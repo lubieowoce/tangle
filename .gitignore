@@ -1,0 +1,49 @@
+# Turborepo
+.turbo
+
+.history
+**/tfplan
+**/.terraform
+
+# Logs
+logs
+*.log
+npm-debug.log*
+opt/service.json
+
+# Coverage directory used by tools like istanbul
+coverage
+*.lcov
+
+# Dependency directories
+node_modules
+**/node_modules
+
+# Output of 'npm pack'
+*.tgz
+
+# dotenv environment variables file
+.env
+.env.local
+
+# Build output
+dist
+storybook-static
+
+# IDE settings
+.idea
+.vscode
+.vs
+
+# SonarQube
+.scannerwork
+
+# Desktop Services Store
+.DS_store
+
+# Reports
+test-reports
+
+# Cypress
+screenshots
+videos

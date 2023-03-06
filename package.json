@@ -1,0 +1,17 @@
+{
+  "name": "rsc",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "react": "^18.3.0-next-1528c5ccd-20230306",
+    "react-dom": "^18.3.0-next-1528c5ccd-20230306",
+    "react-server-dom-webpack": "^18.3.0-next-1528c5ccd-20230306"
+  }
+}
