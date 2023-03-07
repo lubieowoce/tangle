@@ -1,0 +1,13 @@
+{
+  "include": ["src/**/*.ts", "src/**/*.tsx"],
+  "compilerOptions": {
+    "strict": true,
+    "target": "ESNext",
+    "module": "Node16",
+    "jsxImportSource": "react",
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "jsx": "react-jsx",
+    "typeRoots": ["types", "node_modules/@types"]
+  }
+}
