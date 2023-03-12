@@ -1,5 +1,6 @@
 // @ts-check
 const path = require("node:path");
+const webpack = require("webpack");
 
 const rel = (/** @type {string} */ p) => path.resolve(__dirname, p);
 
@@ -10,10 +11,29 @@ const opts = {
   nodeModulesDir: rel("./node_modules"),
 };
 
+const serverModules = [rel("src/app/server-child.tsx")];
+
+// https://stackoverflow.com/a/6969486
+
+function escapeRegExp(str) {
+  return str.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"); // $& means the whole matched string
+}
+
+const stubModules = (/** @type {string[]} */ modules) => {
+  const regexp = new RegExp(modules.map(escapeRegExp).join("|"));
+  for (const mod of modules) {
+    console.assert(regexp.test(mod), "Regex failed for '%s'", mod);
+  }
+  return new webpack.NormalModuleReplacementPlugin(
+    regexp,
+    rel("./src/app/blank.ts")
+  );
+};
+
 /** @type {import('webpack').Configuration} */
 const config = {
-  mode: "development",
   entry: opts.entry,
+  mode: "development",
   devtool: "source-map",
   output: {
     path: opts.destDir,
@@ -25,7 +45,6 @@ const config = {
   resolve: {
     modules: [opts.moduleDir, opts.nodeModulesDir],
     extensions: [".ts", ".tsx", ".js", ".jsx", ".json"],
-    alias: {},
   },
   module: {
     rules: [
@@ -41,7 +60,7 @@ const config = {
       },
     ],
   },
-  plugins: [],
+  plugins: [stubModules(serverModules)],
   target: ["web", "es6"],
   optimization: {
     usedExports: true,

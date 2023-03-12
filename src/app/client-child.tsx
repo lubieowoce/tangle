@@ -1,9 +1,10 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { PropsWithChildren, useEffect, useState } from "react";
 import { Card, Text } from "./common";
 
-export const ClientChild = () => {
+export const ClientChild = ({ children }: PropsWithChildren<{}>) => {
+  console.log("rendering ClientChild");
   const [isClient, setIsClient] = useState(false);
   useEffect(() => {
     setIsClient(true);
@@ -16,6 +17,7 @@ export const ClientChild = () => {
       ) : (
         <Text color={color}>ClientChild not initialized yet...</Text>
       )}
+      {children}
     </Card>
   );
 };

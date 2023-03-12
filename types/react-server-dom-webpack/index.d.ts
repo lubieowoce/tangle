@@ -2,47 +2,7 @@ declare module "react-server-dom-webpack" {
   export {};
 }
 
-declare module "react-server-dom-webpack/server.node" {
-  import type { Writable } from "node:stream";
-  import type { ReactElement } from "react";
-  import type { ServerContextJSONValue } from "react-shared-types";
-
-  // https://github.com/facebook/react/blob/main/packages/react-server-dom-webpack/src/ReactFlightDOMServerNode.js
-
-  export type Options = {
-    onError?: (error: unknown) => void;
-    context?: Array<[string, ServerContextJSONValue]>;
-    identifierPrefix?: string;
-  };
-
-  type PipeableStream = {
-    abort(reason: unknown): void;
-    pipe<T extends Writable>(destination: T): T;
-  };
-
-  // export declare function renderToPipeableStream(
-  export function renderToPipeableStream(
-    model: ReactModel,
-    webpackMap: BundlerConfig,
-    options?: Options
-  ): PipeableStream;
-
-  // https://github.com/facebook/react/blob/main/packages/react-server/src/ReactFlightServer.js
-
-  export type ReactModel =
-    | ReactElement<any> // | React$Element<any>
-    | LazyComponent<any, any>
-    | string
-    | boolean
-    | number
-    | symbol
-    | null
-    | Iterable<ReactModel>
-    | ReactModelObject
-    | Promise<ReactModel>;
-
-  export type ReactModelObject = { [key: string]: ReactModel };
-
+declare module "react-server-dom-webpack/src/ReactFlightServerWebpackBundlerConfig" {
   // https://github.com/facebook/react/blob/main/packages/react-server-dom-webpack/src/ReactFlightServerWebpackBundlerConfig.js
 
   type WebpackMap = {
@@ -72,6 +32,51 @@ declare module "react-server-dom-webpack/server.node" {
     name: string;
     async: boolean;
   };
+}
+
+declare module "react-server-dom-webpack/server.node" {
+  import type { Writable, PassThrough } from "node:stream";
+  import type { ReactElement } from "react";
+  import type { ServerContextJSONValue } from "react-shared-types";
+  import type { BundlerConfig } from "react-server-dom-webpack/src/ReactFlightServerWebpackBundlerConfig";
+
+  // https://github.com/facebook/react/blob/main/packages/react-server-dom-webpack/src/ReactFlightDOMServerNode.js
+
+  export type Options = {
+    onError?: (error: unknown) => void;
+    context?: Array<[string, ServerContextJSONValue]>;
+    identifierPrefix?: string;
+  };
+
+  type PipeableStream = {
+    abort(reason: unknown): void;
+    pipe<T extends Writable>(destination: T): T;
+  };
+
+  export { BundlerConfig };
+
+  // export declare function renderToPipeableStream(
+  export function renderToPipeableStream(
+    model: ReactModel,
+    webpackMap: BundlerConfig,
+    options?: Options
+  ): PipeableStream;
+
+  // https://github.com/facebook/react/blob/main/packages/react-server/src/ReactFlightServer.js
+
+  export type ReactModel =
+    | ReactElement<any> // | React$Element<any>
+    | LazyComponent<any, any>
+    | string
+    | boolean
+    | number
+    | symbol
+    | null
+    | Iterable<ReactModel>
+    | ReactModelObject
+    | Promise<ReactModel>;
+
+  export type ReactModelObject = { [key: string]: ReactModel };
 
   // https://github.com/facebook/react/blob/main/packages/react/src/ReactLazy.js
 
@@ -160,6 +165,64 @@ declare module "react-server-dom-webpack/client.browser" {
   ): Thenable<T>;
 }
 
+declare module "react-server-dom-webpack/client.node" {
+  import type { Thenable } from "react-shared-types";
+  import type { Readable } from "node:stream";
+
+  export type ClientReferenceMetadata = {
+    id: string;
+    chunks: Array<string>;
+    name: string;
+  };
+
+  // eslint-disable-next-line no-unused-vars
+  export type ClientReference<T> = {
+    specifier: string;
+    name: string;
+  };
+
+  export type WebpackSSRMap = {
+    [clientId: string]: {
+      [clientExportName: string]: ClientReference<any>;
+    };
+  };
+
+  export type BundlerConfig = WebpackSSRMap;
+
+  export function createFromNodeStream<T>(
+    stream: Readable,
+    moduleMap: BundlerConfig
+  ): Thenable<T>;
+}
+
 declare module "react-server-dom-webpack/node-register" {
   export default function register(): void;
+}
+
+declare module "react-server-dom-webpack/plugin" {
+  import type { Compiler } from "webpack";
+  export type ClientReferenceSearchPath = {
+    directory: string;
+    recursive?: boolean;
+    include: RegExp;
+    exclude?: RegExp;
+  };
+
+  export type ClientReferencePath = string | ClientReferenceSearchPath;
+
+  export type Options = {
+    isServer: boolean;
+    clientReferences?: ClientReferencePath | readonly ClientReferencePath[];
+    chunkName?: string;
+    clientManifestFilename?: string;
+    ssrManifestFilename?: string;
+  };
+
+  class ReactFlightWebpackPlugin {
+    // export default class ReactFlightWebpackPlugin {
+    constructor(options: Options);
+    apply(compiler: Compiler): void;
+  }
+
+  export = ReactFlightWebpackPlugin;
 }

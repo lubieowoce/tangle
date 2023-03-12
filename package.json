@@ -5,7 +5,8 @@
   "main": "dist/server/server.js",
   "scripts": {
     "dev": "npm run build && npm run start",
-    "build": "npm run build:server && webpack --config webpack.config.js",
+    "build": "npm run build:server && npm run build:client",
+    "build:client": "node build/build.cjs",
     "build:server": "tsc --outDir dist/server --module commonjs",
     "#build": "tsup && webpack --config webpack.config.js",
     "start": "node dist/server/server.js",
