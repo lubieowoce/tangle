@@ -226,3 +226,73 @@ declare module "react-server-dom-webpack/plugin" {
 
   export = ReactFlightWebpackPlugin;
 }
+
+declare module "react-server-dom-webpack/node-loader" {
+  type ResolveContext = {
+    conditions: Array<string>;
+    parentURL: string | void;
+  };
+
+  type ResolveFunction = (
+    string,
+    ResolveContext,
+    ResolveFunction
+  ) => { url: string } | Promise<{ url: string }>;
+
+  type GetSourceContext = {
+    format: string;
+  };
+
+  type GetSourceFunction = (
+    string,
+    GetSourceContext,
+    GetSourceFunction
+  ) => Promise<{ source: Source }>;
+
+  type TransformSourceContext = {
+    format: string;
+    url: string;
+  };
+
+  type TransformSourceFunction = (
+    Source,
+    TransformSourceContext,
+    TransformSourceFunction
+  ) => Promise<{ source: Source }>;
+
+  type LoadContext = {
+    conditions: Array<string>;
+    format: string | null | void;
+    importAssertions: Object;
+  };
+
+  type LoadFunction = (
+    string,
+    LoadContext,
+    LoadFunction
+  ) => Promise<{ format: string; shortCircuit?: boolean; source: Source }>;
+
+  export async function load(
+    url: string,
+    context: LoadContext,
+    defaultLoad: LoadFunction
+  ): Promise<{ format: string; shortCircuit?: boolean; source: Source }>;
+
+  export async function transformSource(
+    source: Source,
+    context: TransformSourceContext,
+    defaultTransformSource: TransformSourceFunction
+  ): Promise<{ source: Source }>;
+
+  export async function getSource(
+    url: string,
+    context: GetSourceContext,
+    defaultGetSource: GetSourceFunction
+  ): Promise<{ source: Source }>;
+
+  export async function resolve(
+    specifier: string,
+    context: ResolveContext,
+    defaultResolve: ResolveFunction
+  ): Promise<{ url: string }>;
+}

@@ -3,7 +3,8 @@
   "compilerOptions": {
     "strict": true,
     "target": "ESNext",
-    "module": "Node16",
+    "module": "ES2022",
+    "lib": ["es2022"],
     "jsxImportSource": "react",
     "esModuleInterop": true,
     "skipLibCheck": true,
