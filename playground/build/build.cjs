@@ -1,5 +1,7 @@
 //@ts-check
 
+const DependencyTemplate = require("webpack/lib/DependencyTemplate.js");
+
 const { pathToFileURL } = require("node:url");
 const { promisify } = require("node:util");
 
@@ -16,6 +18,7 @@ const {
   sources,
 } = require("webpack");
 const HarmonyImportSideEffectDependency = require("webpack/lib/dependencies/HarmonyImportSideEffectDependency");
+const ModuleDependencyTemplateAsId = require("webpack/lib/dependencies/ModuleDependencyTemplateAsId");
 const { ModuleDependency } = dependencies;
 
 const rel = (/** @type {string} */ p) => path.resolve(__dirname, p);
@@ -197,15 +200,17 @@ class RSCPlugin {
         );
         compilation.dependencyTemplates.set(
           InjectedImportDependency,
-          new dependencies.NullDependency.Template()
+          new InjectedImportDependency.Template()
+          // new dependencies.NullDependency.Template()
           // new dependencies.HarmonyImportDependency.Template()
           // @ts-ignore
           // new HarmonyImportSideEffectDependency.Template()
         );
 
-        compilation.hooks.finishModules.tapPromise(
+        // compilation.hooks.finishModules.tapPromise(
+        compilation.hooks.optimizeDependencies.tap(
           RSCPlugin.pluginName,
-          async (finishedModsIter) => {
+          (finishedModsIter) => {
             const finishedMods = [...finishedModsIter];
             console.log("compilation > finishModules");
             // console.log(this.options.ctx.clientModules);
@@ -261,24 +266,33 @@ class RSCPlugin {
                 ].map((m) => m.resource);
 
               console.log(
-                `\n\n\n======================\nAdding a dependency on '${realMod.request}' to the entry...`
+                `\n\n\n======================\nAdding a dependency on '${realMod.request}' to the entry...`,
+                entryMod.context || compiler.context
               );
               const dep = new InjectedImportDependency(
-                realMod.request,
-                1000 + i
+                "!" + realMod.request
+                // 1000 + i
               );
+              dep.loc = { name: "generated import", index: 0 };
+              // const res = await promisify((cb) =>
+              //   compilation.addModuleChain(
+              //     entryMod.context || compiler.context,
+              //     dep,
+              //     cb
+              //   )
+              // )();
               entryMod.addDependency(dep);
 
               // console.log("entry dependencies before", entryMod.dependencies);
-              const res =
-                compilation.processModuleDependenciesNonRecursive(entryMod);
+              // const  =
+              compilation.processModuleDependenciesNonRecursive(entryMod);
               // const res = await new Promise((resolve, reject) => {
               //   compilation.processModuleDependencies(entryMod, (err, res) => {
               //     if (err) return reject(err);
               //     return resolve(res);
               //   });
               // });
-              console.log("new module?", res);
+              console.log("new module?" /* res */);
               console.log("entry dependencies after", entryMod.dependencies);
 
               console.log("outgoingConnections", depResources(entryMod));
@@ -453,7 +467,10 @@ class RSCPlugin {
   }
 }
 
-class InjectedImportDependency extends dependencies.HarmonyImportDependency {
+class InjectedImportDependency extends dependencies.ModuleDependency {
+  constructor(request) {
+    super(request);
+  }
   get category() {
     return "esm";
   }
@@ -461,6 +478,41 @@ class InjectedImportDependency extends dependencies.HarmonyImportDependency {
     return "injected import";
   }
 }
+
+class InjectedImportDependencyTemplate extends dependencies.ModuleDependency
+  .Template {
+  /**
+   * @param {import('webpack').Dependency} dep the dependency for which the template should be applied
+   * @param {import('webpack').sources.ReplaceSource} source the current replace source which can be modified
+   * @param {DependencyTemplateContext} templateContext the context object
+   * @returns {void}
+   */
+  apply(dep, source, templateContext) {
+    const { request } = /** @type {InjectedImportDependency} */ (dep);
+    const moduleGraph = templateContext.moduleGraph;
+    const connection = moduleGraph.getConnection(dep);
+
+    if (!connection) {
+      throw new Error(`Could not find connection ${request}`);
+    }
+
+    const { /* originModule, */ module: targetModule } = connection;
+
+    const importCode = templateContext.importStatement({
+      module: targetModule,
+      importName: "default",
+      request: targetModule.request,
+    });
+
+    const content = `${importCode}\n${source.source()}`;
+    source.insert(0, content);
+  }
+}
+
+InjectedImportDependency.Template = InjectedImportDependencyTemplate;
+
+// @ts-ignore
+// InjectedImportDependency.Template = ModuleDependencyTemplateAsId;
 
 /** @typedef {import("../../build/loaders/types.cjs").ClientModuleInfo} ClientModuleInfo */
 
