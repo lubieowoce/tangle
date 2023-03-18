@@ -10,6 +10,23 @@
 const CLIENT_REFERENCE = Symbol.for("react.client.reference");
 const PROMISE_PROTOTYPE = Promise.prototype;
 
+// const log = ({ onCall }, fn) => {
+//   return function (...args) {
+//     const res = fn.call(this, ...args);
+//     onCall(args, res);
+//     return res;
+//   };
+// };
+
+// const deepProxyHandlers = {
+//   get: log(
+//     {
+//       onCall: ([, name], res) => {
+//         console.log("deepProxyHandlers [get]", name, res);
+//       },
+//     },
+//     function (target: any, name: string, _receiver: ProxyHandler<any>) {
+
 const deepProxyHandlers = {
   get: function (target: any, name: string, _receiver: ProxyHandler<any>) {
     switch (name) {
@@ -26,6 +43,10 @@ const deepProxyHandlers = {
         return undefined;
       case "async":
         return target.async;
+      case "$$async":
+        return target.$$async;
+      case "$$id":
+        return target.$$id;
       // We need to special case this because createElement reads it if we pass this
       // reference.
       case "defaultProps":
@@ -81,6 +102,10 @@ const proxyHandlers = {
         return target.name;
       case "async":
         return target.async;
+      case "$$async":
+        return target.$$async;
+      case "$$id":
+        return target.$$id;
       // We need to special case this because createElement reads it if we pass this
       // reference.
       case "defaultProps":
@@ -111,6 +136,8 @@ const proxyHandlers = {
             $$typeof: { value: CLIENT_REFERENCE },
             filepath: { value: target.filepath },
             async: { value: target.async },
+            $$id: { value: target.$$id },
+            $$async: { value: target.$$async },
           }
         );
         return true;
@@ -119,7 +146,7 @@ const proxyHandlers = {
           // Use a cached value
           return target.then;
         }
-        if (!target.async) {
+        if (!target.async && !target.$$async) {
           // If this module is expected to return a Promise (such as an AsyncModule) then
           // we should resolve that with a client reference that unwraps the Promise on
           // the client.
@@ -132,6 +159,8 @@ const proxyHandlers = {
               $$typeof: { value: CLIENT_REFERENCE },
               filepath: { value: target.filepath },
               async: { value: true },
+              $$id: { value: target.$$id },
+              $$async: { value: true },
             }
           );
           const proxy = new Proxy(clientReference, proxyHandlers);
@@ -155,6 +184,8 @@ const proxyHandlers = {
               $$typeof: { value: CLIENT_REFERENCE },
               filepath: { value: target.filepath },
               async: { value: false },
+              $$id: { value: target.$$id },
+              $$async: { value: false },
             }
           ));
           return then;
@@ -184,6 +215,8 @@ const proxyHandlers = {
           $$typeof: { value: CLIENT_REFERENCE },
           filepath: { value: target.filepath },
           async: { value: target.async },
+          $$id: { value: target.$$id + "#" + name },
+          $$async: { value: target.$$async },
         }
       );
       cachedReference = target[name] = new Proxy(reference, deepProxyHandlers);
@@ -207,7 +240,8 @@ export function createProxy(moduleId: string) {
       name: { value: "*" },
       $$typeof: { value: CLIENT_REFERENCE },
       filepath: { value: moduleId },
-      async: { value: false },
+      $$async: { value: false },
+      $$id: { value: moduleId },
     }
   );
   return new Proxy(clientReference, proxyHandlers);

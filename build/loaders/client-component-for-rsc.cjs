@@ -83,10 +83,10 @@ const load = createAsyncLoader(async function (source) {
     const generatedCode = [
       `import { createProxy } from ${JSON.stringify(CREATE_PROXY_MOD_PATH)};`,
       ``,
-      // `// HACK: inject real module into the moduleGraph`,
-      // `;(() => import(/* webpackMode: "eager" */ ${JSON.stringify(
-      //   realModuleRequest
-      // )}))();`,
+      `// HACK: inject real module into the moduleGraph`,
+      `;(() => import(/* webpackMode: "eager" */ ${JSON.stringify(
+        realModuleRequest
+      )}))();`,
       ``,
       `const proxy = /*@__PURE__*/ createProxy(${JSON.stringify(
         clientModuleInfo.manifestId

@@ -9,13 +9,13 @@ export const ClientChild = ({ children }: PropsWithChildren<{}>) => {
   useEffect(() => {
     setIsClient(true);
   }, []);
-  const color = isClient ? "tomato" : "lightgrey";
+  const color = isClient ? "tomato" : "#efa2a2";
   return (
     <Card borderColor={color}>
       {isClient ? (
-        <Text color={color}>ClientChild initialized!</Text>
+        <Text color={color}>ClientChild hydrated!</Text>
       ) : (
-        <Text color={color}>ClientChild not initialized yet...</Text>
+        <Text color={color}>ClientChild not hydrated yet...</Text>
       )}
       {children}
     </Card>

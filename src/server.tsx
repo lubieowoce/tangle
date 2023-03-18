@@ -1,4 +1,4 @@
-import "./server-register-import-hook";
+// import "./server-register-import-hook";
 
 import path from "node:path";
 import url from "node:url";
@@ -112,18 +112,20 @@ const filterMapSrcOnly = (map: Record<string, any>): Record<string, any> => {
 
 const readJSONFile = (p: string) => JSON.parse(fs.readFileSync(p, "utf-8"));
 
-const webpackMapForClient = patchClientMapTsImports(
-  readJSONFile(
-    path.join(CLIENT_ASSETS_DIR, "client-manifest.json")
-  ) as BundlerConfig
-);
+const webpackMapForClient = readJSONFile(
+  path.join(CLIENT_ASSETS_DIR, "client-manifest.json")
+) as BundlerConfig;
 
-const webpackMapForSSR = patchSSRMapChunks({
-  clientMap: webpackMapForClient,
-  ssrMap: readJSONFile(
-    path.join(CLIENT_ASSETS_DIR, "ssr-manifest.json")
-  ) as WebpackSSRMap,
-});
+const webpackMapForSSR = readJSONFile(
+  path.resolve(__dirname, "ssr-manifest.json")
+) as WebpackSSRMap;
+
+// const webpackMapForSSR = patchSSRMapChunks({
+//   clientMap: webpackMapForClient,
+//   ssrMap: readJSONFile(
+//     path.join(CLIENT_ASSETS_DIR, "ssr-manifest.json")
+//   ) as WebpackSSRMap,
+// });
 
 console.log(
   "patched client map (src only)",
@@ -134,12 +136,12 @@ console.log(
   util.inspect(filterMapSrcOnly(webpackMapForSSR), { depth: undefined })
 );
 
-// for SSR
-(global as any)["__webpack_require__"] = (id: string) => {
-  const mod = require(id);
-  console.log("server-side __webpack_require__", id, "-->", mod);
-  return mod;
-};
+// // for SSR
+// (global as any)["__webpack_require__"] = (id: string) => {
+//   const mod = require(id);
+//   console.log("server-side __webpack_require__", id, "-->", mod);
+//   return mod;
+// };
 
 app.get("/", async (req, res) => {
   const elem = <ServerRoot />;
@@ -175,17 +177,22 @@ app.get("/", async (req, res) => {
 
     console.log("converting flight output to node stream");
     clientPipeableStream.pipe(inoutStream);
-    const clientTreePromise = createFromNodeStream<ReactNode>(
+    const clientTreeThenable = createFromNodeStream<ReactNode>(
       inoutStream,
       throwOnMissingProperty(
         webpackMapForSSR,
-        "webpackMapForClient [createFromNodeStream for ssr]"
+        "webpackMapForSSR [createFromNodeStream for ssr]"
       )
     );
 
     const ServerComponentWrapper = () => {
-      console.log("ServerComponentWrapper");
-      return use(clientTreePromise);
+      console.log(
+        "ServerComponentWrapper",
+        clientTreeThenable.status === "fulfilled"
+          ? util.inspect(clientTreeThenable.value, { depth: undefined })
+          : undefined
+      );
+      return use(clientTreeThenable);
     };
 
     // const clientStream = new TransformStream();
