@@ -14,13 +14,14 @@ export function Text({
 export function Card({
   children,
   borderColor = "lightgrey",
-}: PropsWithChildren<{ borderColor?: string }>) {
+  borderStyle = "dashed",
+}: PropsWithChildren<{ borderColor?: string; borderStyle?: string }>) {
   return (
     <div
       style={{
         padding: "16px",
         borderRadius: "8px",
-        border: "2px dashed",
+        border: `2px ${borderStyle}`,
         borderColor,
       }}
     >
