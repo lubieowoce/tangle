@@ -4,7 +4,7 @@
     "strict": true,
     "target": "ESNext",
     "module": "ES2022",
-    "lib": ["es2022"],
+    "lib": ["es2022", "DOM"],
     "jsxImportSource": "react",
     "esModuleInterop": true,
     "skipLibCheck": true,

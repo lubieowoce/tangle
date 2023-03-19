@@ -10,37 +10,28 @@ export default function ServerRoot() {
       style={{ fontFamily: "sans-serif", maxWidth: "800px", margin: "0 auto" }}
     >
       <Card>
-        <Text>Server root</Text>
-        {/* <Suspense fallback="Fallback for ClientChild"> */}
-        <ClientChild>
+        <Text>ServerRoot</Text>
+        <Suspense
+          fallback={
+            <Card>
+              <Text color="lightgrey">
+                ServerInner is loading... ⟳ (fake delay)
+              </Text>
+            </Card>
+          }
+        >
           {/* @ts-expect-error  async component */}
-          <ServerChild color="teal" />
-        </ClientChild>
-        {/* </Suspense> */}
+          <ServerRootInner color="green">
+            <ClientChild>
+              {/* @ts-expect-error  async component */}
+              <ServerChild color="teal" />
+            </ClientChild>
+          </ServerRootInner>
+        </Suspense>
       </Card>
     </main>
   );
 }
-
-// <Card>
-//   <Text>Server root</Text>
-//   <Suspense
-//     fallback={
-//       <Card>
-//         <Text color="lightgrey">Inner is loading... ⟳</Text>
-//       </Card>
-//     }
-//   >
-//     {/* @ts-expect-error  async component */}
-//     <ServerRootInner color="green">
-//       <Text color="green">Inner loaded!</Text>
-//       <ClientChild>
-//         {/* @ts-expect-error  async component */}
-//         <ServerChild color="teal" />
-//       </ClientChild>
-//     </ServerRootInner>
-//   </Suspense>
-// </Card>;
 
 async function ServerRootInner({
   color,
@@ -49,7 +40,7 @@ async function ServerRootInner({
   await new Promise((resolve) => setTimeout(resolve, 1000));
   return (
     <Card borderColor={color}>
-      <Text>Server inner</Text>
+      <Text color="green">ServerInner ready!</Text>
       {children}
     </Card>
   );
