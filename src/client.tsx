@@ -11,11 +11,7 @@ import {
   createFromReadableStream,
 } from "react-server-dom-webpack/client.browser";
 import { HTMLPage } from "./app/page";
-// import ServerRoot from "./app/server-root";
 // import { FLIGHT_REQUEST_HEADER, ROOT_DOM_NODE_ID } from "./shared";
-
-// // make sure it's in the bundle!
-import("./app/client-child");
 
 declare var __RSC_CHUNKS__: string[];
 
