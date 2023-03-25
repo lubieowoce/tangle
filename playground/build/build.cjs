@@ -506,6 +506,13 @@ class InjectedImportDependencyTemplate extends dependencies.ModuleDependency
 
     const content = `${importCode}\n${source.source()}`;
     source.insert(0, content);
+    console.log("**************************");
+    console.log(
+      "InjectedImportDependencyTemplate",
+      "\n",
+      source.source().toString()
+    );
+    console.log("**************************");
   }
 }
 

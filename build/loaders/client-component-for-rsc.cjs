@@ -2,6 +2,8 @@
 // const { urlToRequest } = require("loader-utils");
 // const { validate } = require("schema-utils");
 
+const { LAYERS } = require("../shared.cjs");
+
 const { pathToFileURL } = require("node:url");
 const path = require("node:path");
 const { basename, relative } = require("node:path");
@@ -70,7 +72,25 @@ const load = createAsyncLoader(async function (source) {
       this.resourcePath
     )}`;
     console.log("requesting", realModuleRequest);
-    const realModExports = await this.importModule(realModuleRequest);
+
+    // wait holy shit... this actually runs the code at build time?????
+    // maybe we should use loadModule instead...
+    const realModExports = await this.importModule(realModuleRequest, {
+      layer: LAYERS.ssr,
+    });
+
+    const _realMod = await new Promise((resolve, reject) =>
+      this.loadModule(realModuleRequest, (err, _source, _sourcemap, mod) => {
+        if (err) return reject(err);
+        return resolve(mod);
+      })
+    );
+    console.log("real module", _realMod);
+    console.log("real module exports", [
+      ...(this._compilation?.moduleGraph?.getExportsInfo(_realMod)
+        .orderedExports ?? []),
+    ]);
+
     console.log(`${LOADER_NAME} :: imported`, realModExports);
     console.log();
 
@@ -83,10 +103,10 @@ const load = createAsyncLoader(async function (source) {
     const generatedCode = [
       `import { createProxy } from ${JSON.stringify(CREATE_PROXY_MOD_PATH)};`,
       ``,
-      `// HACK: inject real module into the moduleGraph`,
-      `if (Math.random() < 0) import(/* webpackMode: "eager" */ ${JSON.stringify(
-        realModuleRequest
-      )});`,
+      // `// HACK: inject real module into the moduleGraph`,
+      // `if (Math.random() < 0) import(/* webpackMode: "eager" */ ${JSON.stringify(
+      //   realModuleRequest
+      // )});`,
       ``,
       `const proxy = /*@__PURE__*/ createProxy(${JSON.stringify(
         clientModuleInfo.manifestId

@@ -1,5 +1,7 @@
 //@ts-check
 
+const { LAYERS } = require("./shared.cjs");
+
 const { readFileSync } = require("node:fs");
 const { pathToFileURL } = require("node:url");
 const path = require("node:path");
@@ -137,11 +139,18 @@ const main = async () => {
   /** @type {Ctx} */
   const ctx = createContext();
 
+  const tsLoader = {
+    loader: "ts-loader",
+    options: {
+      transpileOnly: true,
+    },
+  };
+
   console.log("building server...");
   /** @type {Configuration} */
   const serverConfig = {
     ...shared,
-    entry: opts.server.entry,
+    entry: { main: opts.server.entry /* , layer: LAYERS.default */ },
     resolve: {
       ...shared.resolve,
     },
@@ -150,6 +159,14 @@ const main = async () => {
       rules: [
         {
           test: /\.(t|j)sx?$/,
+          // only transform client components to proxies if we're in the default layer.
+          // if we're in `LAYERS.ssr`, we don't want that.
+          issuerLayer: (layer) => {
+            return (
+              !layer || // no layer assigned = default, or entrypoint i guess?
+              layer === LAYERS.default
+            );
+          },
           exclude: /node_modules/,
           use: [
             {
@@ -159,13 +176,21 @@ const main = async () => {
                 ctx,
               },
             },
-            {
-              loader: "ts-loader",
-              options: {
-                transpileOnly: true,
-              },
-            },
+            tsLoader,
           ],
+        },
+        {
+          test: /\.(t|j)sx?$/,
+          // if we're in `LAYERS.ssr`, don't do anything special.
+          issuerLayer: LAYERS.ssr,
+          exclude: /node_modules/,
+          use: [tsLoader],
+        },
+        {
+          test: /server-ssr-layer.tsx$/,
+          // if we're in `LAYERS.ssr`, don't do anything special.
+          layer: LAYERS.ssr,
+          use: [tsLoader],
         },
       ],
     },
@@ -185,6 +210,7 @@ const main = async () => {
       }),
     ],
     target: "node16",
+    experiments: { layers: true },
     output: {
       path: opts.server.destDir,
       clean: true,
@@ -234,6 +260,19 @@ class RSCServerPlugin {
           (finishedModsIter) => {
             const finishedMods = [...finishedModsIter];
             console.log("compilation > finishModules");
+            for (const mod of finishedMods) {
+              if (
+                !(mod instanceof ExternalModule) &&
+                mod.request &&
+                mod.request.includes(compiler.context + "/src/")
+              ) {
+                console.log("==============================");
+                console.log(mod.request);
+                console.log("layer:", mod.layer);
+                console.log(mod._source._value);
+                console.log("==============================");
+              }
+            }
             for (const clientModInfo of this.options.ctx.clientModules) {
               const mod = finishedMods.find(
                 (m) =>
@@ -265,11 +304,10 @@ class RSCServerPlugin {
           const isGeneratedModule = (m) =>
             m instanceof NormalModule &&
             m.request.startsWith(CLIENT_COMPONENT_FOR_SSR_LOADER);
-
           compilation.chunkGroups.forEach((chunkGroup) => {
-            const chunkIds = chunkGroup.chunks
-              .map((c) => c.id)
-              .filter((id) => id !== null);
+            const chunkIds = /** @type {(string | number)[]} */ (
+              chunkGroup.chunks.map((c) => c.id).filter((id) => id !== null)
+            );
 
             chunkGroup.chunks.forEach(function (chunk) {
               const chunkModules =
@@ -315,8 +353,8 @@ class RSCServerPlugin {
               }
             }
           }
-          console.log(ssrManifestSpecifierRewrite);
-          console.log(finalSSRManifest);
+          console.log("manifest rewrites", ssrManifestSpecifierRewrite);
+          console.log("final ssr manifest", finalSSRManifest);
           const ssrOutput = JSON.stringify(finalSSRManifest, null, 2);
           compilation.emitAsset(
             this.options.ssrManifestFilename,
