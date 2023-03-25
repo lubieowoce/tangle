@@ -1,33 +1,35 @@
-//@ts-check
+/// <reference types="../types/react-server-dom-webpack" />
 
-const { LAYERS } = require("./shared.cjs");
+import { LAYERS } from "./shared.js";
 
-const { readFileSync } = require("node:fs");
-const { pathToFileURL } = require("node:url");
-const path = require("node:path");
+import { readFileSync } from "node:fs";
+import { pathToFileURL } from "node:url";
+import path from "node:path";
 
-const { createContext } = require("./loaders/shared-context.cjs");
+import { createContext } from "./loaders/shared-context.js";
 
 // not sure why TS doesn't pick this up automatically...
-/// <reference types="../types/react-server-dom-webpack" />
-const ReactFlightWebpackPlugin = require("react-server-dom-webpack/plugin");
-// const ReactFlightWebpackPlugin =
-//   /** @type {import("react-server-dom-webpack/plugin").default} */ (
-//     /** @type {unknown} */ (require("react-server-dom-webpack/plugin"))
-//   );
+import ReactFlightWebpackPlugin, {
+  Options as ReactFlightWebpackPluginOptions,
+} from "react-server-dom-webpack/plugin";
 
-const { runWebpack } = require("./run-webpack.cjs");
-const {
+import { runWebpack } from "./run-webpack.js";
+import {
   Module,
   NormalModule,
   ExternalModule,
   dependencies,
   Compilation,
   sources,
-} = require("webpack");
+  Configuration,
+  Compiler,
+} from "webpack";
+import { Ctx } from "./loaders/types.js";
+import { LOADER_PATH as CLIENT_COMPONENT_FOR_RSC_LOADER } from "./loaders/client-component-for-rsc.js";
+import { LOADER_PATH as CLIENT_COMPONENT_FOR_SSR_LOADER } from "./loaders/client-component-for-ssr.js";
 const { ModuleDependency } = dependencies;
 
-const rel = (/** @type {string} */ p) => path.resolve(__dirname, p);
+const rel = (p: string) => path.resolve(__dirname, p);
 
 const opts = {
   client: {
@@ -42,28 +44,11 @@ const opts = {
   nodeModulesDir: rel("../node_modules"),
 };
 
-/**
- * @typedef {import('webpack').Configuration} Configuration
- */
-
-const CLIENT_COMPONENT_FOR_RSC_LOADER = require.resolve(
-  path.resolve(__dirname, "./loaders/client-component-for-rsc.cjs")
-);
-
-const CLIENT_COMPONENT_FOR_SSR_LOADER_ID = "client-component-for-ssr";
-
-const CLIENT_COMPONENT_FOR_SSR_LOADER = require.resolve(
-  path.resolve(__dirname, `./loaders/${CLIENT_COMPONENT_FOR_SSR_LOADER_ID}.cjs`)
-);
-
-/** @typedef {import('./loaders/types.cjs').Ctx} Ctx */
-
 const main = async () => {
   const moduleExtensions = [".ts", ".tsx", ".js", ".jsx", ".json"];
   const moduleExtensionsRegex = /(ts|tsx|.js|jsx|json)$/;
 
-  /** @type {Configuration} */
-  const shared = {
+  const shared: Configuration = {
     mode: "development",
     devtool: "source-map",
     resolve: {
@@ -86,17 +71,15 @@ const main = async () => {
     },
   };
 
-  //@ts-ignore FIXME later!
-  /** @type {import('react-server-dom-webpack/plugin').Options['clientReferences']} */
-  const clientReferences = [path.join(opts.moduleDir, "app/client-child.tsx")];
+  const clientReferences: ReactFlightWebpackPluginOptions["clientReferences"] =
+    [path.join(opts.moduleDir, "app/client-child.tsx")];
   // const clientReferences = {
   //   directory: opts.moduleDir,
   //   include: moduleExtensionsRegex,
   //   recursive: true,
   // };
 
-  /** @type {Configuration} */
-  const clientConfig = {
+  const clientConfig: Configuration = {
     ...shared,
     entry: opts.client.entry,
     resolve: {
@@ -131,12 +114,10 @@ const main = async () => {
     "ssr-manifest-intermediate.json"
   );
 
-  /** @type {SSRManifest} */
-  const ssrManifestFromRSDW = JSON.parse(
+  const ssrManifestFromRSDW: SSRManifest = JSON.parse(
     readFileSync(ssrManifestPath, "utf-8")
   );
 
-  /** @type {Ctx} */
   const ctx = createContext();
 
   const tsLoader = {
@@ -147,8 +128,7 @@ const main = async () => {
   };
 
   console.log("building server...");
-  /** @type {Configuration} */
-  const serverConfig = {
+  const serverConfig: Configuration = {
     ...shared,
     entry: { main: opts.server.entry /* , layer: LAYERS.default */ },
     resolve: {
@@ -219,39 +199,35 @@ const main = async () => {
   await runWebpack(serverConfig);
 };
 
-/** @typedef {{
- *   [id: string]: {
- *     [exportName: string]: { specifier: string | number, name: string },
- *   },
- * }} SSRManifest
- * */
+type SSRManifest = {
+  [id: string]: {
+    [exportName: string]: { specifier: string | number; name: string };
+  };
+};
 
-/** @typedef {{
- *   [id: string]: {
- *     [exportName: string]: { id: string | number, name: string, chunks: (string | number)[], async: boolean },
- *   },
- * }} SSRManifestActual
- * */
+type SSRManifestActual = {
+  [id: string]: {
+    [exportName: string]: {
+      id: string | number;
+      name: string;
+      chunks: (string | number)[];
+      async: boolean;
+    };
+  };
+};
 
-/** @typedef {import('webpack').Compiler} Compiler */
-
-/** @typedef {{ ctx: Ctx, ssrManifestFromClient: SSRManifest, ssrManifestFilename: string }} RSCPluginOptions */
+type RSCPluginOptions = {
+  ctx: Ctx;
+  ssrManifestFromClient: SSRManifest;
+  ssrManifestFilename: string;
+};
 
 class RSCServerPlugin {
   static pluginName = "RSCServerPlugin";
 
-  /**
-   * @param {RSCPluginOptions} options
-   */
-  constructor(options) {
-    /** @type {RSCPluginOptions} */
-    this.options = options;
-  }
+  constructor(public options: RSCPluginOptions) {}
 
-  /**
-   * @param {Compiler} compiler
-   */
-  apply(compiler) {
+  apply(compiler: Compiler) {
     compiler.hooks.thisCompilation.tap(
       RSCServerPlugin.pluginName,
       (compilation, { normalModuleFactory }) => {
@@ -262,14 +238,14 @@ class RSCServerPlugin {
             console.log("compilation > finishModules");
             for (const mod of finishedMods) {
               if (
-                !(mod instanceof ExternalModule) &&
+                mod instanceof NormalModule &&
                 mod.request &&
                 mod.request.includes(compiler.context + "/src/")
               ) {
                 console.log("==============================");
                 console.log(mod.request);
                 console.log("layer:", mod.layer);
-                console.log(mod._source._value);
+                console.log(mod["_source"]._value);
                 console.log("==============================");
               }
             }
@@ -298,22 +274,27 @@ class RSCServerPlugin {
           stage: Compilation.PROCESS_ASSETS_STAGE_REPORT,
         },
         () => {
-          /** @type {{ [id: string]: { moduleId: string | number, chunkIds: (string | number)[] }} */
-          const ssrManifestSpecifierRewrite = {};
+          type Rewrites = {
+            [id: string]: {
+              moduleId: string | number;
+              chunkIds: (string | number)[];
+            };
+          };
+          const ssrManifestSpecifierRewrite: Rewrites = {};
 
-          const isGeneratedModule = (m) =>
+          const isGeneratedModule = (m: Module) =>
             m instanceof NormalModule &&
             m.request.startsWith(CLIENT_COMPONENT_FOR_SSR_LOADER);
           compilation.chunkGroups.forEach((chunkGroup) => {
-            const chunkIds = /** @type {(string | number)[]} */ (
-              chunkGroup.chunks.map((c) => c.id).filter((id) => id !== null)
-            );
+            const chunkIds = chunkGroup.chunks
+              .map((c) => c.id)
+              .filter((id) => id !== null) as (string | number)[];
 
             chunkGroup.chunks.forEach(function (chunk) {
               const chunkModules =
                 compilation.chunkGraph.getChunkModulesIterable(chunk);
 
-              Array.from(chunkModules).forEach(function (mod) {
+              Array.from(chunkModules).forEach((mod) => {
                 if (!isGeneratedModule(mod)) return;
                 const moduleId = compilation.chunkGraph.getModuleId(mod);
                 if (!(mod instanceof NormalModule)) {
@@ -331,8 +312,7 @@ class RSCServerPlugin {
             });
           });
 
-          /** @type {SSRManifestActual} */
-          const finalSSRManifest = {};
+          const finalSSRManifest: SSRManifestActual = {};
           for (const [clientModuleId, moduleExportMap] of Object.entries(
             this.options.ssrManifestFromClient
           )) {

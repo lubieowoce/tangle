@@ -1,8 +1,5 @@
-//@ts-check
-const LAYERS = {
+export const LAYERS = {
   default: null,
   // default: "rsc-layer",
   ssr: "ssr-layer",
 };
-
-module.exports = { LAYERS };

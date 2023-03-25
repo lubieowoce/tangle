@@ -1,16 +1,9 @@
-//@ts-check
+import { Configuration, Stats, StatsError, webpack } from "webpack";
 
-const { webpack } = require("webpack");
+type WebpackResult = { err: Error | undefined; stats: Stats | undefined };
 
-/**
- * @typedef {import('webpack').Stats} Stats
- * @typedef {import('webpack').Configuration} Configuration
- * @typedef {{ err: Error | undefined; stats: Stats | undefined }} WebpackResult
- */
-
-const runWebpack = async (/** @type {Configuration} */ config) => {
-  /** @type {Promise<WebpackResult>} */
-  const pRes = new Promise((resolve) => {
+export const runWebpack = async (config: Configuration) => {
+  const pRes = new Promise<WebpackResult>((resolve) => {
     webpack(config, (err, stats) => {
       resolve({ err, stats });
     });
@@ -30,13 +23,12 @@ const runWebpack = async (/** @type {Configuration} */ config) => {
 
 /**
  * based on https://webpack.js.org/api/node/#error-handling
- * @param {WebpackResult} result
  */
-const report = ({ err, stats }) => {
+const report = ({ err, stats }: WebpackResult) => {
   // webpack crashed
   if (err) {
     console.error(err.stack || err);
-    const castErr = /** @type {Error & { details?: string }} */ (err);
+    const castErr = err as Error & { details?: string };
     if (castErr.details) {
       console.error(castErr.details);
     }
@@ -66,13 +58,9 @@ const report = ({ err, stats }) => {
   return true;
 };
 
-const logMany = (
-  /** @type {import("webpack").StatsError[] | undefined} */ items
-) => {
+const logMany = (items: StatsError[] | undefined) => {
   if (!items) return;
   for (const item of items) {
     console.log("message" in item ? item.message : item);
   }
 };
-
-module.exports = { runWebpack };

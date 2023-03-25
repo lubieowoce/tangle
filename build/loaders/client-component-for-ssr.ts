@@ -1,21 +1,12 @@
-//@ts-check
+import { LoaderDefinitionFunction } from "webpack";
+import { getContext } from "./shared-context";
 
-/**
- * @typedef {import('./types.cjs').Ctx} Ctx
- */
+type Options = { moduleId: string };
 
-const { getContext } = require("./shared-context.cjs");
+export const LOADER_NAME = "client-component-for-ssr";
+export const LOADER_PATH = __filename;
 
-/**
- * @typedef {{ moduleId: string }} Options
- */
-
-const LOADER_NAME = "client-component-for-ssr";
-
-/**
- * @type {import('webpack').LoaderDefinitionFunction<Options, {}>}
- * */
-const load = function (_source) {
+const load: LoaderDefinitionFunction<Options, {}> = function (_source) {
   const options = this.getOptions();
   console.log(`${LOADER_NAME} :: loading`, options);
 
@@ -43,4 +34,4 @@ const load = function (_source) {
   );
 };
 
-module.exports = load;
+export default load;

@@ -1,24 +1,18 @@
-//@ts-check
+import { Ctx } from "./types";
 
-/**
- * @typedef {import('./types.cjs').Ctx} Ctx
- */
+let globalCtx: Ctx | null = null;
 
-/** @type {Ctx | null} */
-let globalCtx = null;
-
-const setContext = (/** @type {Ctx}*/ ctx) => {
+export const setContext = (ctx: Ctx) => {
   globalCtx = ctx;
 };
 
-const getContext = () => {
+export const getContext = () => {
   const ctx = globalCtx;
   if (!ctx) throw new Error("Expected global ctx to be set.");
   return ctx;
 };
 
-/** @returns {Ctx} */
-const createContext = () => ({
+export const createContext = (): Ctx => ({
   clientModules: [],
   addClientModule(mod) {
     console.log("saving module", mod);
@@ -48,5 +42,3 @@ const createContext = () => ({
     // }
   },
 });
-
-module.exports = { createContext, setContext, getContext };
