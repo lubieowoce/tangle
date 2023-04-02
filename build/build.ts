@@ -188,29 +188,24 @@ const main = async () => {
     module: {
       ...shared.module,
       rules: [
-        // {
-        //   test: rsdwSSRClientFileName,
-        //   layer: LAYERS.ssr,
-        // },
         {
-          test: opts.server.ssrModule,
-          layer: LAYERS.ssr,
-        },
-        {
-          // put client modules in the SSR layer.
-          test(resource) {
-            return analysisCtx.getTypeForResource(resource) === "client";
-          },
-          issuerLayer: LAYERS.ssr,
-          layer: LAYERS.ssr,
-        },
-        {
-          test: /(react|react-dom|react-is|scheduler)/,
-          layer: LAYERS.shared,
-        },
-        {
-          test: /(react-server-dom-webpack\/client)|react-server-dom-webpack-client/,
-          layer: LAYERS.ssr,
+          oneOf: [
+            {
+              test: /\/(react|react-dom|react-is|scheduler)\//,
+              layer: LAYERS.shared,
+            },
+            {
+              // everything imported from the main SSR module (including RSDW/client) goes into the SSR layer,
+              // so that our NormalModuleReplacement function can rewrite the imports to `.__ssr__.EXT`...
+              test: opts.server.ssrModule,
+              layer: LAYERS.ssr,
+            },
+            {
+              // ... and we make it transitive, so that it propagates through imports
+              issuerLayer: LAYERS.ssr,
+              layer: LAYERS.ssr,
+            },
+          ],
         },
         ...(shared.module?.rules ?? []),
       ],
@@ -219,14 +214,6 @@ const main = async () => {
       new NormalModuleReplacementPlugin(
         MODULE_EXTENSIONS_REGEX,
         (resolveData /*: ResolveData */) => {
-          // console.log(resolveData.contextInfo.issuer);
-          // if (
-          //   // TODO: figure out what to do with react and stuff from node_modules
-          //   resolveData.createData.resource?.startsWith(opts.moduleDir) &&
-          //   (analysisCtx.getTypeForResource(resolveData.contextInfo.issuer) ===
-          //     "client" ||
-          //     resolveData.contextInfo.issuerLayer === LAYERS.ssr)
-          // ) {
           const originalResource = resolveData.createData.resource;
 
           if (analysisCtx.getTypeForResource(originalResource) === "client") {
@@ -240,6 +227,9 @@ const main = async () => {
             console.log(
               `${label} preparing replacement: `,
               resolveData.createData.resource
+            );
+            console.log(
+              `${label} issued from: ${resolveData.contextInfo.issuer} (${resolveData.contextInfo.issuerLayer})`
             );
             console.log(`${label} rewriting request to`, newResource);
             // console.log(resolveData);
@@ -305,17 +295,6 @@ const main = async () => {
         compiler.hooks.thisCompilation.tap(
           pluginName,
           (compilation, { normalModuleFactory }) => {
-            // normalModuleFactory
-            //   .getResolver("normal")
-            //   .resolve(
-            //     { context: path.dirname(opts.server.ssrModule) },
-            //     opts.server.ssrModule,
-            //     rsdwSSRClientImportName,
-            //     {},
-            //     (...result) =>
-            //       console.log(`resolved ${rsdwSSRClientImportName}:`, ...result)
-            //   );
-
             compilation.dependencyFactories.set(
               ClientReferenceDependency,
               normalModuleFactory
@@ -339,6 +318,8 @@ const main = async () => {
                   clientModuleResource,
                 ] of analysisCtx.modules.client.entries()) {
                   const dep = new ClientReferenceDependency(
+                    // this kicks off the imports for some SSR modules, so they might not go through
+                    // our SSR/proxy resolution hacks in NormalModuleReplacementPlugin
                     getVirtualPathSSR(clientModuleResource)
                   );
 
