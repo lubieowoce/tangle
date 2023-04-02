@@ -201,7 +201,9 @@ const main = async () => {
               layer: LAYERS.ssr,
             },
             {
-              // ... and we make it transitive, so that it propagates through imports
+              // ... and we make it transitive, so that it propagates through imports.
+              // note that this may result in duplicating some shared modules.
+              // TODO: figure out if we can solve that somehow
               issuerLayer: LAYERS.ssr,
               layer: LAYERS.ssr,
             },
@@ -392,11 +394,6 @@ const createProxyModule = ({
   const manifestId = getManifestId(resource);
   const generatedCode = [
     `import { createProxy } from ${JSON.stringify(CREATE_PROXY_MOD_PATH)};`,
-    ``,
-    // `// HACK: inject real module into the moduleGraph`,
-    // `if (Math.random() < 0) import(/* webpackMode: "eager" */ ${JSON.stringify(
-    //   realModuleRequest
-    // )});`,
     ``,
     `const proxy = /*@__PURE__*/ createProxy(${JSON.stringify(manifestId)});`,
   ];
