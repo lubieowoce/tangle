@@ -7,7 +7,7 @@ export function Counter({ id }: { id: string }) {
   return (
     <Card>
       <Text>
-        Interactive counter {id}: {count}
+        Client counter (#{id}): {count}
       </Text>
       <button type="button" onClick={() => setCount((c) => c + 1)}>
         +1

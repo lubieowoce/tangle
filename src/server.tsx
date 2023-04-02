@@ -12,41 +12,17 @@ import {
 } from "react-server-dom-webpack/server.node";
 
 import ServerRoot from "./app/server-root";
-import { FLIGHT_REQUEST_HEADER } from "./shared";
 import {
-  createFromNodeStream,
-  WebpackSSRMap,
-} from "react-server-dom-webpack/client.node";
-import {
-  ReactNode,
-  Suspense,
-  // @ts-ignore  bad type definitions
-  use,
-} from "react";
-import { HTMLPage } from "./app/page";
-
-const ASSETS_ROUTE = "/_assets";
+  ASSETS_ROUTE,
+  FLIGHT_REQUEST_HEADER,
+  throwOnMissingProperty,
+} from "./shared";
+import type { WebpackSSRMap } from "react-server-dom-webpack/client.node";
+import { getSSRDomStream } from "./server-ssr";
 
 const CLIENT_ASSETS_DIR = path.resolve(__dirname, "../client");
 
 const app = Express();
-
-const throwOnMissingProperty = <TObj extends Record<string, any>>(
-  obj: TObj,
-  name?: string
-): TObj => {
-  const msgSuffix = name ? ` (in object '${name}')` : "";
-  return new Proxy(obj, {
-    get(target, name) {
-      if (!(name in target)) {
-        throw new Error(`Missing property ${String(name)}` + msgSuffix);
-      }
-      const res = target[name as any];
-      console.log("accessed property" + msgSuffix + ":", name, "-->", res);
-      return res;
-    },
-  });
-};
 
 const filterMapSrcOnly = (map: Record<string, any>): Record<string, any> => {
   return Object.fromEntries(
@@ -120,34 +96,8 @@ app.get("/", async (req, res) => {
       );
     });
 
-    const clientTreeThenable = createFromNodeStream<ReactNode>(
-      rscStream,
-      throwOnMissingProperty(
-        webpackMapForSSR,
-        "webpackMapForSSR [createFromNodeStream for ssr]"
-      )
-    );
+    const domStream = getSSRDomStream(rscStream, webpackMapForSSR);
 
-    const ServerComponentWrapper = () => {
-      return use(clientTreeThenable);
-    };
-
-    console.log("SSRing response");
-    const domStream = renderToPipeableStream(
-      <HTMLPage>
-        <Suspense>
-          <ServerComponentWrapper />
-        </Suspense>
-      </HTMLPage>,
-      {
-        bootstrapScripts: [`${ASSETS_ROUTE}/main.js`],
-        // onShellReady() {
-        //   res.header("content-type", "text/html; charset=utf-8");
-        //   domStream.pipe(finalOutputStream);
-        //   finalOutputStream.pipe(res);
-        // },
-      }
-    );
     // FIXME: this causes the inline scripts to go in front of <html>, that's bad.
     // figure out how combine the streams properly
     res.header("content-type", "text/html; charset=utf-8");

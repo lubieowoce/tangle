@@ -1,5 +1,6 @@
 import { PropsWithChildren, Suspense } from "react";
 import { ClientChild } from "./client-child";
+import { Counter } from "./client-counter";
 import { Card, Text } from "./common";
 import { ServerChild } from "./server-child";
 
@@ -11,6 +12,7 @@ export default function ServerRoot() {
     >
       <Card>
         <Text>ServerRoot</Text>
+        <Counter id="0" />
         <Suspense
           fallback={
             <Card>
