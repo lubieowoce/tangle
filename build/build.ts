@@ -35,6 +35,7 @@ const opts = {
   server: {
     entry: rel("../src/server.tsx"),
     ssrModule: rel("../src/server-ssr.tsx"),
+    rscModule: rel("../src/server-rsc.tsx"),
     destDir: rel("../dist/server"),
   },
   moduleDir: rel("../src"),
@@ -60,6 +61,8 @@ const getOriginalPathFromVirtual = (p: string) =>
 
 const moduleExtensions = [".ts", ".tsx", ".js", ".jsx", ".json"];
 const MODULE_EXTENSIONS_REGEX = /\.(ts|tsx|js|jsx)$/;
+const REACT_MODULES_REGEX =
+  /\/(react|react-server|react-dom|react-is|scheduler)\//;
 
 const main = async () => {
   const TS_LOADER = {
@@ -179,6 +182,8 @@ const main = async () => {
 
   console.log("building server...");
 
+  const serverImportConditions = ["node", "import", "require"];
+
   const serverConfig: Configuration = {
     ...shared,
     entry: { main: opts.server.entry /* ssr: virtualPath("ssr-entry.js") */ },
@@ -189,10 +194,15 @@ const main = async () => {
       ...shared.module,
       rules: [
         {
+          // assign modules to layers
           oneOf: [
             {
-              test: /\/(react|react-dom|react-is|scheduler)\//,
+              test: REACT_MODULES_REGEX,
               layer: LAYERS.shared,
+            },
+            {
+              test: opts.server.rscModule,
+              layer: LAYERS.rsc,
             },
             {
               // everything imported from the main SSR module (including RSDW/client) goes into the SSR layer,
@@ -206,6 +216,29 @@ const main = async () => {
               // TODO: figure out if we can solve that somehow
               issuerLayer: LAYERS.ssr,
               layer: LAYERS.ssr,
+            },
+          ],
+        },
+        {
+          // assign import conditions per layer
+          oneOf: [
+            {
+              issuerLayer: LAYERS.shared,
+              resolve: {
+                conditionNames: serverImportConditions,
+              },
+            },
+            {
+              issuerLayer: LAYERS.ssr,
+              resolve: {
+                conditionNames: serverImportConditions,
+              },
+            },
+            {
+              issuerLayer: LAYERS.rsc,
+              resolve: {
+                conditionNames: ["react-server", ...serverImportConditions],
+              },
             },
           ],
         },

@@ -27,6 +27,7 @@ export function getSSRDomStream(
   );
 
   const ServerComponentWrapper = () => {
+    console.log("Rendering ServerComponentWrapper");
     return use(clientTreeThenable);
   };
 

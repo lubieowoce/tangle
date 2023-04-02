@@ -1,3 +1,4 @@
+import "server-only"; // poisoned import test
 import { PropsWithChildren, Suspense } from "react";
 import { ClientChild } from "./client-child";
 import { Counter } from "./client-counter";

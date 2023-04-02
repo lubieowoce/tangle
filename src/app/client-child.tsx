@@ -1,5 +1,5 @@
 "use client";
-
+import "client-only"; // poisoned import test
 import { PropsWithChildren, useEffect, useState } from "react";
 import { Counter } from "./client-counter";
 import { Card, Text } from "./common";

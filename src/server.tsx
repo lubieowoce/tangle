@@ -1,23 +1,13 @@
-// import "./server-register-import-hook";
-
 import path from "node:path";
 import util from "node:util";
 import fs from "node:fs";
 import streams from "node:stream";
 import Express, { static as expressStatic } from "express";
-import { renderToPipeableStream } from "react-dom/server";
-import {
-  BundlerConfig,
-  renderToPipeableStream as renderRSCToFlightPipeableStream,
-} from "react-server-dom-webpack/server.node";
+import type { BundlerConfig } from "react-server-dom-webpack/server.node";
 
-import ServerRoot from "./app/server-root";
-import {
-  ASSETS_ROUTE,
-  FLIGHT_REQUEST_HEADER,
-  throwOnMissingProperty,
-} from "./shared";
+import { ASSETS_ROUTE, FLIGHT_REQUEST_HEADER } from "./shared";
 import type { WebpackSSRMap } from "react-server-dom-webpack/client.node";
+import { renderRSCRoot } from "./server-rsc";
 import { getSSRDomStream } from "./server-ssr";
 
 const CLIENT_ASSETS_DIR = path.resolve(__dirname, "../client");
@@ -58,29 +48,18 @@ const createNoopStream = () =>
   });
 
 app.get("/", async (req, res) => {
-  const elem = <ServerRoot />;
-
   if (req.header(FLIGHT_REQUEST_HEADER)) {
     console.log("=====================");
     console.log("rendering RSC");
-    const stream = renderRSCToFlightPipeableStream(
-      elem,
-      throwOnMissingProperty(webpackMapForClient, "webpackMapForClient [rsc]")
-    );
-    stream.pipe(res);
+    const rscStream = renderRSCRoot(webpackMapForClient);
+    rscStream.pipe(res);
   } else {
     console.log("=====================");
     console.log("rendering RSC for SSR");
 
     const finalOutputStream = createNoopStream();
 
-    const rscStream = renderRSCToFlightPipeableStream(
-      elem,
-      throwOnMissingProperty(
-        webpackMapForClient,
-        "webpackMapForClient [rsc for ssr]"
-      )
-    ).pipe(createNoopStream());
+    const rscStream = renderRSCRoot(webpackMapForClient);
 
     rscStream.on("data", (chunk: Buffer) => {
       console.log("RSC chunk", chunk.toString("utf-8"));
