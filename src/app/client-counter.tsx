@@ -3,6 +3,7 @@ import { useState } from "react";
 import { Card, Text } from "./common";
 
 export function Counter({ id }: { id: string }) {
+  console.log(`rendering Counter (#${id})`);
   const [count, setCount] = useState(0);
   return (
     <Card>
