@@ -130,7 +130,8 @@ const main = async () => {
   // =================
 
   const clientReferences: ReactFlightWebpackPluginOptions["clientReferences"] =
-    [path.join(opts.moduleDir, "app/client-child.tsx")];
+    [path.join(opts.moduleDir, "app/server-root.tsx")];
+
   // const clientReferences = {
   //   directory: opts.moduleDir,
   //   include: moduleExtensionsRegex,
