@@ -2,15 +2,10 @@
   "name": "rsc",
   "version": "1.0.0",
   "description": "",
-  "main": "dist/server/server.js",
   "scripts": {
     "dev": "npm run build && npm run start",
-    "build": "npm run build:server && npm run build:client",
-    "build:client": "node build/build.cjs",
-    "build:server": "tsc --outDir dist/server --module commonjs",
-    "#build": "tsup && webpack --config webpack.config.js",
-    "start": "node dist/server/server.js",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "build": "NODE_ENV=production node --loader tsx build/build.ts",
+    "start": "node dist/server/main.js"
   },
   "keywords": [],
   "author": "",
