@@ -1,4 +1,5 @@
 /// <reference types="../types/react-server-dom-webpack" />
+// ^ not sure why TS doesn't pick this up automatically...
 
 import { LAYERS } from "./shared.js";
 
@@ -6,7 +7,6 @@ import { readFileSync } from "node:fs";
 import { pathToFileURL } from "node:url";
 import path from "node:path";
 
-// not sure why TS doesn't pick this up automatically...
 import ReactFlightWebpackPlugin, {
   Options as ReactFlightWebpackPluginOptions,
 } from "react-server-dom-webpack/plugin";
@@ -65,6 +65,9 @@ const REACT_MODULES_REGEX =
   /\/(react|react-server|react-dom|react-is|scheduler)\//;
 
 const main = async () => {
+  const BUILD_MODE =
+    process.env.NODE_ENV === "production" ? "production" : "development";
+
   const TS_LOADER = {
     loader: "ts-loader",
     options: {
@@ -72,8 +75,13 @@ const main = async () => {
     },
   };
 
+  const NO_TERSER: Configuration["optimization"] = {
+    minimize: false, // terser is breaking with `__name is not defined` for some reason...
+  };
+
   const shared: Configuration = {
-    mode: "development",
+    mode: BUILD_MODE,
+    // devtool: false,
     devtool: "source-map",
     resolve: {
       modules: [opts.moduleDir, opts.nodeModulesDir],
@@ -99,7 +107,9 @@ const main = async () => {
   console.log("performing analysis...");
   const analysisConfig: Configuration = {
     ...shared,
-    entry: { main: opts.server.entry /* , layer: LAYERS.default */ },
+    mode: BUILD_MODE,
+    devtool: false,
+    entry: { main: opts.server.entry },
     resolve: {
       ...shared.resolve,
     },
@@ -120,6 +130,9 @@ const main = async () => {
       path: path.join(opts.server.destDir, "__analysis__"),
       clean: true,
     },
+    optimization: {
+      ...NO_TERSER,
+    },
   };
   await runWebpack(analysisConfig);
 
@@ -130,13 +143,7 @@ const main = async () => {
   // =================
 
   const clientReferences: ReactFlightWebpackPluginOptions["clientReferences"] =
-    [path.join(opts.moduleDir, "app/server-root.tsx")];
-
-  // const clientReferences = {
-  //   directory: opts.moduleDir,
-  //   include: moduleExtensionsRegex,
-  //   recursive: true,
-  // };
+    [...analysisCtx.modules.client.keys()];
 
   const clientConfig: Configuration = {
     ...shared,
@@ -153,15 +160,22 @@ const main = async () => {
         clientManifestFilename: "client-manifest.json",
         ssrManifestFilename: "ssr-manifest-intermediate.json",
         clientReferences,
-        // clientReferences: opts.moduleDir,
-        // clientReferences: opts.moduleDir + "/*",
       }),
     ],
     target: ["web", "es2020"],
     output: {
+      clean: true,
       path: opts.client.destDir,
       publicPath: "auto", // we don't know the public path statically
-      clean: true,
+      filename: "[name].[contenthash].js",
+      chunkFilename: "[id].[chunkhash].js",
+    },
+    optimization: {
+      moduleIds: "deterministic",
+      ...NO_TERSER,
+      // splitChunks: {
+      //   chunks: "all",
+      // },
     },
   };
   console.log("building client...");
@@ -405,6 +419,9 @@ const main = async () => {
     output: {
       path: opts.server.destDir,
       clean: true,
+    },
+    optimization: {
+      ...NO_TERSER,
     },
     cache: false,
   };

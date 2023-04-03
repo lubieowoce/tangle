@@ -16,9 +16,14 @@ import { HTMLPage } from "./app/page";
 import { createDummyNavigation, NavigationContext } from "./navigation-context";
 import { ServerRootProps } from "./app/root-props";
 
+export type ScriptsManifest = {
+  main: string;
+};
+
 export function getSSRDomStream(
   props: ServerRootProps,
   rscStream: streams.Readable,
+  scriptsManifest: ScriptsManifest,
   webpackMapForSSR: WebpackSSRMap
 ) {
   const clientTreeThenable = createFromNodeStream<ReactNode>(
@@ -44,7 +49,7 @@ export function getSSRDomStream(
       </HTMLPage>
     </NavigationContext.Provider>,
     {
-      bootstrapScripts: [`${ASSETS_ROUTE}/main.js`],
+      bootstrapScripts: [`${ASSETS_ROUTE}/${scriptsManifest.main}`],
       // onShellReady() {
       //   res.header("content-type", "text/html; charset=utf-8");
       //   domStream.pipe(finalOutputStream);

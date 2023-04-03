@@ -7,7 +7,7 @@ import type { BundlerConfig } from "react-server-dom-webpack/server.node";
 import { ASSETS_ROUTE, FLIGHT_REQUEST_HEADER } from "./shared";
 import type { WebpackSSRMap } from "react-server-dom-webpack/client.node";
 import { renderRSCRoot } from "./server-rsc";
-import { getSSRDomStream } from "./server-ssr";
+import { getSSRDomStream, ScriptsManifest } from "./server-ssr";
 import { ServerRootProps } from "./app/root-props";
 import { createNoopStream } from "./utils";
 
@@ -30,6 +30,15 @@ const webpackMapForClient = readJSONFile(
 const webpackMapForSSR = readJSONFile(
   path.resolve(__dirname, "ssr-manifest.json")
 ) as WebpackSSRMap;
+
+const scriptsManifest: ScriptsManifest = {
+  // FIXME: emit this from the build, because cmon
+  main: fs
+    .readdirSync(CLIENT_ASSETS_DIR)
+    .find((p) => /^main(\.[^.]+)?\.js$/.test(p))!,
+};
+
+console.log("scriptsManifest", scriptsManifest);
 
 console.log(
   "client map (src only)",
@@ -69,7 +78,12 @@ app.get("/", async (req, res) => {
       );
     });
 
-    const domStream = getSSRDomStream(props, rscStream, webpackMapForSSR);
+    const domStream = getSSRDomStream(
+      props,
+      rscStream,
+      scriptsManifest,
+      webpackMapForSSR
+    );
 
     // FIXME: this causes the inline scripts to go in front of <html>, that's bad.
     // figure out how combine the streams properly

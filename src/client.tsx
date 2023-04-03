@@ -124,6 +124,13 @@ const ClientNavigationProvider = ({
   );
 };
 
+const getPropsFromUrl = (url: string): ServerRootProps => {
+  const params = new URLSearchParams(url);
+  return {
+    input: params.get("input") ?? "",
+  };
+};
+
 const ServerComponentWrapper = ({ cache }: { cache: ServerResponseCache }) => {
   const { key } = useNavigationContext();
   return use(cache.get(key));
@@ -136,9 +143,7 @@ const init = async () => {
     createFromReadableStream<ReactNode>(initialStream);
   const cache = createCache();
 
-  const initialProps: ServerRootProps = {
-    input: new URLSearchParams(window.location.search).get("input") ?? "",
-  }; // TODO
+  const initialProps = getPropsFromUrl(window.location.href);
   const initialKey = getKey(initialProps);
   cache.set(initialKey, initialServerTreeThenable);
 
