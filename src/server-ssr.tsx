@@ -13,8 +13,11 @@ import {
   use,
 } from "react";
 import { HTMLPage } from "./app/page";
+import { createDummyNavigation, NavigationContext } from "./navigation-context";
+import { ServerRootProps } from "./app/root-props";
 
 export function getSSRDomStream(
+  props: ServerRootProps,
   rscStream: streams.Readable,
   webpackMapForSSR: WebpackSSRMap
 ) {
@@ -33,11 +36,13 @@ export function getSSRDomStream(
 
   console.log("SSRing response");
   const domStream = renderToPipeableStream(
-    <HTMLPage>
-      <Suspense>
-        <ServerComponentWrapper />
-      </Suspense>
-    </HTMLPage>,
+    <NavigationContext.Provider value={createDummyNavigation(props)}>
+      <HTMLPage>
+        <Suspense>
+          <ServerComponentWrapper />
+        </Suspense>
+      </HTMLPage>
+    </NavigationContext.Provider>,
     {
       bootstrapScripts: [`${ASSETS_ROUTE}/main.js`],
       // onShellReady() {

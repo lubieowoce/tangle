@@ -4,8 +4,10 @@ import { ClientChild } from "./client-child";
 import { Counter } from "./client-counter";
 import { Card, Text } from "./common";
 import { ServerChild } from "./server-child";
+import { ServerRootProps } from "./root-props";
+import { ClientInputForm } from "./client-input-form";
 
-export default function ServerRoot() {
+export default function ServerRoot({ input }: ServerRootProps) {
   console.log("rendering ServerRoot", ClientChild);
   return (
     <main
@@ -13,6 +15,10 @@ export default function ServerRoot() {
     >
       <Card>
         <Text>ServerRoot</Text>
+        <div>
+          <Text>Input is: {JSON.stringify(input)}</Text>
+        </div>
+        <ClientInputForm input={input} />
         <Counter id="0" />
         <Suspense
           fallback={
@@ -27,7 +33,9 @@ export default function ServerRoot() {
           <ServerRootInner color="green">
             <ClientChild>
               {/* @ts-expect-error  async component */}
-              <ServerChild color="teal" />
+              <ServerChild color="teal">
+                <Text>Input is: {JSON.stringify(input)}</Text>
+              </ServerChild>
             </ClientChild>
           </ServerRootInner>
         </Suspense>

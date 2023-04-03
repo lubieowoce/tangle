@@ -1,7 +1,6 @@
 import path from "node:path";
 import util from "node:util";
 import fs from "node:fs";
-import streams from "node:stream";
 import Express, { static as expressStatic } from "express";
 import type { BundlerConfig } from "react-server-dom-webpack/server.node";
 
@@ -9,6 +8,8 @@ import { ASSETS_ROUTE, FLIGHT_REQUEST_HEADER } from "./shared";
 import type { WebpackSSRMap } from "react-server-dom-webpack/client.node";
 import { renderRSCRoot } from "./server-rsc";
 import { getSSRDomStream } from "./server-ssr";
+import { ServerRootProps } from "./app/root-props";
+import { createNoopStream } from "./utils";
 
 const CLIENT_ASSETS_DIR = path.resolve(__dirname, "../client");
 
@@ -39,19 +40,12 @@ console.log(
   util.inspect(filterMapSrcOnly(webpackMapForSSR), { depth: undefined })
 );
 
-const createNoopStream = () =>
-  new streams.Transform({
-    transform(chunk: Buffer, _encoding, callback) {
-      this.push(chunk);
-      callback();
-    },
-  });
-
 app.get("/", async (req, res) => {
+  const props: ServerRootProps = { input: (req.query.input as string) ?? "" };
   if (req.header(FLIGHT_REQUEST_HEADER)) {
     console.log("=====================");
     console.log("rendering RSC");
-    const rscStream = renderRSCRoot(webpackMapForClient);
+    const rscStream = renderRSCRoot(props, webpackMapForClient);
     rscStream.pipe(res);
   } else {
     console.log("=====================");
@@ -59,7 +53,7 @@ app.get("/", async (req, res) => {
 
     const finalOutputStream = createNoopStream();
 
-    const rscStream = renderRSCRoot(webpackMapForClient);
+    const rscStream = renderRSCRoot(props, webpackMapForClient);
 
     rscStream.on("data", (chunk: Buffer) => {
       console.log("RSC chunk", chunk.toString("utf-8"));
@@ -75,7 +69,7 @@ app.get("/", async (req, res) => {
       );
     });
 
-    const domStream = getSSRDomStream(rscStream, webpackMapForSSR);
+    const domStream = getSSRDomStream(props, rscStream, webpackMapForSSR);
 
     // FIXME: this causes the inline scripts to go in front of <html>, that's bad.
     // figure out how combine the streams properly

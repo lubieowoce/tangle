@@ -1,5 +1,3 @@
-import streams from "node:stream";
-
 export const ROOT_DOM_NODE_ID = "root";
 export const FLIGHT_REQUEST_HEADER = "X-RSC-Request";
 export const ASSETS_ROUTE = "/_assets";
@@ -20,11 +18,3 @@ export const throwOnMissingProperty = <TObj extends Record<string, any>>(
     },
   });
 };
-
-export const createNoopStream = () =>
-  new streams.Transform({
-    transform(chunk: Buffer, _encoding, callback) {
-      this.push(chunk);
-      callback();
-    },
-  });
