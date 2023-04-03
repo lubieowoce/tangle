@@ -11,7 +11,7 @@ import ReactFlightWebpackPlugin, {
   Options as ReactFlightWebpackPluginOptions,
 } from "react-server-dom-webpack/plugin";
 
-import { runWebpack } from "./run-webpack.js";
+import { runWebpack } from "./run-webpack";
 import Webpack, {
   Configuration,
   Compiler,
@@ -26,21 +26,6 @@ import Webpack, {
 import VirtualModulesPlugin from "webpack-virtual-modules";
 
 const rel = (p: string) => path.resolve(__dirname, p);
-
-const opts = {
-  client: {
-    entry: rel("../src/client.tsx"),
-    destDir: rel("../dist/client"),
-  },
-  server: {
-    entry: rel("../src/server.tsx"),
-    ssrModule: rel("../src/server-ssr.tsx"),
-    rscModule: rel("../src/server-rsc.tsx"),
-    destDir: rel("../dist/server"),
-  },
-  moduleDir: rel("../src"),
-  nodeModulesDir: rel("../node_modules"),
-};
 
 const rsdwSSRClientImportName = "react-server-dom-webpack/client.node";
 // const clientImportName = "react-server-dom-webpack/client"; // TODO: handle others?
@@ -59,12 +44,43 @@ const getVirtualPathProxy = (p: string) =>
 const getOriginalPathFromVirtual = (p: string) =>
   p.replace(/\.(__ssr__|__proxy__)\./, ".");
 
-const moduleExtensions = [".ts", ".tsx", ".js", ".jsx", ".json"];
+const moduleExtensions = [".ts", ".tsx", ".js", ".jsx"];
 const MODULE_EXTENSIONS_REGEX = /\.(ts|tsx|js|jsx)$/;
 const REACT_MODULES_REGEX =
   /\/(react|react-server|react-dom|react-is|scheduler)\//;
 
-const main = async () => {
+export const build = async ({
+  appPath,
+  serverRoot,
+}: {
+  appPath: string;
+  serverRoot: string;
+}) => {
+  const DIST_PATH = path.join(appPath, "dist");
+  const INTERNAL_CODE = rel("../runtime");
+
+  const opts = {
+    user: {
+      rootComponent: path.resolve(appPath, serverRoot),
+      tsConfig: path.resolve(appPath, "tsconfig.json"),
+      nodeModules: path.resolve(appPath, "../../node_modules"), // FIXME
+    },
+    client: {
+      entry: path.join(INTERNAL_CODE, "client.js"),
+      destDir: path.join(DIST_PATH, "client"),
+    },
+    server: {
+      entry: path.join(INTERNAL_CODE, "server.js"),
+      ssrModule: path.join(INTERNAL_CODE, "server-ssr.js"),
+      rscModule: path.join(INTERNAL_CODE, "server-rsc.js"),
+      rootComponentModule: path.join(INTERNAL_CODE, "server-root.js"),
+      destDir: path.join(DIST_PATH, "server"),
+    },
+    moduleDir: INTERNAL_CODE,
+  };
+
+  console.log(opts);
+
   const BUILD_MODE =
     process.env.NODE_ENV === "production" ? "production" : "development";
 
@@ -72,6 +88,10 @@ const main = async () => {
     loader: "ts-loader",
     options: {
       transpileOnly: true,
+      configFile: opts.user.tsConfig,
+      compilerOptions: {
+        moduleResolution: "node",
+      },
     },
   };
 
@@ -84,18 +104,38 @@ const main = async () => {
     // devtool: false,
     devtool: "source-map",
     resolve: {
-      modules: [opts.moduleDir, opts.nodeModulesDir],
+      modules: [appPath, opts.user.nodeModules],
       extensions: moduleExtensions,
+      fullySpecified: false, // annoying to deal with
     },
     module: {
       rules: [
         {
+          test: /\.m?js/,
+          type: "javascript/auto",
+          resolve: {
+            fullySpecified: false,
+          },
+        },
+        {
           test: MODULE_EXTENSIONS_REGEX,
-          exclude: /node_modules/,
+          exclude: [/node_modules/],
           use: TS_LOADER,
         },
+        { test: /\.json$/, type: "json" },
       ],
     },
+  };
+
+  const sharedPlugins = (): Configuration["plugins"] & unknown[] => {
+    return [
+      new VirtualModulesPlugin({
+        [opts.server.rootComponentModule]: [
+          `import ServerRoot from ${JSON.stringify(opts.user.rootComponent)};`,
+          `export default ServerRoot;`,
+        ].join("\n"),
+      }),
+    ];
   };
 
   // =================
@@ -115,15 +155,15 @@ const main = async () => {
     },
     module: {
       ...shared.module,
-      rules: [
-        {
-          test: MODULE_EXTENSIONS_REGEX,
-          exclude: /node_modules/,
-          use: [TS_LOADER],
-        },
-      ],
+      // rules: [
+      //   {
+      //     test: MODULE_EXTENSIONS_REGEX,
+      //     exclude: /node_modules/,
+      //     use: [TS_LOADER],
+      //   },
+      // ],
     },
-    plugins: [new RSCAnalysisPlugin({ analysisCtx })],
+    plugins: [...sharedPlugins(), new RSCAnalysisPlugin({ analysisCtx })],
     target: "node16", // TODO does this matter?
     experiments: { layers: true },
     output: {
@@ -155,6 +195,7 @@ const main = async () => {
       ...shared.module,
     },
     plugins: [
+      ...sharedPlugins(),
       new ReactFlightWebpackPlugin({
         isServer: false,
         clientManifestFilename: "client-manifest.json",
@@ -261,6 +302,7 @@ const main = async () => {
       ],
     },
     plugins: [
+      ...sharedPlugins(),
       new NormalModuleReplacementPlugin(
         MODULE_EXTENSIONS_REGEX,
         (resolveData /*: ResolveData */) => {
@@ -426,6 +468,8 @@ const main = async () => {
     cache: false,
   };
   await runWebpack(serverConfig);
+
+  return { server: { path: path.join(opts.server.destDir, "main.js") } };
 };
 
 const getManifestId = (resource: string) => pathToFileURL(resource);
@@ -439,7 +483,7 @@ const createProxyModule = ({
 }) => {
   const CREATE_PROXY_MOD_PATH = path.resolve(
     __dirname,
-    "./support/client-module-proxy-for-server"
+    "../runtime/support/client-module-proxy-for-server"
   );
 
   const manifestId = getManifestId(resource);
@@ -694,5 +738,3 @@ class RSCServerPlugin {
     });
   }
 }
-
-main();

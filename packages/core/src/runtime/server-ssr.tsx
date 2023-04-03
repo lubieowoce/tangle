@@ -1,7 +1,11 @@
 import streams from "node:stream";
 import { renderToPipeableStream } from "react-dom/server";
 
-import { ASSETS_ROUTE, throwOnMissingProperty } from "./shared";
+import {
+  AnyServerRootProps,
+  ASSETS_ROUTE,
+  throwOnMissingProperty,
+} from "./shared";
 import {
   createFromNodeStream,
   WebpackSSRMap,
@@ -12,16 +16,15 @@ import {
   // @ts-ignore  bad type definitions
   use,
 } from "react";
-import { HTMLPage } from "./app/page";
+import { HTMLPage } from "./page";
 import { createDummyNavigation, NavigationContext } from "./navigation-context";
-import { ServerRootProps } from "./app/root-props";
 
 export type ScriptsManifest = {
   main: string;
 };
 
 export function getSSRDomStream(
-  props: ServerRootProps,
+  props: AnyServerRootProps,
   rscStream: streams.Readable,
   scriptsManifest: ScriptsManifest,
   webpackMapForSSR: WebpackSSRMap

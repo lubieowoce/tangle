@@ -16,8 +16,7 @@ import {
   createFromReadableStream,
 } from "react-server-dom-webpack/client.browser";
 import type { Thenable } from "react-shared-types";
-import { HTMLPage } from "./app/page";
-import { ServerRootProps } from "./app/root-props";
+import { HTMLPage } from "./page";
 import {
   getKey,
   NavigateOptions,
@@ -25,8 +24,7 @@ import {
   NavigationContextValue,
   useNavigationContext,
 } from "./navigation-context";
-import { FLIGHT_REQUEST_HEADER } from "./shared";
-// import { FLIGHT_REQUEST_HEADER, ROOT_DOM_NODE_ID } from "./shared";
+import { AnyServerRootProps, FLIGHT_REQUEST_HEADER } from "./shared";
 
 declare var __RSC_CHUNKS__: string[];
 
@@ -76,7 +74,7 @@ const ClientNavigationProvider = ({
   children,
 }: PropsWithChildren<{
   cache: ServerResponseCache;
-  initialProps: ServerRootProps;
+  initialProps: AnyServerRootProps;
 }>) => {
   const [key, setKey] = useState(() => getKey(initialProps));
   const [isNavigating, startTransition] = useTransition();
@@ -124,7 +122,7 @@ const ClientNavigationProvider = ({
   );
 };
 
-const getPropsFromUrl = (url: string): ServerRootProps => {
+const getPropsFromUrl = (url: string): AnyServerRootProps => {
   const params = new URLSearchParams(url);
   return {
     input: params.get("input") ?? "",

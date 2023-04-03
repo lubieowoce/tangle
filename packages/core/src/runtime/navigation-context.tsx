@@ -1,7 +1,7 @@
 import { createContext, useContext } from "react";
-import { ServerRootProps } from "./app/root-props";
+import { AnyServerRootProps } from "./shared";
 
-export const getKey = (props: ServerRootProps) => JSON.stringify(props);
+export const getKey = (props: AnyServerRootProps) => JSON.stringify(props);
 
 export type NavigateOptions = {
   noCache?: boolean;
@@ -11,7 +11,7 @@ export type NavigateOptions = {
 export type NavigationContextValue = {
   key: string;
   isNavigating: boolean;
-  navigate(newProps: ServerRootProps, opts?: NavigateOptions): void;
+  navigate(newProps: AnyServerRootProps, opts?: NavigateOptions): void;
 };
 
 export const NavigationContext = createContext<NavigationContextValue | null>(
@@ -19,7 +19,7 @@ export const NavigationContext = createContext<NavigationContextValue | null>(
 );
 
 export function createDummyNavigation(
-  props: ServerRootProps
+  props: AnyServerRootProps
 ): NavigationContextValue {
   return {
     key: getKey(props),

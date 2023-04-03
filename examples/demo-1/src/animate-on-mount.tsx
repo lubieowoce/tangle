@@ -36,7 +36,7 @@ export function FlashOnMount({ children, ...props }: TextProps) {
           animationName: animation,
           animationDuration: "700ms",
           animationFillMode: "both",
-          animationState: isMounted ? "running" : "paused",
+          animationPlayState: isMounted ? "running" : "paused",
         }}
         {...props}
       >

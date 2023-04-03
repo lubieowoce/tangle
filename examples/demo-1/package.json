@@ -1,15 +1,10 @@
 {
-  "name": "rsc",
+  "name": "rsc-example-1",
   "version": "1.0.0",
   "description": "",
-  "workspaces": [
-    "packages/*",
-    "examples/*"
-  ],
   "scripts": {
-    "dev": "npm run build && npm run start",
-    "build": "NODE_ENV=production node --loader tsx build/build.ts && ",
-    "start": "node dist/server/main.js"
+    "dev": "rsc dev src/index.tsx",
+    "#start": "node dist/server/main.js"
   },
   "keywords": [],
   "author": "",
@@ -26,6 +21,7 @@
   "devDependencies": {
     "@types/react": "^18.0.28",
     "@types/react-dom": "^18.0.11",
+    "rsc-core": "^1.0.0",
     "ts-loader": "^9.4.2",
     "tsup": "^6.6.3",
     "tsx": "^3.12.6",

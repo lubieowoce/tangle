@@ -4,11 +4,14 @@ import fs from "node:fs";
 import Express, { static as expressStatic } from "express";
 import type { BundlerConfig } from "react-server-dom-webpack/server.node";
 
-import { ASSETS_ROUTE, FLIGHT_REQUEST_HEADER } from "./shared";
+import {
+  AnyServerRootProps,
+  ASSETS_ROUTE,
+  FLIGHT_REQUEST_HEADER,
+} from "./shared";
 import type { WebpackSSRMap } from "react-server-dom-webpack/client.node";
 import { renderRSCRoot } from "./server-rsc";
 import { getSSRDomStream, ScriptsManifest } from "./server-ssr";
-import { ServerRootProps } from "./app/root-props";
 import { createNoopStream } from "./utils";
 
 const CLIENT_ASSETS_DIR = path.resolve(__dirname, "../client");
@@ -50,7 +53,9 @@ console.log(
 );
 
 app.get("/", async (req, res) => {
-  const props: ServerRootProps = { input: (req.query.input as string) ?? "" };
+  const props: AnyServerRootProps = {
+    input: (req.query.input as string) ?? "",
+  };
   if (req.header(FLIGHT_REQUEST_HEADER)) {
     console.log("=====================");
     console.log("rendering RSC");

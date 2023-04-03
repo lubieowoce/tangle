@@ -1,7 +1,9 @@
 {
-  "include": ["src/**/*.ts", "src/**/*.tsx"],
+  "include": ["**/*.ts", "**/*.tsx"],
   "compilerOptions": {
     "strict": true,
+    "outDir": "../../dist/runtime",
+    "declaration": true,
     "target": "ESNext",
     "module": "ES2022",
     "lib": ["es2022", "DOM"],
@@ -9,6 +11,6 @@
     "esModuleInterop": true,
     "skipLibCheck": true,
     "jsx": "react-jsx",
-    "typeRoots": ["types", "node_modules/@types"]
+    "typeRoots": ["../../../../types", "node_modules/@types"]
   }
 }

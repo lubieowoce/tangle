@@ -1,0 +1,12 @@
+{
+  "include": ["**/*.ts", "**/*.tsx"],
+  "compilerOptions": {
+    "strict": true,
+    "target": "ESNext",
+    "module": "CommonJS",
+    "lib": ["es2022", "DOM"],
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "typeRoots": ["../../../../types", "../../../../node_modules/@types"]
+  }
+}

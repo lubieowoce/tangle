@@ -1,0 +1,39 @@
+{
+  "name": "rsc-core",
+  "version": "1.0.0",
+  "description": "",
+  "module": "dist/runtime/index.js",
+  "scripts": {
+    "build": "npm run build:bin && npm run build:compiled",
+    "build:bin": "tsup --config tsup.config.bin.js",
+    "build:compiled": "tsc -p src/runtime/ && echo '{ \"type\": \"module\" }' > dist/runtime/package.json"
+  },
+  "bin": {
+    "rsc": "./dist/bin/rsc.js"
+  },
+  "files": [
+    "dist",
+    "src/runtime"
+  ],
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "express": "^4.18.2",
+    "react": "^18.3.0-next-1528c5ccd-20230306",
+    "react-dom": "^18.3.0-next-1528c5ccd-20230306",
+    "react-server-dom-webpack": "^18.3.0-next-1528c5ccd-20230306",
+    "ts-loader": "^9.4.2",
+    "typescript": "^5.0.3",
+    "webpack": "^5.75.0",
+    "webpack-cli": "^5.0.1",
+    "webpack-virtual-modules": "^0.5.0"
+  },
+  "devDependencies": {
+    "@types/express": "^4.17.17",
+    "@types/react": "^18.0.28",
+    "@types/react-dom": "^18.0.11",
+    "tsup": "^6.6.3",
+    "tsx": "^3.12.6"
+  }
+}

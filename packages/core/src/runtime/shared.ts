@@ -2,6 +2,8 @@ export const ROOT_DOM_NODE_ID = "root";
 export const FLIGHT_REQUEST_HEADER = "X-RSC-Request";
 export const ASSETS_ROUTE = "/_assets";
 
+export type AnyServerRootProps = Record<string, any>;
+
 export const throwOnMissingProperty = <TObj extends Record<string, any>>(
   obj: TObj,
   name?: string
