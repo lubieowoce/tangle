@@ -1,6 +1,6 @@
 "use client";
 import { FormEvent, useState } from "react";
-import { NavigateOptions, useNavigationContext } from "rsc-core/dist/runtime";
+import { NavigateOptions, useNavigationContext } from "rsc-core";
 import { Card } from "./common";
 import { colorSets } from "./theme";
 

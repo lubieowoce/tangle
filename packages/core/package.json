@@ -3,6 +3,7 @@
   "version": "1.0.0",
   "description": "",
   "module": "dist/runtime/index.js",
+  "types": "dist/runtime/index.d.ts",
   "scripts": {
     "build": "npm run build:bin && npm run build:compiled",
     "build:bin": "tsup --config tsup.config.bin.js",
