@@ -2,7 +2,8 @@
 import "client-only"; // poisoned import test
 import { PropsWithChildren, useEffect, useState } from "react";
 import { Counter } from "./client-counter";
-import { Card, Text } from "./common";
+import { Card, Stack, Text } from "./common";
+import { colorSets } from "./theme";
 
 export const ClientChild = ({ children }: PropsWithChildren<{}>) => {
   console.log("rendering ClientChild");
@@ -10,16 +11,18 @@ export const ClientChild = ({ children }: PropsWithChildren<{}>) => {
   useEffect(() => {
     setIsClient(true);
   }, []);
-  const color = isClient ? "tomato" : "#efa2a2";
+  const colorSet = isClient ? colorSets.client : colorSets.loading;
   return (
-    <Card borderColor={color}>
-      {isClient ? (
-        <Text color={color}>ClientChild hydrated!</Text>
-      ) : (
-        <Text color={color}>ClientChild not hydrated yet...</Text>
-      )}
-      {children}
-      <Counter id="1" />
+    <Card {...colorSet}>
+      <Stack>
+        {isClient ? (
+          <Text>Client child hydrated!</Text>
+        ) : (
+          <Text>Client child not hydrated yet...</Text>
+        )}
+        {children}
+        <Counter id="1" />
+      </Stack>
     </Card>
   );
 };

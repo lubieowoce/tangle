@@ -1,13 +1,12 @@
-import { PropsWithChildren } from "react";
-import { Card, Text } from "./common";
+import { Card, CardProps, Text } from "./common";
+import { Timestamp } from "./timestamp";
 
-export async function ServerChild({
-  color,
-  children,
-}: PropsWithChildren<{ color: string }>) {
+export async function ServerChild({ children, ...props }: CardProps) {
   return (
-    <Card borderColor={color}>
-      <Text>Server child</Text>
+    <Card {...props}>
+      <Text>
+        Server child <Timestamp />
+      </Text>
       {children}
     </Card>
   );
