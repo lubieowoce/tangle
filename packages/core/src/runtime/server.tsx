@@ -15,6 +15,7 @@ import { createNoopStream } from "./utils";
 
 import type { ClientManifest } from "react-server-dom-webpack/server.node";
 import type { SSRManifest } from "react-server-dom-webpack/client.node";
+import { pathToParams } from "./user/paths";
 
 const CLIENT_ASSETS_DIR = path.resolve(__dirname, "../client");
 
@@ -55,9 +56,8 @@ console.log(
 );
 
 app.get("/", async (req, res) => {
-  const props: AnyServerRootProps = {
-    input: (req.query.input as string) ?? "",
-  };
+  const url = new URL(req.url, `http://${req.headers.host}`);
+  const props: AnyServerRootProps = pathToParams(url);
   if (req.header(FLIGHT_REQUEST_HEADER)) {
     console.log("=====================");
     console.log("rendering RSC");

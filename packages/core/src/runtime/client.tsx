@@ -24,7 +24,7 @@ import {
   useNavigationContext,
 } from "./navigation-context";
 import { AnyServerRootProps, FLIGHT_REQUEST_HEADER } from "./shared";
-import { pathToParams } from "./user/paths";
+import { paramsToPath, pathToParams } from "./user/paths";
 
 declare var __RSC_CHUNKS__: string[];
 
@@ -94,15 +94,14 @@ const ClientNavigationProvider = ({
           }
           setKey(newKey);
 
-          const newUrl = new URL(window.location.href);
-          newUrl.search = "?" + new URLSearchParams(newProps);
-          window.history.replaceState(null, "", newUrl);
+          const newPath = paramsToPath(newProps);
+          window.history.replaceState(null, "", newPath);
 
           if (cache.has(newKey)) return;
           cache.set(
             newKey,
             createFromFetch(
-              fetch(newUrl, { headers: { [FLIGHT_REQUEST_HEADER]: "1" } }),
+              fetch(newPath, { headers: { [FLIGHT_REQUEST_HEADER]: "1" } }),
               {}
             )
           );
