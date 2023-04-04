@@ -12,7 +12,6 @@ import {
 import { hydrateRoot } from "react-dom/client";
 import {
   createFromFetch,
-  // createFromFetch,
   createFromReadableStream,
 } from "react-server-dom-webpack/client.browser";
 import type { Thenable } from "react__shared/ReactTypes";
@@ -25,6 +24,7 @@ import {
   useNavigationContext,
 } from "./navigation-context";
 import { AnyServerRootProps, FLIGHT_REQUEST_HEADER } from "./shared";
+import { pathToParams } from "./user/paths";
 
 declare var __RSC_CHUNKS__: string[];
 
@@ -78,6 +78,7 @@ const ClientNavigationProvider = ({
 }>) => {
   const [key, setKey] = useState(() => getKey(initialProps));
   const [isNavigating, startTransition] = useTransition();
+  // TODO: handle popState, allow pushState
   const navigation = useMemo<NavigationContextValue>(
     () => ({
       key,
@@ -122,13 +123,6 @@ const ClientNavigationProvider = ({
   );
 };
 
-const getPropsFromUrl = (url: string): AnyServerRootProps => {
-  const params = new URLSearchParams(url);
-  return {
-    input: params.get("input") ?? "",
-  };
-};
-
 const ServerComponentWrapper = ({ cache }: { cache: ServerResponseCache }) => {
   const { key } = useNavigationContext();
   return use(cache.get(key));
@@ -141,13 +135,12 @@ const init = async () => {
     createFromReadableStream<ReactNode>(initialStream);
   const cache = createCache();
 
-  const initialProps = getPropsFromUrl(window.location.href);
+  const initialProps = pathToParams(new URL(window.location.href));
   const initialKey = getKey(initialProps);
   cache.set(initialKey, initialServerTreeThenable);
 
   console.log(cache);
 
-  // TODO: loading order later
   onDocumentLoad(() => {
     startTransition(() => {
       hydrateRoot(

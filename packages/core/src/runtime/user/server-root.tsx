@@ -1,4 +1,4 @@
-import { AnyServerRootProps } from "./shared";
+import type { AnyServerRootProps } from "../shared";
 
 export default function DummyServerRoot(
   _props: AnyServerRootProps

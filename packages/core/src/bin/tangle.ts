@@ -14,9 +14,13 @@ const main = async () => {
   const appPath = process.cwd();
   switch (command) {
     case "dev": {
-      const [, rootPath = "src/index.tsx"] = args;
+      const [, serverRoot = "src/index.tsx", paths = "src/paths.ts"] = args;
       const runDev = async () => {
-        const { server } = await build({ appPath, serverRoot: rootPath });
+        const { server } = await build({
+          appPath,
+          serverRoot,
+          paths,
+        });
         return () => {
           const proc = spawnServer({ path: server.path, watchDir: appPath });
           return () => proc.kill();

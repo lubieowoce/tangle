@@ -1,13 +1,13 @@
 import "server-only"; // poisoned import test
 import { Suspense } from "react";
-import { ClientChild } from "./client-child";
-import { Counter } from "./client-counter";
-import { Card, CardProps, Stack, Text } from "./common";
-import { ServerChild } from "./server-child";
+import { ClientChild } from "./components/client-child";
+import { Counter } from "./components/client-counter";
+import { Card, CardProps, Stack, Text } from "./components/common";
+import { ServerChild } from "./components/server-child";
 import { ServerRootProps } from "./root-props";
-import { ClientInputForm } from "./client-input-form";
-import { colorSets, themeVariables } from "./theme";
-import { Timestamp } from "./timestamp";
+import { ClientInputForm } from "./components/client-input-form";
+import { colorSets, themeVariables } from "./components/theme";
+import { Timestamp } from "./components/timestamp";
 
 export default function ServerRoot({ input }: ServerRootProps) {
   console.log("rendering ServerRoot", ClientChild);

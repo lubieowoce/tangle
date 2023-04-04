@@ -52,16 +52,19 @@ const REACT_MODULES_REGEX =
 export const build = async ({
   appPath,
   serverRoot,
+  paths: pathsFile,
 }: {
   appPath: string;
   serverRoot: string;
+  paths: string;
 }) => {
   const DIST_PATH = path.join(appPath, "dist");
   const INTERNAL_CODE = rel("../runtime");
 
   const opts = {
     user: {
-      rootComponent: path.resolve(appPath, serverRoot),
+      rootComponentModule: path.resolve(appPath, serverRoot),
+      pathsModule: path.resolve(appPath, pathsFile),
       tsConfig: path.resolve(appPath, "tsconfig.json"),
       nodeModules: path.resolve(appPath, "../../node_modules"), // FIXME
     },
@@ -73,7 +76,8 @@ export const build = async ({
       entry: path.join(INTERNAL_CODE, "server.js"),
       ssrModule: path.join(INTERNAL_CODE, "server-ssr.js"),
       rscModule: path.join(INTERNAL_CODE, "server-rsc.js"),
-      rootComponentModule: path.join(INTERNAL_CODE, "server-root.js"),
+      rootComponentModule: path.join(INTERNAL_CODE, "user/server-root.js"),
+      pathsModule: path.join(INTERNAL_CODE, "user/paths.js"),
       destDir: path.join(DIST_PATH, "server"),
     },
     moduleDir: INTERNAL_CODE,
@@ -131,8 +135,15 @@ export const build = async ({
     return [
       new VirtualModulesPlugin({
         [opts.server.rootComponentModule]: [
-          `import ServerRoot from ${JSON.stringify(opts.user.rootComponent)};`,
+          `import ServerRoot from ${JSON.stringify(
+            opts.user.rootComponentModule
+          )};`,
           `export default ServerRoot;`,
+        ].join("\n"),
+        [opts.server.pathsModule]: [
+          `export { pathToParams, paramsToPath } from ${JSON.stringify(
+            opts.user.pathsModule
+          )};`,
         ].join("\n"),
       }),
     ];

@@ -5,7 +5,7 @@ import {
 
 import { AnyServerRootProps, throwOnMissingProperty } from "./shared";
 
-import ServerRoot from "./server-root";
+import ServerRoot from "./user/server-root";
 import { createNoopStream } from "./utils";
 
 export function renderRSCRoot(
