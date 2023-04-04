@@ -16,8 +16,8 @@ Though it does manage to do SSR in the same process as the main server, which is
 ### Usage
 
 Currently, the framework assumes there's a server component at `src/index.tsx`, and serves that under `localhost:8080/`.
-There's a `useNavigation` thingy that you can use to change the cuurent props.
-As a stopgap for a router, make a `paths.ts` what exports functions that translate between params and URLs.
+There's a `useNavigation` thingy that you can use to change the current props.
+As a stopgap for a router, you define a `src/paths.ts` that exports functions for converting the url to props and vice versa.
 
 ### Demo
 
