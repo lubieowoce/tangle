@@ -185,6 +185,8 @@ export const build = async ({
   const clientReferences: ReactFlightWebpackPluginOptions["clientReferences"] =
     [...analysisCtx.modules.client.keys()];
 
+  const INTERMEDIATE_SSR_MANIFEST = "ssr-manifest-intermediate.json";
+
   const clientConfig: Configuration = {
     ...shared,
     entry: opts.client.entry,
@@ -199,7 +201,7 @@ export const build = async ({
       new ReactFlightWebpackPlugin({
         isServer: false,
         clientManifestFilename: "client-manifest.json",
-        ssrManifestFilename: "ssr-manifest-intermediate.json",
+        ssrManifestFilename: INTERMEDIATE_SSR_MANIFEST,
         clientReferences,
       }),
     ],
@@ -213,11 +215,12 @@ export const build = async ({
     },
     optimization: {
       moduleIds: "deterministic",
-      ...NO_TERSER,
+      // ...NO_TERSER,
       // splitChunks: {
       //   chunks: "all",
       // },
     },
+    cache: false, // FIXME
   };
   console.log("building client...");
 
@@ -225,7 +228,7 @@ export const build = async ({
 
   const ssrManifestPath = path.join(
     opts.client.destDir,
-    "ssr-manifest-intermediate.json"
+    INTERMEDIATE_SSR_MANIFEST
   );
 
   const ssrManifestFromRSDW: SSRManifest = JSON.parse(
@@ -672,8 +675,8 @@ class RSCServerPlugin {
           };
           const ssrManifestSpecifierRewrite: Rewrites = {};
 
-          const isGeneratedModule = (m: Module) =>
-            m instanceof NormalModule && isVirtualPathSSR(m.resource);
+          const isGeneratedModule = (mod: Module) =>
+            mod instanceof NormalModule && isVirtualPathSSR(mod.resource);
           // && m.layer === LAYERS.ssr; // TODO: should we do something like this??
 
           compilation.chunkGroups.forEach((chunkGroup) => {
@@ -681,31 +684,50 @@ class RSCServerPlugin {
               .map((c) => c.id)
               .filter((id) => id !== null) as (string | number)[];
 
+            const visitModule = (
+              mod: Module & { modules?: Module[] },
+              parentModuleId?: string | number
+            ) => {
+              // If this is a concatenation, register each child to the parent ID.
+              if (mod.modules) {
+                const moduleId =
+                  parentModuleId ?? compilation.chunkGraph.getModuleId(mod);
+                mod.modules.forEach((concatenatedMod) => {
+                  visitModule(concatenatedMod, moduleId);
+                });
+                return;
+              }
+
+              if (!isGeneratedModule(mod)) return;
+              const moduleId =
+                parentModuleId ?? compilation.chunkGraph.getModuleId(mod);
+              if (!(mod instanceof NormalModule)) {
+                throw new Error(
+                  `Expected generated module ${moduleId} to be a NormalModule`
+                );
+              }
+              // Assumption: RSDW uses file:// ids to identify SSR modules
+              const currentIdInSSRManifest = getManifestId(
+                getOriginalPathFromVirtual(mod.resource)
+              ).href;
+              ssrManifestSpecifierRewrite[currentIdInSSRManifest] = {
+                moduleId,
+                chunkIds,
+              };
+            };
+
             chunkGroup.chunks.forEach(function (chunk) {
               const chunkModules =
                 compilation.chunkGraph.getChunkModulesIterable(chunk);
 
               Array.from(chunkModules).forEach((mod) => {
-                if (!isGeneratedModule(mod)) return;
-                const moduleId = compilation.chunkGraph.getModuleId(mod);
-                if (!(mod instanceof NormalModule)) {
-                  throw new Error(
-                    `Expected generated module ${moduleId} to be a NormalModule`
-                  );
-                }
-                // Assumption: RSDW uses file:// ids to identify SSR modules
-                const currentIdInSSRManifest = pathToFileURL(
-                  getOriginalPathFromVirtual(mod.resource)
-                ).href;
-                ssrManifestSpecifierRewrite[currentIdInSSRManifest] = {
-                  moduleId,
-                  chunkIds,
-                };
+                visitModule(mod);
               });
             });
           });
 
           const finalSSRManifest: SSRManifestActual = {};
+          const toRewrite = new Set(Object.keys(ssrManifestSpecifierRewrite));
           for (const [clientModuleId, moduleExportMap] of Object.entries(
             this.options.ssrManifestFromClient
           )) {
@@ -723,11 +745,21 @@ class RSCServerPlugin {
                 };
                 finalSSRManifest[clientModuleId] ||= {};
                 finalSSRManifest[clientModuleId][exportName] = newExportInfo;
+                toRewrite.delete(exportInfo.specifier + "");
               }
             }
           }
+
           console.log("manifest rewrites", ssrManifestSpecifierRewrite);
           console.log("final ssr manifest", finalSSRManifest);
+
+          if (toRewrite.size > 0) {
+            throw new Error(
+              "INTERNAL ERROR: Not all modules rewritten:\n" +
+                [...toRewrite].join("\n")
+            );
+          }
+
           const ssrOutput = JSON.stringify(finalSSRManifest, null, 2);
           compilation.emitAsset(
             this.options.ssrManifestFilename,
