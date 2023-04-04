@@ -15,7 +15,7 @@ import {
   // createFromFetch,
   createFromReadableStream,
 } from "react-server-dom-webpack/client.browser";
-import type { Thenable } from "react-shared-types";
+import type { Thenable } from "react__shared/ReactTypes";
 import { HTMLPage } from "./page";
 import {
   getKey,

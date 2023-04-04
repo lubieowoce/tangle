@@ -1,6 +1,6 @@
 import {
-  type BundlerConfig,
-  renderToPipeableStream as renderRSCToFlightPipeableStream,
+  renderToPipeableStream,
+  ClientManifest,
 } from "react-server-dom-webpack/server.node";
 
 import { AnyServerRootProps, throwOnMissingProperty } from "./shared";
@@ -10,10 +10,10 @@ import { createNoopStream } from "./utils";
 
 export function renderRSCRoot(
   props: AnyServerRootProps,
-  webpackMapForClient: BundlerConfig
+  webpackMapForClient: ClientManifest
 ) {
   const elem = <ServerRoot {...props} />;
-  return renderRSCToFlightPipeableStream(
+  return renderToPipeableStream(
     elem,
     throwOnMissingProperty(webpackMapForClient, "webpackMapForClient [rsc]")
   ).pipe(createNoopStream());

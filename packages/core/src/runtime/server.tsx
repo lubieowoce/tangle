@@ -2,17 +2,19 @@ import path from "node:path";
 import util from "node:util";
 import fs from "node:fs";
 import Express, { static as expressStatic } from "express";
-import type { BundlerConfig } from "react-server-dom-webpack/server.node";
 
 import {
   AnyServerRootProps,
   ASSETS_ROUTE,
   FLIGHT_REQUEST_HEADER,
 } from "./shared";
-import type { WebpackSSRMap } from "react-server-dom-webpack/client.node";
+
 import { renderRSCRoot } from "./server-rsc";
 import { getSSRDomStream, ScriptsManifest } from "./server-ssr";
 import { createNoopStream } from "./utils";
+
+import type { ClientManifest } from "react-server-dom-webpack/server.node";
+import type { SSRManifest } from "react-server-dom-webpack/client.node";
 
 const CLIENT_ASSETS_DIR = path.resolve(__dirname, "../client");
 
@@ -28,11 +30,11 @@ const readJSONFile = (p: string) => JSON.parse(fs.readFileSync(p, "utf-8"));
 
 const webpackMapForClient = readJSONFile(
   path.join(CLIENT_ASSETS_DIR, "client-manifest.json")
-) as BundlerConfig;
+) as ClientManifest;
 
 const webpackMapForSSR = readJSONFile(
   path.resolve(__dirname, "ssr-manifest.json")
-) as WebpackSSRMap;
+) as NonNullable<SSRManifest>;
 
 const scriptsManifest: ScriptsManifest = {
   // FIXME: emit this from the build, because cmon

@@ -2,19 +2,112 @@ declare module "react-server-dom-webpack" {
   export {};
 }
 
-declare module "react-server-dom-webpack/src/ReactFlightServerWebpackBundlerConfig" {
-  // https://github.com/facebook/react/blob/main/packages/react-server-dom-webpack/src/ReactFlightServerWebpackBundlerConfig.js
+declare module "react-server-dom-webpack/client.browser" {
+  export * from "react-server-dom-webpack/src/ReactFlightDOMClientBrowser";
+}
 
-  type WebpackMap = {
-    [id: string]: ClientReferenceMetadata;
+declare module "react-server-dom-webpack/server.node" {
+  export * from "react-server-dom-webpack/src/ReactFlightDOMServerNode";
+}
+
+declare module "react-server-dom-webpack/server.edge" {
+  export * from "react-server-dom-webpack/src/ReactFlightDOMServerEdge";
+}
+
+declare module "react-server-dom-webpack/client.browser" {
+  export * from "react-server-dom-webpack/src/ReactFlightDOMClientBrowser";
+}
+
+declare module "react-server-dom-webpack/client.node" {
+  export * from "react-server-dom-webpack/src/ReactFlightDOMClientNode";
+}
+
+declare module "react-server-dom-webpack/client.edge" {
+  export * from "react-server-dom-webpack/src/ReactFlightDOMClientEdge";
+}
+
+//========================
+// host & server configs
+//=======================
+
+// these modules would normally be subsitituted by some machinery react has. (forks?)
+// i'm only using webpack for server & client, so i'll plug it in here.
+
+declare module "react-client/src/ReactFlightClientHostConfig" {
+  export * from "react-server-dom-webpack/src/ReactFlightClientWebpackBundlerConfig";
+}
+
+declare module "react-server/src/ReactFlightServerConfig" {
+  export * from "react-server-dom-webpack/src/ReactFlightServerWebpackBundlerConfig";
+}
+
+//==================
+// bundler configs
+//==================
+
+declare module "react-server-dom-webpack/src/ReactFlightClientNodeBundlerConfig" {
+  import type {
+    Thenable,
+    FulfilledThenable,
+    RejectedThenable,
+  } from "react__shared/ReactTypes";
+
+  export type SSRManifest = {
+    [clientId: string]: {
+      [clientExportName: string]: ClientReference<any>;
+    };
   };
 
-  export type BundlerConfig = WebpackMap;
+  export type ServerManifest = void;
+
+  export type ServerReferenceId = string;
+
+  export type ClientReferenceMetadata = {
+    id: string;
+    chunks: Array<string>;
+    name: string;
+  };
+
+  // eslint-disable-next-line no-unused-vars
+  export type ClientReference<T> = {
+    specifier: string;
+    name: string;
+  };
+}
+
+declare module "react-server-dom-webpack/src/ReactFlightClientWebpackBundlerConfig" {
+  export type SSRManifest = null | {
+    [clientId: string]: {
+      [clientExportName: string]: ClientReferenceMetadata;
+    };
+  };
+
+  export type ServerManifest = {
+    [id: string]: ClientReference<any>;
+  };
+
+  export type ServerReferenceId = string;
+
+  export type ClientReferenceMetadata = {
+    id: string;
+    chunks: Array<string>;
+    name: string;
+    async: boolean;
+  };
+
+  // eslint-disable-next-line no-unused-vars
+  export type ClientReference<T> = ClientReferenceMetadata;
+}
+
+declare module "react-server-dom-webpack/src/ReactFlightServerWebpackBundlerConfig" {
+  export type ClientManifest = {
+    [id: string]: ClientReferenceMetadata;
+  };
 
   export type ServerReference<T extends (...args: any[]) => any> = T & {
     $$typeof: symbol;
     $$id: string;
-    $$bound: Array<ReactModel>;
+    $$bound: null | Array<ReactClientValue>;
   };
 
   export type ServerReferenceId = string;
@@ -32,13 +125,22 @@ declare module "react-server-dom-webpack/src/ReactFlightServerWebpackBundlerConf
     name: string;
     async: boolean;
   };
+
+  export type ClientReferenceKey = string;
 }
 
-declare module "react-server-dom-webpack/server.node" {
+//================
+// server
+//================
+
+declare module "react-server-dom-webpack/src/ReactFlightDOMServerNode" {
   import type { Writable, PassThrough } from "node:stream";
   import type { ReactElement } from "react";
-  import type { ServerContextJSONValue } from "react-shared-types";
-  import type { BundlerConfig } from "react-server-dom-webpack/src/ReactFlightServerWebpackBundlerConfig";
+  import type { ReactClientValue } from "react-server/src/ReactFlightServer";
+  import type { ServerContextJSONValue } from "react__shared/ReactTypes";
+  import type { ClientManifest } from "react-server-dom-webpack/src/ReactFlightServerWebpackBundlerConfig";
+
+  export { ClientManifest }; // reexport for convenience
 
   // https://github.com/facebook/react/blob/main/packages/react-server-dom-webpack/src/ReactFlightDOMServerNode.js
 
@@ -53,33 +155,174 @@ declare module "react-server-dom-webpack/server.node" {
     pipe<T extends Writable>(destination: T): T;
   };
 
-  export { BundlerConfig };
-
-  // export declare function renderToPipeableStream(
   export function renderToPipeableStream(
-    model: ReactModel,
-    webpackMap: BundlerConfig,
+    model: ReactClientValue,
+    webpackMap: ClientManifest,
     options?: Options
   ): PipeableStream;
+}
 
-  // https://github.com/facebook/react/blob/main/packages/react-server/src/ReactFlightServer.js
+declare module "react-server-dom-webpack/src/ReactFlightDOMServerEdge" {
+  import type { ReadableStream } from "node:stream/web";
+  import type { ReactElement } from "react";
+  import type { ServerContextJSONValue } from "react__shared/ReactTypes";
+  import type { ClientManifest } from "react-server-dom-webpack/src/ReactFlightServerWebpackBundlerConfig";
+  import type { ServerManifest } from "react-client/src/ReactFlightClientHostConfig";
 
-  export type ReactModel =
-    | ReactElement<any> // | React$Element<any>
-    | LazyComponent<any, any>
+  export { ClientManifest }; // reexport for convenience
+
+  export type Options = {
+    identifierPrefix?: string;
+    signal?: AbortSignal;
+    context?: Array<[string, ServerContextJSONValue]>;
+    onError?: (error: unknown) => void;
+  };
+
+  export function renderToReadableStream(
+    model: ReactClientValue,
+    webpackMap: ClientManifest,
+    options?: Options
+  ): ReadableStream;
+
+  export function decodeReply<T>(
+    body: string | FormData,
+    webpackMap: ServerManifest
+  ): Thenable<T>;
+}
+
+//================
+// client
+//================
+
+declare module "react-server-dom-webpack/src/ReactFlightDOMClientBrowser" {
+  import type { Thenable } from "react__shared/ReactTypes";
+
+  // https://github.com/facebook/react/blob/main/packages/react-server-dom-webpack/src/ReactFlightDOMClientBrowser.js
+
+  type CallServerCallback = <A, T>(id: string, args: A) => Promise<T>;
+
+  export type Options = {
+    callServer?: CallServerCallback;
+  };
+
+  export function createFromFetch<T>(
+    promiseForResponse: Promise<Response>,
+    options?: Options
+  ): Thenable<T>;
+
+  export function createFromReadableStream<T>(
+    stream: ReadableStream,
+    options?: Options
+  ): Thenable<T>;
+
+  export function createFromXHR<T>(
+    request: XMLHttpRequest,
+    options?: Options
+  ): Thenable<T>;
+}
+
+declare module "react-server-dom-webpack/src/ReactFlightDOMClientNode" {
+  import type { Thenable } from "react__shared/ReactTypes";
+  import type { Readable } from "node:stream";
+  import type { SSRManifest } from "react-client/src/ReactFlightClientHostConfig";
+
+  export { SSRManifest }; // reexport for convenience
+
+  export function createFromNodeStream<T>(
+    stream: Readable,
+    moduleMap: NonNullable<SSRManifest>
+  ): Thenable<T>;
+}
+
+declare module "react-server-dom-webpack/src/ReactFlightDOMClientEdge" {
+  import type { Thenable } from "react__shared/ReactTypes";
+  import type { ReadableStream } from "node:stream/web";
+  import type { SSRManifest } from "react-client/src/ReactFlightClientHostConfig";
+
+  export { SSRManifest }; // reexport for convenience
+
+  export type Options = {
+    moduleMap?: SSRManifest;
+  };
+
+  export function createFromReadableStream<T>(
+    stream: ReadableStream,
+    options?: Options
+  ): Thenable<T>;
+
+  export function createFromFetch<T>(
+    promiseForResponse: Promise<Response>,
+    options?: Options
+  ): Thenable<T>;
+}
+
+//================
+// core
+//================
+
+declare module "react-server/src/ReactFlightServer" {
+  // no idea where the's come from in flow, i'll just import them from regular react
+  import type {
+    ElementType as React$Element,
+    ComponentType as React$AbstractComponent, // hmmm... maybe this is close enough?
+  } from "react";
+
+  import type {
+    // Destination,
+    // Chunk,
+    ClientManifest,
+    ClientReferenceMetadata,
+    ClientReference,
+    ClientReferenceKey,
+    ServerReference,
+    ServerReferenceId,
+  } from "react-server/src/ReactFlightServerConfig";
+
+  import type { LazyComponent } from "react/src/ReactLazy";
+
+  type React$Element<T> = React.ElementType<T>;
+
+  type ReactJSONValue =
+    | string
+    | boolean
+    | number
+    | null
+    | readonly ReactJSONValue[]
+    | ReactClientObject;
+
+  type ReactClientObject = { [key: string]: ReactClientValue };
+
+  // Serializable values
+  export type ReactClientValue =
+    // Server Elements and Lazy Components are unwrapped on the Server
+    | React$Element<React$AbstractComponent<any, any>>
+    | LazyComponent<ReactClientValue, any>
+    // References are passed by their value
+    | ClientReference<any>
+    | ServerReference<any>
+    // The rest are passed as is. Sub-types can be passed in but lose their
+    // subtype, so the receiver can only accept once of these.
+    | React$Element<string>
+    | React$Element<ClientReference<any> & any>
+    | ReactServerContext<any>
     | string
     | boolean
     | number
     | symbol
     | null
-    | Iterable<ReactModel>
-    | ReactModelObject
-    | Promise<ReactModel>;
+    | void
+    | Iterable<ReactClientValue>
+    | Array<ReactClientValue>
+    | ReactClientObject
+    | Promise<ReactClientValue>; // Thenable<ReactClientValue>
+}
 
-  export type ReactModelObject = { [key: string]: ReactModel };
+//================
+// shared
+//================
 
+declare module "react/src/ReactLazy" {
   // https://github.com/facebook/react/blob/main/packages/react/src/ReactLazy.js
-
   export type LazyComponent<T, P> = {
     $$typeof: symbol | number;
     _payload: P;
@@ -87,7 +330,9 @@ declare module "react-server-dom-webpack/server.node" {
   };
 }
 
-declare module "react-shared-types" {
+declare module "react__shared/ReactTypes" {
+  import type { Context as ReactContext } from "react";
+
   // https://github.com/facebook/react/blob/main/packages/shared/ReactTypes.js
 
   // The subset of a Thenable required by things thrown by Suspense.
@@ -136,64 +381,15 @@ declare module "react-shared-types" {
     | null
     | readonly ServerContextJSONValue[]
     | { [key: string]: ServerContextJSONValue };
+
+  export type ReactServerContext<T = any> = ReactContext<T>;
 }
 
-declare module "react-server-dom-webpack/client.browser" {
-  import type { Thenable } from "react-shared-types";
+//================
+// misc
+//================
 
-  // https://github.com/facebook/react/blob/main/packages/react-server-dom-webpack/src/ReactFlightDOMClientBrowser.js
-
-  type CallServerCallback = <A, T>(id: string, args: A) => Promise<T>;
-
-  export type Options = {
-    callServer?: CallServerCallback;
-  };
-
-  export function createFromFetch<T>(
-    promiseForResponse: Promise<Response>,
-    options?: Options
-  ): Thenable<T>;
-
-  export function createFromReadableStream<T>(
-    stream: ReadableStream,
-    options?: Options
-  ): Thenable<T>;
-
-  export function createFromXHR<T>(
-    request: XMLHttpRequest,
-    options?: Options
-  ): Thenable<T>;
-}
-
-declare module "react-server-dom-webpack/client.node" {
-  import type { Thenable } from "react-shared-types";
-  import type { Readable } from "node:stream";
-
-  export type ClientReferenceMetadata = {
-    id: string;
-    chunks: Array<string>;
-    name: string;
-  };
-
-  // eslint-disable-next-line no-unused-vars
-  export type ClientReference<T> = {
-    specifier: string;
-    name: string;
-  };
-
-  export type WebpackSSRMap = {
-    [clientId: string]: {
-      [clientExportName: string]: ClientReference<any>;
-    };
-  };
-
-  export type BundlerConfig = WebpackSSRMap;
-
-  export function createFromNodeStream<T>(
-    stream: Readable,
-    moduleMap: BundlerConfig
-  ): Thenable<T>;
-}
+// i dont't feel like mapping out the ones below in detail, so i'll just delare the top-level ones
 
 declare module "react-server-dom-webpack/node-register" {
   export default function register(): void;

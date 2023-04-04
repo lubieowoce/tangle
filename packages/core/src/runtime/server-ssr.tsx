@@ -1,4 +1,4 @@
-import streams from "node:stream";
+import type { Readable } from "node:stream";
 import { renderToPipeableStream } from "react-dom/server";
 
 import {
@@ -8,8 +8,9 @@ import {
 } from "./shared";
 import {
   createFromNodeStream,
-  WebpackSSRMap,
+  SSRManifest,
 } from "react-server-dom-webpack/client.node";
+
 import {
   ReactNode,
   Suspense,
@@ -25,16 +26,13 @@ export type ScriptsManifest = {
 
 export function getSSRDomStream(
   props: AnyServerRootProps,
-  rscStream: streams.Readable,
+  rscStream: Readable,
   scriptsManifest: ScriptsManifest,
-  webpackMapForSSR: WebpackSSRMap
+  webpackMapForSSR: NonNullable<SSRManifest>
 ) {
   const clientTreeThenable = createFromNodeStream<ReactNode>(
     rscStream,
-    throwOnMissingProperty(
-      webpackMapForSSR,
-      "webpackMapForSSR [createFromNodeStream for ssr]"
-    )
+    throwOnMissingProperty(webpackMapForSSR, "webpackMapForSSR [ssr]")
   );
 
   const ServerComponentWrapper = () => {
