@@ -261,11 +261,12 @@ declare module "react-server-dom-webpack/src/ReactFlightDOMClientEdge" {
 //================
 
 declare module "react-server/src/ReactFlightServer" {
-  // no idea where the's come from in flow, i'll just import them from regular react
+  // no idea where the `React$NAME` types come from in react's flow types, but i can just import them from regular react here
   import type {
     ElementType as React$Element,
     ComponentType as React$AbstractComponent, // hmmm... maybe this is close enough?
   } from "react";
+  import type { ReactServerContext } from "react__shared/ReactTypes";
 
   import type {
     // Destination,
@@ -291,6 +292,8 @@ declare module "react-server/src/ReactFlightServer" {
     | ReactClientObject;
 
   type ReactClientObject = { [key: string]: ReactClientValue };
+
+  // FIXME: Typescript doesn't seem to like recursive types, so this comes out as `any`...
 
   // Serializable values
   export type ReactClientValue =
