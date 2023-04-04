@@ -1,4 +1,4 @@
-export const variables = {
+export const themeVariables = {
   "--color-text-client": "#2b6374", // "#2389a1",
   "--color-border-client": "#a6dfec",
   "--color-bg-client": "#d3f5f8",

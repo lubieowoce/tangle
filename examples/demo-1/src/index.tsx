@@ -6,14 +6,19 @@ import { Card, CardProps, Stack, Text } from "./common";
 import { ServerChild } from "./server-child";
 import { ServerRootProps } from "./root-props";
 import { ClientInputForm } from "./client-input-form";
-import { colorSets } from "./theme";
+import { colorSets, themeVariables } from "./theme";
 import { Timestamp } from "./timestamp";
 
 export default function ServerRoot({ input }: ServerRootProps) {
   console.log("rendering ServerRoot", ClientChild);
   return (
     <main
-      style={{ fontFamily: "sans-serif", maxWidth: "600px", margin: "0 auto" }}
+      style={{
+        fontFamily: "sans-serif",
+        maxWidth: "600px",
+        margin: "0 auto",
+        ...themeVariables,
+      }}
     >
       <Card {...colorSets.server}>
         <Stack>
