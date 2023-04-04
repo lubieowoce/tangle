@@ -8,6 +8,6 @@ export default defineConfig({
   clean: true,
   outDir: "dist/bin",
   entry: {
-    rsc: "src/bin/index.ts",
+    tangle: "src/bin/tangle.ts",
   },
 });

@@ -1,6 +1,6 @@
 {
-  "name": "rsc-core",
-  "version": "1.0.0",
+  "name": "@owoce/tangle",
+  "version": "0.0.1",
   "description": "",
   "module": "dist/runtime/index.js",
   "types": "dist/runtime/index.d.ts",
@@ -10,11 +10,10 @@
     "build:compiled": "tsc -p src/runtime/ && echo '{ \"type\": \"module\" }' > dist/runtime/package.json"
   },
   "bin": {
-    "rsc": "./dist/bin/rsc.js"
+    "tangle": "./dist/bin/tangle.js"
   },
   "files": [
-    "dist",
-    "src/runtime"
+    "dist"
   ],
   "keywords": [],
   "author": "",

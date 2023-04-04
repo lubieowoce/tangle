@@ -1,6 +1,5 @@
 {
-  "name": "rsc",
-  "version": "1.0.0",
+  "private": true,
   "description": "",
   "workspaces": [
     "packages/*",
@@ -11,8 +10,6 @@
     "example:prod": "NODE_ENV=production npm run -w examples/demo-1 dev",
     "build": "npm run -w packages/core build"
   },
-  "keywords": [],
-  "author": "",
   "license": "MIT",
   "dependencies": {},
   "devDependencies": {
