@@ -1,6 +1,6 @@
 {
   "name": "@owoce/tangle",
-  "version": "0.0.2",
+  "version": "0.0.3",
   "description": "",
   "repository": {
     "url": "https://github.com/lubieowoce/tangle"
@@ -22,6 +22,7 @@
   "author": "",
   "license": "MIT",
   "dependencies": {
+    "chokidar": "^3.5.3",
     "express": "^4.18.2",
     "react": "18.3.0-next-b14f8da15-20230403",
     "react-dom": "18.3.0-next-b14f8da15-20230403",

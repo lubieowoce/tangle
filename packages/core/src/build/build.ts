@@ -66,7 +66,6 @@ export const build = async ({
       rootComponentModule: path.resolve(appPath, serverRoot),
       pathsModule: path.resolve(appPath, pathsFile),
       tsConfig: path.resolve(appPath, "tsconfig.json"),
-      nodeModules: path.resolve(appPath, "../../node_modules"), // FIXME
     },
     client: {
       entry: path.join(INTERNAL_CODE, "client.js"),
@@ -108,7 +107,7 @@ export const build = async ({
     // devtool: false,
     devtool: "source-map",
     resolve: {
-      modules: [appPath, opts.user.nodeModules],
+      modules: [appPath, "node_modules"],
       extensions: moduleExtensions,
       fullySpecified: false, // annoying to deal with
     },
