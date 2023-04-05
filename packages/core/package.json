@@ -1,7 +1,10 @@
 {
   "name": "@owoce/tangle",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "description": "",
+  "repository": {
+    "url": "https://github.com/lubieowoce/tangle"
+  },
   "module": "dist/runtime/index.js",
   "types": "dist/runtime/index.d.ts",
   "scripts": {

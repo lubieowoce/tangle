@@ -17,8 +17,8 @@
     "server-only": "^0.0.1"
   },
   "devDependencies": {
+    "@owoce/tangle": "0.0.2",
     "@types/react": "^18.0.28",
-    "@types/react-dom": "^18.0.11",
-    "@owoce/tangle": "0.0.1"
+    "@types/react-dom": "^18.0.11"
   }
 }
