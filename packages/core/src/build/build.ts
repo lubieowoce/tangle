@@ -316,153 +316,8 @@ export const build = async ({
     },
     plugins: [
       ...sharedPlugins(),
-      new NormalModuleReplacementPlugin(
-        MODULE_EXTENSIONS_REGEX,
-        (resolveData /*: ResolveData */) => {
-          const originalResource = resolveData.createData.resource;
-
-          if (analysisCtx.getTypeForResource(originalResource) === "client") {
-            // console.log("replacement", resolveData);
-            const isSSR = resolveData.contextInfo.issuerLayer === LAYERS.ssr;
-            const newResource = isSSR
-              ? getVirtualPathSSR(originalResource)
-              : getVirtualPathProxy(originalResource);
-
-            const label = `(${isSSR ? "ssr" : "proxy"})`;
-            console.log(
-              `${label} preparing replacement: `,
-              resolveData.createData.resource
-            );
-            console.log(
-              `${label} issued from: ${resolveData.contextInfo.issuer} (${resolveData.contextInfo.issuerLayer})`
-            );
-            console.log(`${label} rewriting request to`, newResource);
-            // console.log(resolveData);
-            console.log();
-
-            resolveData.request = newResource;
-            resolveData.createData.request =
-              resolveData.createData.request.replace(
-                originalResource,
-                newResource
-              );
-            resolveData.createData.resource = newResource;
-            resolveData.createData.userRequest = newResource;
-            // console.log(resolveData);
-          }
-        }
-      ),
-      new VirtualModulesPlugin({
-        ...Object.fromEntries(
-          [...analysisCtx.modules.client.entries()].map(([resource, mod]) => {
-            const virtualPath = getVirtualPathSSR(resource);
-            const source = mod.originalSource()!.buffer().toString("utf-8");
-            console.log(
-              "VirtualModule (ssr):" + virtualPath,
-              "\n" + source + "\n"
-            );
-            return [virtualPath, source];
-          })
-        ),
-        ...Object.fromEntries(
-          [...analysisCtx.modules.client.entries()].map(([resource]) => {
-            const virtualPath = getVirtualPathProxy(resource);
-            const source = createProxyModule({
-              resource,
-              exports: analysisCtx.exports.client.get(resource)!,
-            });
-            console.log(
-              "VirtualModule (proxy): " + virtualPath,
-              "\n" + source + "\n"
-            );
-            return [virtualPath, source];
-          })
-        ),
-      }),
-      function AddSSRDependency(compiler) {
-        const pluginName = "AddSSRDependency";
-        const SSR_CHUNK_NAME = "ssr[index]";
-
-        let clientFileNameFound = false;
-
-        const dependencies = Webpack.dependencies;
-
-        class ClientReferenceDependency extends dependencies.ModuleDependency {
-          constructor(request: string) {
-            super(request);
-          }
-
-          get type(): string {
-            return "client-reference";
-          }
-        }
-
-        compiler.hooks.thisCompilation.tap(
-          pluginName,
-          (compilation, { normalModuleFactory }) => {
-            compilation.dependencyFactories.set(
-              ClientReferenceDependency,
-              normalModuleFactory
-            );
-            compilation.dependencyTemplates.set(
-              ClientReferenceDependency,
-              new dependencies.NullDependency.Template()
-            );
-
-            tapParserJS(normalModuleFactory, pluginName, (parser) => {
-              parser.hooks.program.tap(pluginName, () => {
-                const module = parser.state.module;
-
-                if (module.resource !== rsdwSSRClientFileName) {
-                  return;
-                }
-
-                clientFileNameFound = true;
-
-                for (const [
-                  clientModuleResource,
-                ] of analysisCtx.modules.client.entries()) {
-                  const dep = new ClientReferenceDependency(
-                    // this kicks off the imports for some SSR modules, so they might not go through
-                    // our SSR/proxy resolution hacks in NormalModuleReplacementPlugin
-                    getVirtualPathSSR(clientModuleResource)
-                  );
-
-                  const block = new AsyncDependenciesBlock(
-                    {
-                      name: SSR_CHUNK_NAME,
-                    },
-                    undefined,
-                    dep.request
-                  );
-
-                  block.addDependency(dep);
-                  module.addBlock(block);
-                }
-              });
-            });
-          }
-        );
-
-        compiler.hooks.make.tap(pluginName, (compilation) => {
-          compilation.hooks.processAssets.tap(
-            {
-              name: pluginName,
-              stage: Compilation.PROCESS_ASSETS_STAGE_REPORT,
-            },
-            function () {
-              if (clientFileNameFound === false) {
-                compilation.warnings.push(
-                  new WebpackError(
-                    `Client runtime at ${rsdwSSRClientImportName} was not found.`
-                  )
-                );
-                return;
-              }
-            }
-          );
-        });
-      },
+      ...moduleReplacements(analysisCtx),
+      createSSRDependencyPlugin(analysisCtx),
       new RSCServerPlugin({
         // ctx,
         ssrManifestFromClient: ssrManifestFromRSDW,
@@ -780,3 +635,155 @@ class RSCServerPlugin {
     });
   }
 }
+
+function moduleReplacements(analysisCtx: RSCAnalysisCtx) {
+  // TODO: use .apply() instead of just putting these in the plugin array
+
+  const virtualModules: Record<string, string> = {};
+  for (const [resource, mod] of analysisCtx.modules.client.entries()) {
+    {
+      const virtualPath = getVirtualPathSSR(resource);
+      const source = mod.originalSource()!.buffer().toString("utf-8");
+      console.log("VirtualModule (ssr):" + virtualPath, "\n" + source + "\n");
+      virtualModules[virtualPath] = source;
+    }
+    {
+      const virtualPath = getVirtualPathProxy(resource);
+      const source = createProxyModule({
+        resource,
+        exports: analysisCtx.exports.client.get(resource)!,
+      });
+      console.log(
+        "VirtualModule (proxy): " + virtualPath,
+        "\n" + source + "\n"
+      );
+      virtualModules[virtualPath] = source;
+    }
+  }
+
+  return [
+    new VirtualModulesPlugin(virtualModules),
+    new NormalModuleReplacementPlugin(
+      MODULE_EXTENSIONS_REGEX,
+      (resolveData /*: ResolveData */) => {
+        const originalResource = resolveData.createData.resource;
+
+        if (analysisCtx.getTypeForResource(originalResource) === "client") {
+          // console.log("replacement", resolveData);
+          const isSSR = resolveData.contextInfo.issuerLayer === LAYERS.ssr;
+          const newResource = isSSR
+            ? getVirtualPathSSR(originalResource)
+            : getVirtualPathProxy(originalResource);
+
+          const label = `(${isSSR ? "ssr" : "proxy"})`;
+          console.log(
+            `${label} preparing replacement: `,
+            resolveData.createData.resource
+          );
+          console.log(
+            `${label} issued from: ${resolveData.contextInfo.issuer} (${resolveData.contextInfo.issuerLayer})`
+          );
+          console.log(`${label} rewriting request to`, newResource);
+          // console.log(resolveData);
+          console.log();
+
+          resolveData.request = newResource;
+          resolveData.createData.request =
+            resolveData.createData.request.replace(
+              originalResource,
+              newResource
+            );
+          resolveData.createData.resource = newResource;
+          resolveData.createData.userRequest = newResource;
+          // console.log(resolveData);
+        }
+      }
+    ),
+  ];
+}
+
+const createSSRDependencyPlugin = (analysisCtx: RSCAnalysisCtx) =>
+  function AddSSRDependencyPlugin(compiler: Webpack.Compiler) {
+    const pluginName = "AddSSRDependency";
+    const SSR_CHUNK_NAME = "ssr[index]";
+
+    let clientFileNameFound = false;
+
+    const dependencies = Webpack.dependencies;
+
+    class ClientReferenceDependency extends dependencies.ModuleDependency {
+      constructor(request: string) {
+        super(request);
+      }
+
+      get type(): string {
+        return "client-reference";
+      }
+    }
+
+    compiler.hooks.thisCompilation.tap(
+      pluginName,
+      (compilation, { normalModuleFactory }) => {
+        compilation.dependencyFactories.set(
+          ClientReferenceDependency,
+          normalModuleFactory
+        );
+        compilation.dependencyTemplates.set(
+          ClientReferenceDependency,
+          new dependencies.NullDependency.Template()
+        );
+
+        tapParserJS(normalModuleFactory, pluginName, (parser) => {
+          parser.hooks.program.tap(pluginName, () => {
+            const module = parser.state.module;
+
+            if (module.resource !== rsdwSSRClientFileName) {
+              return;
+            }
+
+            clientFileNameFound = true;
+
+            for (const [
+              clientModuleResource,
+            ] of analysisCtx.modules.client.entries()) {
+              const dep = new ClientReferenceDependency(
+                // this kicks off the imports for some SSR modules, so they might not go through
+                // our SSR/proxy resolution hacks in NormalModuleReplacementPlugin
+                getVirtualPathSSR(clientModuleResource)
+              );
+
+              const block = new AsyncDependenciesBlock(
+                {
+                  name: SSR_CHUNK_NAME,
+                },
+                undefined,
+                dep.request
+              );
+
+              block.addDependency(dep);
+              module.addBlock(block);
+            }
+          });
+        });
+      }
+    );
+
+    compiler.hooks.make.tap(pluginName, (compilation) => {
+      compilation.hooks.processAssets.tap(
+        {
+          name: pluginName,
+          stage: Compilation.PROCESS_ASSETS_STAGE_REPORT,
+        },
+        function () {
+          if (clientFileNameFound === false) {
+            compilation.warnings.push(
+              new WebpackError(
+                `Client runtime at ${rsdwSSRClientImportName} was not found.`
+              )
+            );
+            return;
+          }
+        }
+      );
+    });
+  };
