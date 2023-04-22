@@ -26,7 +26,7 @@ There's a demo. To run it, build the core package, and install the bin links
 ```
 npm ci
 npm run build
-npm run install-links
+npm run install-links # this actually just runs `npm ci` again, not sure how to do it properly...
 ```
 
 and then

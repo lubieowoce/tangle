@@ -10,7 +10,7 @@
     "example:prod": "NODE_ENV=production npm run -w examples/demo-1 dev",
     "build": "turbo run build --filter './packages/core'",
     "clean": "find . -name dist -type d -not -path './node_modules/*' -exec rm -rf {} +",
-    "install-links": "npm install --install-links"
+    "install-links": "npm ci"
   },
   "license": "MIT",
   "devDependencies": {
