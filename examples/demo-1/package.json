@@ -5,7 +5,9 @@
   "description": "",
   "scripts": {
     "dev": "tangle dev src/index.tsx",
-    "#start": "node dist/server/main.js"
+    "build": "tangle build src/index.tsx",
+    "start": "tangle start",
+    "start-raw": "node dist/server/main.js"
   },
   "keywords": [],
   "author": "",
