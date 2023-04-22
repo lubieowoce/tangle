@@ -8,12 +8,14 @@
   "scripts": {
     "example": "npm run -w examples/demo-1 dev",
     "example:prod": "NODE_ENV=production npm run -w examples/demo-1 dev",
-    "build": "npm run -w packages/core build"
+    "build": "turbo run build --filter './packages/core'",
+    "clean": "find . -name dist -type d -not -path './node_modules/*' -exec rm -rf {} +",
+    "install-links": "npm install --install-links"
   },
   "license": "MIT",
-  "dependencies": {},
   "devDependencies": {
     "tsup": "^6.6.3",
-    "tsx": "^3.12.6"
+    "tsx": "^3.12.6",
+    "turbo": "^1.9.3"
   }
 }

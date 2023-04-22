@@ -21,10 +21,12 @@ As a stopgap for a router, you define a `src/paths.ts` that exports functions fo
 
 ### Demo
 
-There's a demo. To run it, build the core package with
+There's a demo. To run it, build the core package, and install the bin links
 
 ```
+npm ci
 npm run build
+npm run install-links
 ```
 
 and then
