@@ -1,8 +1,11 @@
-export function getProfileFromDb({
+import "server-only";
+
+export async function getProfileFromDb({
   profileId,
 }: {
   profileId: string | number;
 }) {
+  await sleep(500);
   const allProfileIds = Object.keys(db.profiles).sort();
   const index = allProfileIds.indexOf(profileId + "");
 
@@ -21,12 +24,16 @@ export function getProfileFromDb({
   return { profile, prevProfileId, nextProfileId };
 }
 
-export function getAllProfilesFromFb() {
+export async function getAllProfilesFromFb() {
+  await sleep(700);
   return Object.entries(db.profiles).map(([profileId, profile]) => ({
     profileId,
     name: profile.name,
   }));
 }
+
+const sleep = (ms: number) =>
+  new Promise<void>((resolve) => setTimeout(resolve, ms));
 
 type ProfileData = { name: string; description: string };
 

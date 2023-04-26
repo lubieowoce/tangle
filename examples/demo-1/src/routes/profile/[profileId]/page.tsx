@@ -4,9 +4,9 @@ import { Timestamp } from "../../../components/timestamp";
 
 type Params = { profileId: string };
 
-export default function ProfileView({ params }: { params: Params }) {
+export default async function ProfileView({ params }: { params: Params }) {
   const profileId = Number(params.profileId ?? "0");
-  const { profile, nextProfileId, prevProfileId } = getProfileFromDb({
+  const { profile, nextProfileId, prevProfileId } = await getProfileFromDb({
     profileId,
   });
   return (
