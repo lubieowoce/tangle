@@ -9,10 +9,10 @@ import ServerRoot from "./user/server-root";
 import { createNoopStream } from "./utils";
 
 export function renderRSCRoot(
-  props: AnyServerRootProps,
+  path: string,
   webpackMapForClient: ClientManifest
 ) {
-  const elem = <ServerRoot {...props} />;
+  const elem = <ServerRoot path={path} />;
   return renderToPipeableStream(
     elem,
     throwOnMissingProperty(webpackMapForClient, "webpackMapForClient [rsc]")

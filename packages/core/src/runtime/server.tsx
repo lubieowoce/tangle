@@ -55,13 +55,16 @@ console.log(
   util.inspect(filterMapSrcOnly(webpackMapForSSR), { depth: undefined })
 );
 
-app.get("/", async (req, res) => {
+app.use(ASSETS_ROUTE, expressStatic(CLIENT_ASSETS_DIR));
+
+app.get("*", async (req, res) => {
   const url = new URL(req.url, `http://${req.headers.host}`);
-  const props: AnyServerRootProps = pathToParams(url);
+  // const props: AnyServerRootProps = pathToParams(url);
+  const path = req.path;
   if (req.header(FLIGHT_REQUEST_HEADER)) {
     console.log("=====================");
     console.log("rendering RSC");
-    const rscStream = renderRSCRoot(props, webpackMapForClient);
+    const rscStream = renderRSCRoot(path, webpackMapForClient);
     rscStream.pipe(res);
   } else {
     console.log("=====================");
@@ -69,7 +72,7 @@ app.get("/", async (req, res) => {
 
     const finalOutputStream = createNoopStream();
 
-    const rscStream = renderRSCRoot(props, webpackMapForClient);
+    const rscStream = renderRSCRoot(path, webpackMapForClient);
 
     rscStream.on("data", (chunk: Buffer) => {
       console.log("RSC chunk", chunk.toString("utf-8"));
@@ -86,7 +89,7 @@ app.get("/", async (req, res) => {
     });
 
     const domStream = getSSRDomStream(
-      props,
+      path,
       rscStream,
       scriptsManifest,
       webpackMapForSSR
@@ -99,7 +102,5 @@ app.get("/", async (req, res) => {
     finalOutputStream.pipe(res);
   }
 });
-
-app.use(ASSETS_ROUTE, expressStatic(CLIENT_ASSETS_DIR));
 
 app.listen(8080);

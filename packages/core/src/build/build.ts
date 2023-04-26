@@ -1,7 +1,7 @@
 /// <reference types="../types/react-server-dom-webpack" />
 // ^ not sure why TS doesn't pick this up automatically...
 
-import { LAYERS } from "./shared.js";
+import { LAYERS } from "./shared";
 
 import { readFileSync } from "node:fs";
 import { pathToFileURL } from "node:url";
@@ -24,6 +24,8 @@ import Webpack, {
 } from "webpack";
 
 import VirtualModulesPlugin from "webpack-virtual-modules";
+import { MODULE_EXTENSIONS_LIST, MODULE_EXTENSIONS_REGEX } from "./common";
+import { RouteInfo, findRoutes } from "./find-routes";
 
 const rel = (p: string) => path.resolve(__dirname, p);
 
@@ -44,10 +46,10 @@ const getVirtualPathProxy = (p: string) =>
 const getOriginalPathFromVirtual = (p: string) =>
   p.replace(/\.(__ssr__|__proxy__)\./, ".");
 
-const moduleExtensions = [".ts", ".tsx", ".js", ".jsx"];
-const MODULE_EXTENSIONS_REGEX = /\.(ts|tsx|js|jsx)$/;
 const REACT_MODULES_REGEX =
   /\/(react|react-server|react-dom|react-is|scheduler)\//;
+
+export type BuildReturn = { server: { path: string } };
 
 export const build = async ({
   appPath,
@@ -57,13 +59,14 @@ export const build = async ({
   appPath: string;
   serverRoot: string;
   paths: string;
-}) => {
+}): Promise<BuildReturn> => {
   const DIST_PATH = path.join(appPath, "dist");
   const INTERNAL_CODE = rel("../runtime");
 
   const opts = {
     user: {
       rootComponentModule: path.resolve(appPath, serverRoot),
+      routesDir: path.resolve(appPath, "src/routes"),
       pathsModule: path.resolve(appPath, pathsFile),
       tsConfig: path.resolve(appPath, "tsconfig.json"),
     },
@@ -108,7 +111,7 @@ export const build = async ({
     devtool: "source-map",
     resolve: {
       modules: [appPath, "node_modules"],
-      extensions: moduleExtensions,
+      extensions: MODULE_EXTENSIONS_LIST,
       fullySpecified: false, // annoying to deal with
     },
     module: {
@@ -130,13 +133,46 @@ export const build = async ({
     },
   };
 
+  const parsedRoutes = findRoutes(opts.user.routesDir, opts.user.routesDir);
+
+  const literal = (val: string | number | null | undefined) => {
+    if (val === undefined) return "undefined";
+    return JSON.stringify(val);
+  };
+
+  const arrayLiteral = (lits: string[]) => "[" + lits.join(", ") + "]";
+
+  const generateRoutesExport = (routes: RouteInfo): string => {
+    return `{
+      segment: ${literal(routes.segment)},
+      page: ${
+        routes.page
+          ? `() => import(/* webpackMode: "eager" */ ${literal(routes.page)})`
+          : literal(null)
+      },
+      layout: ${
+        routes.layout
+          ? `() => import(/* webpackMode: "eager" */ ${literal(routes.layout)})`
+          : literal(null)
+      },
+      children: ${
+        routes.children
+          ? arrayLiteral(
+              routes.children.map((child) => generateRoutesExport(child))
+            )
+          : literal(null)
+      },
+    }`;
+  };
+
   const sharedPlugins = (): Configuration["plugins"] & unknown[] => {
+    const serverRouter = path.join(INTERNAL_CODE, "router/server-router.js");
     return [
       new VirtualModulesPlugin({
         [opts.server.rootComponentModule]: [
-          `import ServerRoot from ${JSON.stringify(
-            opts.user.rootComponentModule
-          )};`,
+          `import { createServerRouter } from ${literal(serverRouter)};`,
+          `const routes = ${generateRoutesExport(parsedRoutes)};`,
+          `const ServerRoot = createServerRouter(routes);`,
           `export default ServerRoot;`,
         ].join("\n"),
         [opts.server.pathsModule]: [
@@ -147,6 +183,15 @@ export const build = async ({
       }),
     ];
   };
+
+  // console.log(
+  //   require("util").inspect(
+  //     routes,
+  //     { depth: undefined, colors: true }
+  //   )
+  // );
+
+  // return { server: { path: "nonexistent" } };
 
   // =================
   // Analysis

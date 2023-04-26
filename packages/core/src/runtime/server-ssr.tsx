@@ -25,7 +25,7 @@ export type ScriptsManifest = {
 };
 
 export function getSSRDomStream(
-  props: AnyServerRootProps,
+  path: string,
   rscStream: Readable,
   scriptsManifest: ScriptsManifest,
   webpackMapForSSR: NonNullable<SSRManifest>
@@ -42,7 +42,8 @@ export function getSSRDomStream(
 
   console.log("SSRing response");
   const domStream = renderToPipeableStream(
-    <NavigationContext.Provider value={createDummyNavigation(props)}>
+    // TODO: integrate NavigationContext with router!
+    <NavigationContext.Provider value={createDummyNavigation({ path })}>
       <HTMLPage>
         <Suspense>
           <ServerComponentWrapper />
