@@ -1,29 +1,25 @@
 "use client";
 import { createContext, useContext } from "react";
-import { AnyServerRootProps } from "./shared";
-
-export const getKey = (props: AnyServerRootProps) => JSON.stringify(props);
 
 export type NavigateOptions = {
   noCache?: boolean;
   instant?: boolean;
+  type?: "push" | "replace";
 };
 
 export type NavigationContextValue = {
   key: string;
   isNavigating: boolean;
-  navigate(newProps: AnyServerRootProps, opts?: NavigateOptions): void;
+  navigate(newPath: string, opts?: NavigateOptions): void;
 };
 
 export const NavigationContext = createContext<NavigationContextValue | null>(
   null
 );
 
-export function createDummyNavigation(
-  props: AnyServerRootProps
-): NavigationContextValue {
+export function createDummyNavigation(path: string): NavigationContextValue {
   return {
-    key: getKey(props),
+    key: path,
     isNavigating: false,
     navigate() {
       throw new Error("Cannot call navigate on the Server.");

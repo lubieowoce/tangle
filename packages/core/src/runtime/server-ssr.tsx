@@ -18,7 +18,10 @@ import {
   use,
 } from "react";
 import { HTMLPage } from "./page";
-import { createDummyNavigation, NavigationContext } from "./navigation-context";
+import {
+  createDummyNavigation,
+  NavigationContext,
+} from "./router/navigation-context";
 
 export type ScriptsManifest = {
   main: string;
@@ -43,7 +46,7 @@ export function getSSRDomStream(
   console.log("SSRing response");
   const domStream = renderToPipeableStream(
     // TODO: integrate NavigationContext with router!
-    <NavigationContext.Provider value={createDummyNavigation({ path })}>
+    <NavigationContext.Provider value={createDummyNavigation(path)}>
       <HTMLPage>
         <Suspense>
           <ServerComponentWrapper />

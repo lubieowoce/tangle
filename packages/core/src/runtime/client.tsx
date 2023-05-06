@@ -1,30 +1,13 @@
-import {
-  PropsWithChildren,
-  startTransition,
-  Suspense,
-  // @ts-ignore
-  use,
-  useMemo,
-  useState,
-  useTransition,
-  type ReactNode,
-} from "react";
+import { startTransition, Suspense, type ReactNode } from "react";
 import { hydrateRoot } from "react-dom/client";
-import {
-  createFromFetch,
-  createFromReadableStream,
-} from "react-server-dom-webpack/client.browser";
-import type { Thenable } from "react__shared/ReactTypes";
+import { createFromReadableStream } from "react-server-dom-webpack/client.browser";
 import { HTMLPage } from "./page";
 import {
-  getKey,
-  NavigateOptions,
-  NavigationContext,
-  NavigationContextValue,
-  useNavigationContext,
-} from "./navigation-context";
-import { AnyServerRootProps, FLIGHT_REQUEST_HEADER } from "./shared";
-import { paramsToPath, pathToParams } from "./user/paths";
+  ClientRouter,
+  RenderCurrentPathFromCache,
+  createCache,
+  getPathFromDOMState,
+} from "./router/client-router";
 
 declare var __RSC_CHUNKS__: string[];
 
@@ -53,8 +36,6 @@ const intoStream = (initialChunks: string[]) => {
   return stream.readable;
 };
 
-// const root = createRoot(document.getElementById(ROOT_DOM_NODE_ID)!);
-
 const onDocumentLoad = (fn: () => void) => {
   if (document.readyState !== "loading") {
     setTimeout(fn);
@@ -65,68 +46,6 @@ const onDocumentLoad = (fn: () => void) => {
   }
 };
 
-const createCache = () => new Map<string, Thenable<ReactNode>>();
-type ServerResponseCache = ReturnType<typeof createCache>;
-
-const ClientNavigationProvider = ({
-  cache,
-  initialProps,
-  children,
-}: PropsWithChildren<{
-  cache: ServerResponseCache;
-  initialProps: AnyServerRootProps;
-}>) => {
-  const [key, setKey] = useState(() => getKey(initialProps));
-  const [isNavigating, startTransition] = useTransition();
-  // TODO: handle popState, allow pushState
-  const navigation = useMemo<NavigationContextValue>(
-    () => ({
-      key,
-      isNavigating,
-      navigate(
-        newProps,
-        { noCache = false, instant = false }: NavigateOptions = {}
-      ) {
-        const doNavigate = () => {
-          let newKey = getKey(newProps);
-          if (noCache) {
-            newKey += "-" + Date.now();
-          }
-          setKey(newKey);
-
-          const newPath = paramsToPath(newProps);
-          window.history.replaceState(null, "", newPath);
-
-          if (cache.has(newKey)) return;
-          cache.set(
-            newKey,
-            createFromFetch(
-              fetch(newPath, { headers: { [FLIGHT_REQUEST_HEADER]: "1" } }),
-              {}
-            )
-          );
-        };
-        if (instant) {
-          doNavigate();
-        } else {
-          startTransition(doNavigate);
-        }
-      },
-    }),
-    [key, isNavigating, cache]
-  );
-  return (
-    <NavigationContext.Provider value={navigation}>
-      {children}
-    </NavigationContext.Provider>
-  );
-};
-
-const ServerComponentWrapper = ({ cache }: { cache: ServerResponseCache }) => {
-  const { key } = useNavigationContext();
-  return use(cache.get(key));
-};
-
 const init = async () => {
   console.log("client-side init!");
   const initialStream = intoStream(__RSC_CHUNKS__);
@@ -134,8 +53,8 @@ const init = async () => {
     createFromReadableStream<ReactNode>(initialStream);
   const cache = createCache();
 
-  const initialProps = pathToParams(new URL(window.location.href));
-  const initialKey = getKey(initialProps);
+  const initialPath = getPathFromDOMState();
+  const initialKey = initialPath;
   cache.set(initialKey, initialServerTreeThenable);
 
   console.log(cache);
@@ -144,13 +63,13 @@ const init = async () => {
     startTransition(() => {
       hydrateRoot(
         document,
-        <ClientNavigationProvider cache={cache} initialProps={initialProps}>
+        <ClientRouter cache={cache} initialPath={initialPath}>
           <HTMLPage>
             <Suspense>
-              <ServerComponentWrapper cache={cache} />
+              <RenderCurrentPathFromCache cache={cache} />
             </Suspense>
           </HTMLPage>
-        </ClientNavigationProvider>
+        </ClientRouter>
       );
     });
   });

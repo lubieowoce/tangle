@@ -65,6 +65,7 @@ app.get("*", async (req, res) => {
     console.log("=====================");
     console.log("rendering RSC");
     const rscStream = renderRSCRoot(path, webpackMapForClient);
+    res.header("content-type", "text/x-component");
     rscStream.pipe(res);
   } else {
     console.log("=====================");
