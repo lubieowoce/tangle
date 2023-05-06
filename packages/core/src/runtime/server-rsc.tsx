@@ -3,9 +3,9 @@ import {
   ClientManifest,
 } from "react-server-dom-webpack/server.node";
 
-import { AnyServerRootProps, throwOnMissingProperty } from "./shared";
+import { throwOnMissingProperty } from "./shared";
 
-import ServerRoot from "./user/server-root";
+import ServerRoot from "./generated/server-root";
 import { createNoopStream } from "./utils";
 
 export function renderRSCRoot(

@@ -3,11 +3,7 @@ import util from "node:util";
 import fs from "node:fs";
 import Express, { static as expressStatic } from "express";
 
-import {
-  AnyServerRootProps,
-  ASSETS_ROUTE,
-  FLIGHT_REQUEST_HEADER,
-} from "./shared";
+import { ASSETS_ROUTE, FLIGHT_REQUEST_HEADER } from "./shared";
 
 import { renderRSCRoot } from "./server-rsc";
 import { getSSRDomStream, ScriptsManifest } from "./server-ssr";
@@ -15,7 +11,6 @@ import { createNoopStream } from "./utils";
 
 import type { ClientManifest } from "react-server-dom-webpack/server.node";
 import type { SSRManifest } from "react-server-dom-webpack/client.node";
-import { pathToParams } from "./user/paths";
 
 const CLIENT_ASSETS_DIR = path.resolve(__dirname, "../client");
 

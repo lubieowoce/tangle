@@ -21,11 +21,14 @@ import Webpack, {
   AsyncDependenciesBlock,
   Compilation,
   WebpackError,
+  dependencies as webpackDependencies,
 } from "webpack";
 
 import VirtualModulesPlugin from "webpack-virtual-modules";
 import { MODULE_EXTENSIONS_LIST, MODULE_EXTENSIONS_REGEX } from "./common";
-import { RouteInfo, findRoutes } from "./find-routes";
+import { findRoutes } from "./routes/find-routes";
+import { stringLiteral } from "./codegen-helpers";
+import { generateRoutesExport } from "./routes/generate-routes";
 
 const rel = (p: string) => path.resolve(__dirname, p);
 
@@ -78,8 +81,7 @@ export const build = async ({
       entry: path.join(INTERNAL_CODE, "server.js"),
       ssrModule: path.join(INTERNAL_CODE, "server-ssr.js"),
       rscModule: path.join(INTERNAL_CODE, "server-rsc.js"),
-      rootComponentModule: path.join(INTERNAL_CODE, "user/server-root.js"),
-      pathsModule: path.join(INTERNAL_CODE, "user/paths.js"),
+      rootComponentModule: path.join(INTERNAL_CODE, "generated/server-root.js"),
       destDir: path.join(DIST_PATH, "server"),
     },
     moduleDir: INTERNAL_CODE,
@@ -135,63 +137,19 @@ export const build = async ({
 
   const parsedRoutes = findRoutes(opts.user.routesDir, opts.user.routesDir);
 
-  const literal = (val: string | number | null | undefined) => {
-    if (val === undefined) return "undefined";
-    return JSON.stringify(val);
-  };
-
-  const arrayLiteral = (lits: string[]) => "[" + lits.join(", ") + "]";
-
-  const generateRoutesExport = (routes: RouteInfo): string => {
-    return `{
-      segment: ${literal(routes.segment)},
-      page: ${
-        routes.page
-          ? `() => import(/* webpackMode: "eager" */ ${literal(routes.page)})`
-          : literal(null)
-      },
-      layout: ${
-        routes.layout
-          ? `() => import(/* webpackMode: "eager" */ ${literal(routes.layout)})`
-          : literal(null)
-      },
-      children: ${
-        routes.children
-          ? arrayLiteral(
-              routes.children.map((child) => generateRoutesExport(child))
-            )
-          : literal(null)
-      },
-    }`;
-  };
-
   const sharedPlugins = (): Configuration["plugins"] & unknown[] => {
     const serverRouter = path.join(INTERNAL_CODE, "router/server-router.js");
     return [
       new VirtualModulesPlugin({
         [opts.server.rootComponentModule]: [
-          `import { createServerRouter } from ${literal(serverRouter)};`,
+          `import { createServerRouter } from ${stringLiteral(serverRouter)};`,
           `const routes = ${generateRoutesExport(parsedRoutes)};`,
           `const ServerRoot = createServerRouter(routes);`,
           `export default ServerRoot;`,
         ].join("\n"),
-        [opts.server.pathsModule]: [
-          `export { pathToParams, paramsToPath } from ${JSON.stringify(
-            opts.user.pathsModule
-          )};`,
-        ].join("\n"),
       }),
     ];
   };
-
-  // console.log(
-  //   require("util").inspect(
-  //     routes,
-  //     { depth: undefined, colors: true }
-  //   )
-  // );
-
-  // return { server: { path: "nonexistent" } };
 
   // =================
   // Analysis
@@ -401,12 +359,12 @@ const createProxyModule = ({
 
   const manifestId = getManifestId(resource);
   const generatedCode = [
-    `import { createProxy } from ${JSON.stringify(CREATE_PROXY_MOD_PATH)};`,
+    `import { createProxy } from ${stringLiteral(CREATE_PROXY_MOD_PATH)};`,
     ``,
     `const proxy = /*@__PURE__*/ createProxy(${JSON.stringify(manifestId)});`,
   ];
   const proxyExpr = (exportName: string) =>
-    `(/*@__PURE__*/ proxy[${JSON.stringify(exportName)}])`;
+    `(/*@__PURE__*/ proxy[${stringLiteral(exportName)}])`;
 
   for (const exportName of exports) {
     const expr = proxyExpr(exportName);
@@ -754,9 +712,7 @@ const createSSRDependencyPlugin = (analysisCtx: RSCAnalysisCtx) =>
 
     let clientFileNameFound = false;
 
-    const dependencies = Webpack.dependencies;
-
-    class ClientReferenceDependency extends dependencies.ModuleDependency {
+    class ClientReferenceDependency extends webpackDependencies.ModuleDependency {
       constructor(request: string) {
         super(request);
       }
@@ -775,7 +731,7 @@ const createSSRDependencyPlugin = (analysisCtx: RSCAnalysisCtx) =>
         );
         compilation.dependencyTemplates.set(
           ClientReferenceDependency,
-          new dependencies.NullDependency.Template()
+          new webpackDependencies.NullDependency.Template()
         );
 
         tapParserJS(normalModuleFactory, pluginName, (parser) => {

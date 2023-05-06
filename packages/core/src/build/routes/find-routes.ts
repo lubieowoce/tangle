@@ -1,19 +1,11 @@
 import { join, basename, relative } from "node:path";
 import { readdirSync, lstatSync } from "node:fs";
 import micromatch from "micromatch";
-import { MODULE_EXTENSIONS_GLOB } from "./common";
+import { MODULE_EXTENSIONS_GLOB } from "../common";
+import { RouteInfo } from "./types";
 
 const IS_PAGE = "page" + MODULE_EXTENSIONS_GLOB;
 const IS_LAYOUT = "layout" + MODULE_EXTENSIONS_GLOB;
-
-type Segment = string;
-
-export type RouteInfo = {
-  segment: Segment;
-  page: string | null;
-  layout: string | null;
-  children: RouteInfo[] | null;
-};
 
 export const isRoot = (info: RouteInfo) => info.segment === "";
 

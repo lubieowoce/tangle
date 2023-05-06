@@ -1,11 +1,7 @@
 import type { Readable } from "node:stream";
 import { renderToPipeableStream } from "react-dom/server";
 
-import {
-  AnyServerRootProps,
-  ASSETS_ROUTE,
-  throwOnMissingProperty,
-} from "./shared";
+import { ASSETS_ROUTE, throwOnMissingProperty } from "./shared";
 import {
   createFromNodeStream,
   SSRManifest,
