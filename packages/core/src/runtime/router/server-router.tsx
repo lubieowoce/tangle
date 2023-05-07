@@ -1,3 +1,4 @@
+import { RouterSegment } from "./client-router";
 import { parsePath } from "./paths";
 import {
   RouteDefinition,
@@ -24,7 +25,7 @@ export function createServerRouter(routes: RouteDefinition) {
     const { segment, params: currentSegmentParams } = match;
     const params: SegmentParams = { ...outerParams, ...currentSegmentParams };
 
-    let children: JSX.Element | null = null;
+    let tree: JSX.Element | null = null;
 
     if (restOfPath.length > 0) {
       console.log("recursing", restOfPath);
@@ -34,7 +35,7 @@ export function createServerRouter(routes: RouteDefinition) {
           `More path remaining (${restOfPath}), but no child routes defined`
         );
       }
-      children = await pathToRouteJSX(restOfPath, segment.children, params);
+      tree = await pathToRouteJSX(restOfPath, segment.children, params);
     } else {
       console.log("stopping walk", segmentPath);
       // no more path remaining, render the component
@@ -42,19 +43,28 @@ export function createServerRouter(routes: RouteDefinition) {
         throw new Error(`Missing component for segment ${segmentPath}`);
       }
       const { default: Page } = await segment.page();
-      children = <Page key={getSegmentKey(segment, params)} params={params} />;
-    }
-
-    if (segment.layout) {
-      const { default: Layout } = await segment.layout();
-      children = (
-        <Layout key={getSegmentKey(segment, params)} params={params}>
-          {children}
-        </Layout>
+      const cacheKey = getSegmentKey(segment, params);
+      tree = (
+        <RouterSegment segmentPath={segmentPath} isRootLayout={false}>
+          <Page key={cacheKey} params={params} />
+        </RouterSegment>
       );
     }
 
-    return children;
+    if (segment.layout) {
+      const isRootLayout = segment.segment === "";
+      const { default: Layout } = await segment.layout();
+      const cacheKey = getSegmentKey(segment, params);
+      tree = (
+        <RouterSegment isRootLayout={isRootLayout} segmentPath={segmentPath}>
+          <Layout key={cacheKey} params={params}>
+            {tree}
+          </Layout>
+        </RouterSegment>
+      );
+    }
+
+    return tree;
   }
 
   async function ServerRoot({ path }: { path: string }) {

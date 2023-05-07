@@ -9,6 +9,8 @@ import {
   useTransition,
   // @ts-ignore  TODO: enable react@next types
   use,
+  createContext,
+  useContext,
 } from "react";
 
 import { Thenable } from "react__shared/ReactTypes";
@@ -42,6 +44,7 @@ export function Link({
 }
 
 export const createCache = () => new Map<string, Thenable<ReactNode>>();
+
 export type ServerResponseCache = ReturnType<typeof createCache>;
 
 export const getPathFromDOMState = () => {
@@ -141,3 +144,90 @@ export const RenderCurrentPathFromCache = ({
   }
   return use(treeThenable);
 };
+
+// new cache
+
+export const createLayoutCacheRoot = (): LayoutCache => {
+  return {
+    segment: "",
+    subTree: null,
+    children: new Map(),
+  };
+};
+
+export const createLayoutCacheNode = (
+  segment: string,
+  subTree: ReactNode
+): LayoutCache => ({
+  segment,
+  subTree,
+  children: new Map(),
+});
+
+type LayoutCache = {
+  segment: string;
+  subTree: ReactNode;
+  children: Map<string, LayoutCache>;
+};
+
+export const LayoutCacheContext = createContext<LayoutCache | null>(null);
+
+const useLayoutCacheContext = () => {
+  const ctx = useContext(LayoutCacheContext);
+  if (!ctx) {
+    throw new Error("Missing LayoutCacheContext.Provider");
+  }
+  return ctx;
+};
+
+export const RouterSegment = ({
+  segmentPath,
+  children,
+  isRootLayout,
+}: PropsWithChildren<{
+  segmentPath: string;
+  isRootLayout: boolean;
+}>) => {
+  const parentCache = useLayoutCacheContext();
+  console.log("RouterSegmentLayout", segmentPath);
+
+  if (!parentCache.children.has(segmentPath)) {
+    console.log("storing subtree for segment", segmentPath);
+    parentCache.children.set(
+      segmentPath,
+      createLayoutCacheNode(segmentPath, children)
+    );
+  } else {
+    console.log("already got cached subtree for segment", segmentPath);
+  }
+
+  const ownCache = parentCache.children.get(segmentPath)!;
+
+  const cachedChildren = ownCache.subTree;
+
+  return (
+    <LayoutCacheContext.Provider value={ownCache}>
+      {cachedChildren}
+    </LayoutCacheContext.Provider>
+  );
+};
+
+// export const RouterSegmentPage = ({
+//   segment,
+//   children,
+//   cacheKey,
+// }: PropsWithChildren<{
+//   segment: string;
+//   cacheKey: string;
+// }>) => {
+//   const cache = useLayoutCacheContext();
+//   console.log("RouterSegmentPage", segment, cacheKey, cache);
+//   if (!cache.currentLayout.has(cacheKey)) {
+//     console.log("caching children", cacheKey, children);
+//     cache.currentLayout.set(cacheKey, children);
+//   }
+//   const cachedChildren = cache.currentLayout.get(cacheKey);
+//   // return cachedChildren as any;
+//   // return use(cachedChildren);
+//   return children as any;
+// };

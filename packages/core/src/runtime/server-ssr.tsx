@@ -18,6 +18,11 @@ import {
   createDummyNavigation,
   NavigationContext,
 } from "./router/navigation-context";
+import {
+  LayoutCacheContext,
+  createLayoutCacheNode,
+  createLayoutCacheRoot,
+} from "./router/client-router";
 
 export type ScriptsManifest = {
   main: string;
@@ -42,13 +47,15 @@ export function getSSRDomStream(
   console.log("SSRing response");
   const domStream = renderToPipeableStream(
     // TODO: integrate NavigationContext with router!
-    <NavigationContext.Provider value={createDummyNavigation(path)}>
-      <HTMLPage>
-        <Suspense>
-          <ServerComponentWrapper />
-        </Suspense>
-      </HTMLPage>
-    </NavigationContext.Provider>,
+    <LayoutCacheContext.Provider value={createLayoutCacheRoot()}>
+      <NavigationContext.Provider value={createDummyNavigation(path)}>
+        <HTMLPage>
+          <Suspense>
+            <ServerComponentWrapper />
+          </Suspense>
+        </HTMLPage>
+      </NavigationContext.Provider>
+    </LayoutCacheContext.Provider>,
     {
       bootstrapScripts: [`${ASSETS_ROUTE}/${scriptsManifest.main}`],
       // onShellReady() {

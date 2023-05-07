@@ -4,8 +4,11 @@ import { createFromReadableStream } from "react-server-dom-webpack/client.browse
 import { HTMLPage } from "./page";
 import {
   ClientRouter,
+  LayoutCacheContext,
   RenderCurrentPathFromCache,
   createCache,
+  createLayoutCacheNode,
+  createLayoutCacheRoot,
   getPathFromDOMState,
 } from "./router/client-router";
 
@@ -52,6 +55,8 @@ const init = async () => {
   const initialServerTreeThenable =
     createFromReadableStream<ReactNode>(initialStream);
   const cache = createCache();
+  const layoutCache = createLayoutCacheRoot();
+  Object.defineProperty(window, "LAYOUT_CACHE", { get: () => layoutCache });
 
   const initialPath = getPathFromDOMState();
   const initialKey = initialPath;
@@ -63,13 +68,15 @@ const init = async () => {
     startTransition(() => {
       hydrateRoot(
         document,
-        <ClientRouter cache={cache} initialPath={initialPath}>
-          <HTMLPage>
-            <Suspense>
-              <RenderCurrentPathFromCache cache={cache} />
-            </Suspense>
-          </HTMLPage>
-        </ClientRouter>
+        <LayoutCacheContext.Provider value={layoutCache}>
+          <ClientRouter cache={cache} initialPath={initialPath}>
+            <HTMLPage>
+              <Suspense>
+                <RenderCurrentPathFromCache cache={cache} />
+              </Suspense>
+            </HTMLPage>
+          </ClientRouter>
+        </LayoutCacheContext.Provider>
       );
     });
   });
