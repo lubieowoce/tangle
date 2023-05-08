@@ -23,12 +23,7 @@ import {
 } from "./navigation-context";
 import { FLIGHT_REQUEST_HEADER, ROUTER_STATE_HEADER } from "../shared";
 import { createFromFetch } from "react-server-dom-webpack/client.browser";
-import {
-  ParsedPath,
-  getRootCachePathForNewState,
-  parsePath,
-  takeSegment,
-} from "./paths";
+import { ParsedPath, parsePath, takeSegment } from "./paths";
 
 export function Link({
   href,
@@ -114,13 +109,17 @@ export const ClientRouter = ({
             return;
           }
 
-          const cacheInstallPath = getRootCachePathForNewState(state, newState);
-          console.log("cache before get", debugCache(cache));
-          const [cacheNode] = getOrCreateCacheNodeForPath(
-            cache,
-            cacheInstallPath
-          );
-          console.log("cache after get", debugCache(cache));
+          console.log("cache before create", debugCache(cache));
+
+          const [cacheNode, existingSegments] =
+            createShallowestCacheNodeForPath(cache, newState);
+          console.log("created node", { existingSegments });
+          console.log("cache after create", debugCache(cache));
+
+          const cacheInstallPath = [
+            ...existingSegments,
+            newState[existingSegments.length],
+          ];
 
           // if (didExist) {
           //   // until we support refetches, we should never stomp over an existing node
@@ -139,7 +138,12 @@ export const ClientRouter = ({
           const request = fetch(newPath, {
             headers: {
               [FLIGHT_REQUEST_HEADER]: "1",
-              [ROUTER_STATE_HEADER]: JSON.stringify(state),
+              // hack -- trick the current server-side machinery into skipping existing segments
+              // (it'll keep going until it finds one that doesn't match...)
+              [ROUTER_STATE_HEADER]: JSON.stringify([
+                ...existingSegments,
+                "__NONEXISTENT__",
+              ]),
             },
           });
           const fetchedRSC = createFromFetch(request, {});
@@ -214,23 +218,49 @@ const getOrCreateCacheNode = (
   }
 };
 
-const getOrCreateCacheNodeForPath = (
+const getChildNode = (cacheNode: LayoutCacheNode, key: string) => {
+  return cacheNode.children.get(key);
+};
+
+const addChildNode = (
+  cacheNode: LayoutCacheNode,
+  key: string,
+  child: LayoutCacheNode
+) => {
+  if (cacheNode.children.has(key)) {
+    console.warn(
+      "overriting existing child, this should't really happen...",
+      cacheNode,
+      key,
+      child
+    );
+  }
+  return cacheNode.children.set(key, child);
+};
+
+const createShallowestCacheNodeForPath = (
   cacheNode: LayoutCacheNode,
   path: ParsedPath
-): [cacheNode: LayoutCacheNode, didExist: boolean] => {
-  if (path.length === 0) throw new Error("oops, this shouldn't happen");
-  const [nodeForFirstSegment, didExist] = getOrCreateCacheNode(
-    cacheNode,
-    path[0]
-  );
-  if (path.length === 1) {
-    return [nodeForFirstSegment, didExist];
+): [cacheNode: LayoutCacheNode, existingPath: ParsedPath] => {
+  console.log("createCacheNodeForPath", path);
+  if (path.length === 0) {
+    // TODO: this case is weird. i'm not sure if this should ever happen.
+    return [cacheNode, []];
   }
-  const [nestedNode, nestedDidExist] = getOrCreateCacheNodeForPath(
-    nodeForFirstSegment,
-    path.slice(1)
-  );
-  return [nestedNode, didExist && nestedDidExist];
+  const [segment, rest] = takeSegment(path);
+  let childNode = getChildNode(cacheNode, segment);
+  if (!childNode) {
+    childNode = createLayoutCacheNode(segment, null);
+    addChildNode(cacheNode, segment, childNode);
+    return [childNode, []];
+  } else {
+    const [finalNode, existingPath] = createShallowestCacheNodeForPath(
+      childNode,
+      rest
+    );
+    existingPath.unshift(segment); // safe to mutate, because no one else has access to it yet.
+    return [finalNode, existingPath];
+  }
 };
 
 const hasCachePath = (
