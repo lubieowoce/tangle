@@ -140,10 +140,7 @@ export const ClientRouter = ({
               [FLIGHT_REQUEST_HEADER]: "1",
               // hack -- trick the current server-side machinery into skipping existing segments
               // (it'll keep going until it finds one that doesn't match...)
-              [ROUTER_STATE_HEADER]: JSON.stringify([
-                ...existingSegments,
-                "__NONEXISTENT__",
-              ]),
+              [ROUTER_STATE_HEADER]: JSON.stringify(existingSegments),
             },
           });
           const fetchedRSC = createFromFetch(request, {});
@@ -367,23 +364,3 @@ export const RouterSegment = ({
     </SegmentContext.Provider>
   );
 };
-
-// export const RouterSegmentPage = ({
-//   segment,
-//   children,
-//   cacheKey,
-// }: PropsWithChildren<{
-//   segment: string;
-//   cacheKey: string;
-// }>) => {
-//   const cache = useLayoutCacheContext();
-//   console.log("RouterSegmentPage", segment, cacheKey, cache);
-//   if (!cache.currentLayout.has(cacheKey)) {
-//     console.log("caching children", cacheKey, children);
-//     cache.currentLayout.set(cacheKey, children);
-//   }
-//   const cachedChildren = cache.currentLayout.get(cacheKey);
-//   // return cachedChildren as any;
-//   // return use(cachedChildren);
-//   return children as any;
-// };

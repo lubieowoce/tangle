@@ -10,9 +10,10 @@ import {
 // TODO: we don't actually need to be calling this in generated code, we could just make it export the tree.
 export function createServerRouter(routes: RouteDefinition) {
   async function pathToRouteJSX(
-    parsedPath: string[],
+    parsedPath: ParsedPath,
     isNestedFetch: boolean,
-    existingState: string[] | undefined,
+    /** we expect this to basically mean "skip rendering these segments" */
+    existingState: ParsedPath | undefined,
     routes: RouteDefinition[],
     outerParams: SegmentParams | null
   ): Promise<JSX.Element | null> {
@@ -23,21 +24,31 @@ export function createServerRouter(routes: RouteDefinition) {
     // but as it is, we need to figure out where we are
 
     const [stateSegmentPath, restOfState] = takeSegmentMaybe(existingState);
+    if (stateSegmentPath !== undefined) {
+      if (segmentPath !== stateSegmentPath) {
+        throw new Error(
+          "Internal error: existingState should always be a prefix of parsedPath"
+        );
+      }
+    }
 
-    const doesSegmentMatchState = segmentPath === stateSegmentPath;
+    // if we've still got some state, the root has to be below us.
+    const isFetchRootBelow = !!(
+      isNestedFetch &&
+      existingState &&
+      existingState.length > 0
+    );
 
-    // we've still got some state, but it matches the current path,
-    // so the root has to be below us.
-    const isFetchRootBelow =
-      isNestedFetch && Boolean(existingState) && doesSegmentMatchState;
+    // if we've ran out of state, this means we're the root.
+    const isFetchRoot = !!(
+      isNestedFetch &&
+      existingState &&
+      existingState.length === 0
+    );
 
-    // we've still got some state, but it no longer matches the current path.
-    // this means we're the root.
-    const isFetchRoot =
-      isNestedFetch && Boolean(existingState) && !doesSegmentMatchState;
-
-    // if we found the fetch root, stop passing state down -- the paths diverged,
-    // so we shouldn't be comparing them.
+    // if we're the root (and isFetchRootBelow becomes false), we have to stop
+    // child segments from thinking they're the root too, so pass `undefined` instead of `[]` --
+    // that way, we won't trip the `isFetchRoot` check above.
     const restOfStateToPassDown = isFetchRootBelow ? restOfState : undefined;
 
     console.log("=".repeat(40));
@@ -85,8 +96,9 @@ export function createServerRouter(routes: RouteDefinition) {
         segment.children,
         params
       );
-      if (doesSegmentMatchState) {
-        // skip rendering layouts if the state matched -- return just the nested part.
+
+      if (isFetchRootBelow) {
+        // we haven't found the root yet, so skip this level. we only need the part from the root & below.
         return treeFromLowerSegments;
       } else {
         tree = treeFromLowerSegments;
