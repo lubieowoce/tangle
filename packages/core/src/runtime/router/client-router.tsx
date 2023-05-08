@@ -14,7 +14,6 @@ import {
   useReducer,
 } from "react";
 
-import { Thenable } from "react__shared/ReactTypes";
 import {
   NavigateOptions,
   GlobalRouterContext,
@@ -22,13 +21,14 @@ import {
   useNavigationContext,
   GlobalRouterContextValue,
 } from "./navigation-context";
-import {
-  FLIGHT_REQUEST_HEADER,
-  ROUTER_RESPONSE_PREFIX_HEADER,
-  ROUTER_STATE_HEADER,
-} from "../shared";
+import { FLIGHT_REQUEST_HEADER, ROUTER_STATE_HEADER } from "../shared";
 import { createFromFetch } from "react-server-dom-webpack/client.browser";
-import { ParsedPath, parsePath } from "./paths";
+import {
+  ParsedPath,
+  getRootCachePathForNewState,
+  parsePath,
+  takeSegment,
+} from "./paths";
 
 export function Link({
   href,
@@ -50,36 +50,9 @@ export function Link({
   );
 }
 
-export const createCache = () => new Map<string, Thenable<ReactNode>>();
-
-export type ServerResponseCache = ReturnType<typeof createCache>;
-
 export const getPathFromDOMState = () => {
   // TODO: searchparams etc?
   return document.location.pathname;
-};
-
-// TODO: this is a bit run-and-gun, and also makes the "skipped" stuff on the server redundant
-const stripCommonPrefix = (
-  left: ParsedPath,
-  right: ParsedPath
-): [prefix: ParsedPath, rest: ParsedPath] => {
-  const res: ParsedPath = [];
-  for (let i = 0; i < Math.min(left.length, right.length); i++) {
-    const leftElem = left[i];
-    const rightElem = right[i];
-    if (leftElem !== rightElem) {
-      break;
-    }
-    res.push(leftElem);
-  }
-  return [res, right.slice(res.length)];
-};
-
-const takeSegment = (path: ParsedPath) => {
-  const [segment, ...rest] = path;
-  // TODO undefined...?
-  return [segment, rest] as const;
 };
 
 export const ClientRouter = ({
@@ -87,7 +60,7 @@ export const ClientRouter = ({
   initialPath,
   children,
 }: PropsWithChildren<{
-  cache: LayoutCache;
+  cache: LayoutCacheNode;
   initialPath: string;
 }>) => {
   const [pathKey, setPathKey] = useState<string>(initialPath);
@@ -136,12 +109,33 @@ export const ClientRouter = ({
           }
 
           const newState = parsePath(newPath);
-          const [, didExist] = getCacheNodeForPath(cache, newState);
-          if (didExist) {
+          const pathExistsInCache = hasCachePath(cache, newState);
+          if (pathExistsInCache) {
             return;
           }
 
-          console.log("requesting RSC from server", { state, newPath });
+          const cacheInstallPath = getRootCachePathForNewState(state, newState);
+          console.log("cache before get", debugCache(cache));
+          const [cacheNode] = getOrCreateCacheNodeForPath(
+            cache,
+            cacheInstallPath
+          );
+          console.log("cache after get", debugCache(cache));
+
+          // if (didExist) {
+          //   // until we support refetches, we should never stomp over an existing node
+          //   throw new Error(
+          //     "Internal error -- node already existed in the cache: " +
+          //       JSON.stringify(cacheInstallPath)
+          //   );
+          // }
+
+          console.log("requesting RSC from server", {
+            state,
+            newPath,
+            cacheInstallPath,
+            cacheNode,
+          });
           const request = fetch(newPath, {
             headers: {
               [FLIGHT_REQUEST_HEADER]: "1",
@@ -150,43 +144,18 @@ export const ClientRouter = ({
           });
           const fetchedRSC = createFromFetch(request, {});
 
-          const [cacheInstallPrefix, restOfPath] = stripCommonPrefix(
-            state,
-            newState
-          );
-
-          const cacheInstallPath = [...cacheInstallPrefix, restOfPath[0]];
-          const [cacheNode] = getCacheNodeForPath(cache, cacheInstallPath);
-
-          // idk about this one, would be nicer to just store a promise, but let's see where it goes
+          // TODO: idk about this one, would be nicer to just store a promise
+          // (i.e. allow the cache to store in-flight data in a more sensible manner)
           const RSCResponseWrapper = () => {
-            console.log("hello from RSCResponseWrapper", {
-              prefix: cacheInstallPrefix,
-              rest: restOfPath,
-            });
             return use(fetchedRSC);
           };
+
+          // DEBUG
           RSCResponseWrapper[
             "displayName"
-          ] = `${RSCResponseWrapper}:${JSON.stringify({
-            prefix: cacheInstallPrefix,
-            rest: restOfPath,
-          })}`;
+          ] = `RSCResponseWrapper:${JSON.stringify(cacheInstallPath)}`;
 
           cacheNode.subTree = <RSCResponseWrapper />;
-
-          // (async () => {
-          //   // const layoutPrefix = JSON.parse(
-          //   //   response.headers.get(ROUTER_RESPONSE_PREFIX_HEADER)!
-          //   // );
-          //   // const [cacheNode] = getCacheNodeForPath(cache, layoutPrefix);
-
-          //   // TODO: let the cache hold in-flight stuff, so that we don't have to await
-          //   cacheNode.subTree = await createFromFetch(request, {});
-          //   forceRerender();
-
-          //   console.log("saved into cache", cacheInstallPath);
-          // })();
         };
 
         if (instant) {
@@ -210,7 +179,6 @@ export const ClientRouter = ({
   return (
     <GlobalRouterContext.Provider value={ctx}>
       <SegmentContext.Provider
-        // key={pathKey} // DEBUG ONLY
         value={{
           cacheNode: cache,
           remainingPath: state,
@@ -224,7 +192,7 @@ export const ClientRouter = ({
 
 // new cache
 
-export const createLayoutCacheRoot = (): LayoutCache => {
+export const createLayoutCacheRoot = (): LayoutCacheNode => {
   return {
     segment: "<root>",
     subTree: null,
@@ -232,58 +200,69 @@ export const createLayoutCacheRoot = (): LayoutCache => {
   };
 };
 
-const getCacheNodeForPath = (cache: LayoutCache, path: ParsedPath) => {
-  const getOrCreate = (
-    cacheNode: LayoutCache,
-    key: string
-  ): [cacheNode: LayoutCache, didExist: boolean] => {
-    const existingNode = cacheNode.children.get(key);
-    if (existingNode) {
-      return [existingNode, true];
-    } else {
-      const newNode = createLayoutCacheNode(key, null);
-      cacheNode.children.set(key, newNode);
-      return [newNode, false];
-    }
-  };
+const getOrCreateCacheNode = (
+  cacheNode: LayoutCacheNode,
+  key: string
+): [cacheNode: LayoutCacheNode, didExist: boolean] => {
+  const existingNode = cacheNode.children.get(key);
+  if (existingNode) {
+    return [existingNode, true];
+  } else {
+    const newNode = createLayoutCacheNode(key, null);
+    cacheNode.children.set(key, newNode);
+    return [newNode, false];
+  }
+};
 
-  const _getCacheNodeForPath = (
-    cacheNode: LayoutCache,
-    path: ParsedPath
-  ): [cacheNode: LayoutCache, didExist: boolean] => {
-    if (path.length === 0) throw new Error("oops, this shouldn't happen");
-    const [nodeForFirstSegment, didExist] = getOrCreate(cacheNode, path[0]);
-    if (path.length === 1) {
-      return [nodeForFirstSegment, didExist];
-    }
-    const [nestedNode, nestedDidExist] = _getCacheNodeForPath(
-      nodeForFirstSegment,
-      path.slice(1)
-    );
-    return [nestedNode, didExist && nestedDidExist];
-  };
+const getOrCreateCacheNodeForPath = (
+  cacheNode: LayoutCacheNode,
+  path: ParsedPath
+): [cacheNode: LayoutCacheNode, didExist: boolean] => {
+  if (path.length === 0) throw new Error("oops, this shouldn't happen");
+  const [nodeForFirstSegment, didExist] = getOrCreateCacheNode(
+    cacheNode,
+    path[0]
+  );
+  if (path.length === 1) {
+    return [nodeForFirstSegment, didExist];
+  }
+  const [nestedNode, nestedDidExist] = getOrCreateCacheNodeForPath(
+    nodeForFirstSegment,
+    path.slice(1)
+  );
+  return [nestedNode, didExist && nestedDidExist];
+};
 
-  return _getCacheNodeForPath(cache, path);
+const hasCachePath = (
+  cacheNode: LayoutCacheNode,
+  path: ParsedPath
+): boolean => {
+  if (path.length === 0) throw new Error("oops, this shouldn't happen");
+  const nodeForFirstSegment = cacheNode.children.get(path[0]);
+  if (path.length === 1 || !nodeForFirstSegment) {
+    return !!nodeForFirstSegment;
+  }
+  return hasCachePath(nodeForFirstSegment, path.slice(1));
 };
 
 export const createLayoutCacheNode = (
   segment: string,
   subTree: ReactNode
-): LayoutCache => ({
+): LayoutCacheNode => ({
   segment,
   subTree,
   children: new Map(),
 });
 
-type LayoutCache = {
+type LayoutCacheNode = {
   segment: string;
   subTree: ReactNode;
-  children: Map<string, LayoutCache>;
+  children: Map<string, LayoutCacheNode>;
 };
 
 type SegmentContextValue = {
   remainingPath: ParsedPath;
-  cacheNode: LayoutCache;
+  cacheNode: LayoutCacheNode;
 };
 
 export const SegmentContext = createContext<SegmentContextValue | null>(null);
@@ -297,12 +276,27 @@ const useSegmentContext = () => {
   return ctx;
 };
 
+const debugCache = (cacheNode: LayoutCacheNode) => {
+  const walk = (node: LayoutCacheNode): Record<string, any> | string => {
+    if (!node.children.size) {
+      return node.subTree === null ? "<empty>" : "content ...";
+    }
+    return Object.fromEntries(
+      [...node.children.entries()].map(([k, v]) => [`${k}`, walk(v)])
+    );
+  };
+
+  const res = walk(cacheNode);
+  return JSON.stringify(res, null, 4);
+};
+
 export const RouterSegment = ({
   children,
-  isRootLayout,
+  isRootLayout, // TODO: unused right now!,
+  DEBUG_originalSegmentPath,
 }: PropsWithChildren<{
-  segmentPath: string;
   isRootLayout: boolean;
+  DEBUG_originalSegmentPath: string;
 }>) => {
   const { cacheNode: parentCacheNode, remainingPath } = useSegmentContext();
 
@@ -313,8 +307,9 @@ export const RouterSegment = ({
   console.log(
     "RouterSegmentLayout",
     segmentPath,
+    `(originally "${DEBUG_originalSegmentPath}")`,
     pathBelowSegment,
-    parentCacheNode
+    debugCache(parentCacheNode)
   );
 
   if (!parentCacheNode.children.has(segmentPath)) {
@@ -323,6 +318,7 @@ export const RouterSegment = ({
       segmentPath,
       createLayoutCacheNode(segmentPath, children)
     );
+    console.log("after:", debugCache(parentCacheNode));
   } else {
     console.log("already got cached subtree for segment", segmentPath);
   }

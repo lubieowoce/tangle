@@ -6,7 +6,6 @@ import Express, { static as expressStatic } from "express";
 import {
   ASSETS_ROUTE,
   FLIGHT_REQUEST_HEADER,
-  ROUTER_RESPONSE_PREFIX_HEADER,
   ROUTER_STATE_HEADER,
   RSC_CONTENT_TYPE,
 } from "./shared";
@@ -67,13 +66,8 @@ app.get("*", async (req, res) => {
     console.log("=====================");
     console.log("rendering RSC");
     console.log("router state", existingState);
-    const [rscStream, skippedSegments] = await renderRSCRoot(
-      path,
-      existingState,
-      webpackMapForClient
-    );
+    const rscStream = renderRSCRoot(path, existingState, webpackMapForClient);
     res.header("content-type", RSC_CONTENT_TYPE);
-    res.header(ROUTER_RESPONSE_PREFIX_HEADER, JSON.stringify(skippedSegments));
     rscStream.pipe(res);
   } else {
     console.log("=====================");
@@ -81,11 +75,7 @@ app.get("*", async (req, res) => {
 
     const finalOutputStream = createNoopStream();
 
-    const [rscStream] = await renderRSCRoot(
-      path,
-      undefined,
-      webpackMapForClient
-    );
+    const rscStream = renderRSCRoot(path, undefined, webpackMapForClient);
 
     rscStream.on("data", (chunk: Buffer) => {
       console.log("RSC chunk", chunk.toString("utf-8"));

@@ -1,5 +1,5 @@
 import { RouterSegment } from "./client-router";
-import { ParsedPath, parsePath } from "./paths";
+import { ParsedPath, parsePath, takeSegmentMaybe } from "./paths";
 import {
   RouteDefinition,
   SegmentParams,
@@ -7,35 +7,49 @@ import {
   getSegmentKey,
 } from "./router-core";
 
-type TakeSegmentResult<T> = [undefined, undefined] | [T, undefined] | [T, T[]];
-
-const takeSegment = (
-  existingState: string[] | undefined
-): TakeSegmentResult<string> => {
-  if (!existingState) return [undefined, undefined];
-  // TODO: length...?
-  const [stateSegmentPath, ...restOfState] = existingState;
-  if (existingState.length === 1) {
-    return [stateSegmentPath, undefined];
-  }
-  return [stateSegmentPath, restOfState];
-};
-
+// TODO: we don't actually need to be calling this in generated code, we could just make it export the tree.
 export function createServerRouter(routes: RouteDefinition) {
   async function pathToRouteJSX(
     parsedPath: string[],
+    isNestedFetch: boolean,
     existingState: string[] | undefined,
     routes: RouteDefinition[],
     outerParams: SegmentParams | null
-  ): Promise<{ skippedSegments: string[]; tree: JSX.Element | null }> {
+  ): Promise<JSX.Element | null> {
     const [segmentPath, ...restOfPath] = parsedPath;
 
-    const [stateSegmentPath, restOfState] = takeSegment(existingState);
+    // machinery for nested fetches.
+    // TODO: might be easier to just fish the "fetch root" out without going through this function
+    // but as it is, we need to figure out where we are
 
-    const restOfStateToPassDown =
-      segmentPath === stateSegmentPath ? restOfState : undefined;
+    const [stateSegmentPath, restOfState] = takeSegmentMaybe(existingState);
+
+    const doesSegmentMatchState = segmentPath === stateSegmentPath;
+
+    // we've still got some state, but it matches the current path,
+    // so the root has to be below us.
+    const isFetchRootBelow =
+      isNestedFetch && Boolean(existingState) && doesSegmentMatchState;
+
+    // we've still got some state, but it no longer matches the current path.
+    // this means we're the root.
+    const isFetchRoot =
+      isNestedFetch && Boolean(existingState) && !doesSegmentMatchState;
+
+    // if we found the fetch root, stop passing state down -- the paths diverged,
+    // so we shouldn't be comparing them.
+    const restOfStateToPassDown = isFetchRootBelow ? restOfState : undefined;
+
+    console.log("=".repeat(40));
     console.log("building jsx for path", { parsedPath });
-    console.log("existing states", { existingState, restOfStateToPassDown });
+    console.log("existing states", {
+      existingState,
+      restOfStateToPassDown,
+      isFetchRootBelow,
+      isFetchRoot,
+    });
+
+    // actual routing
 
     const match = getMatchForSegment({ segmentPath, routes });
     if (!match) {
@@ -48,7 +62,6 @@ export function createServerRouter(routes: RouteDefinition) {
     const { segment, params: currentSegmentParams } = match;
     const params: SegmentParams = { ...outerParams, ...currentSegmentParams };
 
-    let skippedSegments: string[] = [];
     let tree: JSX.Element | null = null;
 
     if (segment.layout && segment.page) {
@@ -65,23 +78,18 @@ export function createServerRouter(routes: RouteDefinition) {
         );
       }
 
-      const nestedResult = await pathToRouteJSX(
+      const treeFromLowerSegments = await pathToRouteJSX(
         restOfPath,
+        isNestedFetch,
         restOfStateToPassDown,
         segment.children,
         params
       );
-      // no need to render layouts if existing state matched.
-      // return just the nested part.
-      if (restOfStateToPassDown) {
-        return {
-          skippedSegments: [segmentPath, ...nestedResult.skippedSegments],
-          tree: nestedResult.tree,
-        };
+      if (doesSegmentMatchState) {
+        // skip rendering layouts if the state matched -- return just the nested part.
+        return treeFromLowerSegments;
       } else {
-        // the segment didn't match, so we're not skipping it.
-        // which means that we don't need to emit anything for that, so we only propagate the tree
-        tree = nestedResult.tree;
+        tree = treeFromLowerSegments;
       }
     } else {
       console.log("stopping walk", segmentPath);
@@ -93,15 +101,24 @@ export function createServerRouter(routes: RouteDefinition) {
       const cacheKey = getSegmentKey(segment, params);
       // TODO: this won't work if we've got a layout on the same level as the page,
       // because we'll do the same segmentPath twice... need to disambiguate them somehow
-      tree = (
-        <RouterSegment
-          key={segmentPath} // TODO: or cachekey?? idk
-          segmentPath={segmentPath}
-          isRootLayout={false}
-        >
-          <Page key={cacheKey} params={params} />
-        </RouterSegment>
-      );
+
+      tree = <Page key={cacheKey} params={params} />;
+
+      // don't wrap the tree in a segment if this is the root of a nested fetch.
+      // because in that case, we'll already be rendered by an existing RouterSegment
+      // (it has to be this way -- we need someone to read us from the cache and display us!)
+      // so adding one here will mess things up, and cause us to register subtrees a layer too deep.
+      if (!isFetchRoot) {
+        tree = (
+          <RouterSegment
+            key={segmentPath} // TODO: or cachekey?? idk
+            isRootLayout={false}
+            DEBUG_originalSegmentPath={segmentPath}
+          >
+            {tree}
+          </RouterSegment>
+        );
+      }
     }
 
     if (segment.layout) {
@@ -109,21 +126,28 @@ export function createServerRouter(routes: RouteDefinition) {
       const { default: Layout } = await segment.layout();
       const cacheKey = getSegmentKey(segment, params);
       tree = (
-        <RouterSegment
-          key={segmentPath}
-          isRootLayout={isRootLayout}
-          segmentPath={segmentPath}
-        >
-          <Layout key={cacheKey} params={params}>
-            {tree}
-          </Layout>
-        </RouterSegment>
+        <Layout key={cacheKey} params={params}>
+          {tree}
+        </Layout>
       );
+      if (!isFetchRoot) {
+        tree = (
+          <RouterSegment
+            key={segmentPath}
+            isRootLayout={isRootLayout}
+            DEBUG_originalSegmentPath={segmentPath}
+          >
+            {tree}
+          </RouterSegment>
+        );
+      }
     }
 
-    return { skippedSegments, tree };
+    return tree;
   }
 
+  // TODO: throw this bit away?
+  // this used to be a component, now it's not, so it's useless
   async function buildServerJSX({
     path,
     existingState,
@@ -132,14 +156,13 @@ export function createServerRouter(routes: RouteDefinition) {
     existingState?: ParsedPath;
   }) {
     const parsedPath = parsePath(path);
-    const { tree, skippedSegments } = await pathToRouteJSX(
+    return pathToRouteJSX(
       parsedPath,
+      !!existingState,
       existingState,
       [routes],
       null
     );
-    console.log("skipped segments", skippedSegments);
-    return { tree, skippedSegments };
   }
 
   return buildServerJSX;
