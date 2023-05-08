@@ -5,16 +5,27 @@ import {
 
 import { throwOnMissingProperty } from "./shared";
 
-import ServerRoot from "./generated/server-root";
+import buildServerJSX from "./generated/server-root";
 import { createNoopStream } from "./utils";
+import { ParsedPath } from "./router/paths";
 
-export function renderRSCRoot(
+export async function renderRSCRoot(
   path: string,
+  existingState: ParsedPath | undefined,
   webpackMapForClient: ClientManifest
 ) {
-  const elem = <ServerRoot path={path} />;
-  return renderToPipeableStream(
-    elem,
-    throwOnMissingProperty(webpackMapForClient, "webpackMapForClient [rsc]")
-  ).pipe(createNoopStream());
+  // TODO: emitting the skipped segments as we go kinda sucks, because we need to await here now.
+  // gotta fix that and calculate it up front
+  const { skippedSegments, tree } = await buildServerJSX({
+    path,
+    existingState,
+  });
+
+  return [
+    renderToPipeableStream(
+      tree,
+      throwOnMissingProperty(webpackMapForClient, "webpackMapForClient [rsc]")
+    ).pipe(createNoopStream()),
+    skippedSegments,
+  ] as const;
 }

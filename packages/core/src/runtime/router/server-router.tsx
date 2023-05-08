@@ -1,5 +1,5 @@
 import { RouterSegment } from "./client-router";
-import { parsePath } from "./paths";
+import { ParsedPath, parsePath } from "./paths";
 import {
   RouteDefinition,
   SegmentParams,
@@ -7,13 +7,36 @@ import {
   getSegmentKey,
 } from "./router-core";
 
+type TakeSegmentResult<T> = [undefined, undefined] | [T, undefined] | [T, T[]];
+
+const takeSegment = (
+  existingState: string[] | undefined
+): TakeSegmentResult<string> => {
+  if (!existingState) return [undefined, undefined];
+  // TODO: length...?
+  const [stateSegmentPath, ...restOfState] = existingState;
+  if (existingState.length === 1) {
+    return [stateSegmentPath, undefined];
+  }
+  return [stateSegmentPath, restOfState];
+};
+
 export function createServerRouter(routes: RouteDefinition) {
   async function pathToRouteJSX(
     parsedPath: string[],
+    existingState: string[] | undefined,
     routes: RouteDefinition[],
     outerParams: SegmentParams | null
-  ): Promise<JSX.Element | null> {
+  ): Promise<{ skippedSegments: string[]; tree: JSX.Element | null }> {
     const [segmentPath, ...restOfPath] = parsedPath;
+
+    const [stateSegmentPath, restOfState] = takeSegment(existingState);
+
+    const restOfStateToPassDown =
+      segmentPath === stateSegmentPath ? restOfState : undefined;
+    console.log("building jsx for path", { parsedPath });
+    console.log("existing states", { existingState, restOfStateToPassDown });
+
     const match = getMatchForSegment({ segmentPath, routes });
     if (!match) {
       throw new Error(
@@ -25,6 +48,7 @@ export function createServerRouter(routes: RouteDefinition) {
     const { segment, params: currentSegmentParams } = match;
     const params: SegmentParams = { ...outerParams, ...currentSegmentParams };
 
+    let skippedSegments: string[] = [];
     let tree: JSX.Element | null = null;
 
     if (segment.layout && segment.page) {
@@ -40,7 +64,25 @@ export function createServerRouter(routes: RouteDefinition) {
           `More path remaining (${restOfPath}), but no child routes defined`
         );
       }
-      tree = await pathToRouteJSX(restOfPath, segment.children, params);
+
+      const nestedResult = await pathToRouteJSX(
+        restOfPath,
+        restOfStateToPassDown,
+        segment.children,
+        params
+      );
+      // no need to render layouts if existing state matched.
+      // return just the nested part.
+      if (restOfStateToPassDown) {
+        return {
+          skippedSegments: [segmentPath, ...nestedResult.skippedSegments],
+          tree: nestedResult.tree,
+        };
+      } else {
+        // the segment didn't match, so we're not skipping it.
+        // which means that we don't need to emit anything for that, so we only propagate the tree
+        tree = nestedResult.tree;
+      }
     } else {
       console.log("stopping walk", segmentPath);
       // no more path remaining, render the component
@@ -52,7 +94,11 @@ export function createServerRouter(routes: RouteDefinition) {
       // TODO: this won't work if we've got a layout on the same level as the page,
       // because we'll do the same segmentPath twice... need to disambiguate them somehow
       tree = (
-        <RouterSegment segmentPath={segmentPath} isRootLayout={false}>
+        <RouterSegment
+          key={segmentPath} // TODO: or cachekey?? idk
+          segmentPath={segmentPath}
+          isRootLayout={false}
+        >
           <Page key={cacheKey} params={params} />
         </RouterSegment>
       );
@@ -63,7 +109,11 @@ export function createServerRouter(routes: RouteDefinition) {
       const { default: Layout } = await segment.layout();
       const cacheKey = getSegmentKey(segment, params);
       tree = (
-        <RouterSegment isRootLayout={isRootLayout} segmentPath={segmentPath}>
+        <RouterSegment
+          key={segmentPath}
+          isRootLayout={isRootLayout}
+          segmentPath={segmentPath}
+        >
           <Layout key={cacheKey} params={params}>
             {tree}
           </Layout>
@@ -71,14 +121,26 @@ export function createServerRouter(routes: RouteDefinition) {
       );
     }
 
-    return tree;
+    return { skippedSegments, tree };
   }
 
-  async function ServerRoot({ path }: { path: string }) {
+  async function buildServerJSX({
+    path,
+    existingState,
+  }: {
+    path: string;
+    existingState?: ParsedPath;
+  }) {
     const parsedPath = parsePath(path);
-    const tree = await pathToRouteJSX(parsedPath, [routes], null);
-    return tree;
+    const { tree, skippedSegments } = await pathToRouteJSX(
+      parsedPath,
+      existingState,
+      [routes],
+      null
+    );
+    console.log("skipped segments", skippedSegments);
+    return { tree, skippedSegments };
   }
 
-  return ServerRoot;
+  return buildServerJSX;
 }

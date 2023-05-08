@@ -1,17 +1,18 @@
-import { startTransition, Suspense, type ReactNode } from "react";
+import {
+  startTransition,
+  Suspense,
+  type ReactNode,
+  // @ts-ignore use exists!
+  use,
+} from "react";
 import { hydrateRoot } from "react-dom/client";
 import { createFromReadableStream } from "react-server-dom-webpack/client.browser";
 import { HTMLPage } from "./page";
 import {
   ClientRouter,
-  SegmentContext,
-  RenderCurrentPathFromCache,
-  createCache,
-  createLayoutCacheNode,
   createLayoutCacheRoot,
   getPathFromDOMState,
 } from "./router/client-router";
-import { parsePath } from "./router/paths";
 
 declare var __RSC_CHUNKS__: string[];
 
@@ -55,34 +56,32 @@ const init = async () => {
   const initialStream = intoStream(__RSC_CHUNKS__);
   const initialServerTreeThenable =
     createFromReadableStream<ReactNode>(initialStream);
-  const cache = createCache();
+  // const cache = createCache();
   const layoutCache = createLayoutCacheRoot();
   Object.defineProperty(window, "LAYOUT_CACHE", { get: () => layoutCache });
 
   const initialPath = getPathFromDOMState();
   const initialKey = initialPath;
-  cache.set(initialKey, initialServerTreeThenable);
+  // cache.set(initialKey, initialServerTreeThenable);
 
-  console.log(cache);
+  // console.log(cache);
+
+  const Root = () => {
+    return use(initialServerTreeThenable);
+  };
 
   onDocumentLoad(() => {
     startTransition(() => {
       hydrateRoot(
         document,
-        <SegmentContext.Provider
-          value={{
-            cacheNode: layoutCache,
-            remainingPath: parsePath(initialPath),
-          }}
-        >
-          <ClientRouter cache={cache} initialPath={initialPath}>
-            <HTMLPage>
-              <Suspense>
-                <RenderCurrentPathFromCache cache={cache} />
-              </Suspense>
-            </HTMLPage>
-          </ClientRouter>
-        </SegmentContext.Provider>
+        // TODO: ClientRouter renders a segment context, and that intercepts children... iffy
+        <ClientRouter cache={layoutCache} initialPath={initialPath}>
+          <HTMLPage>
+            <Suspense fallback="Loading... (global boundary)">
+              <Root />
+            </Suspense>
+          </HTMLPage>
+        </ClientRouter>
       );
     });
   });

@@ -7,7 +7,7 @@ export function getMatchForSegment({
   segmentPath: string;
   routes: RouteDefinition[];
 }) {
-  console.log("matching", segmentPath, "in", routes);
+  console.log("matching", JSON.stringify(segmentPath), "in", routes);
   for (const segment of routes) {
     // TODO: do this at build time, smh
     const maybeParamName = getParamName(segment.segment);
