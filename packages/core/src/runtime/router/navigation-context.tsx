@@ -1,10 +1,16 @@
 "use client";
 import { createContext, useContext } from "react";
+import { ParsedPath, parsePath } from "./paths";
 
 export type NavigateOptions = {
   noCache?: boolean;
   instant?: boolean;
   type?: "push" | "replace";
+};
+
+export type GlobalRouterContextValue = {
+  state: ParsedPath;
+  navigation: NavigationContextValue;
 };
 
 export type NavigationContextValue = {
@@ -13,22 +19,24 @@ export type NavigationContextValue = {
   navigate(newPath: string, opts?: NavigateOptions): void;
 };
 
-export const NavigationContext = createContext<NavigationContextValue | null>(
-  null
-);
+export const GlobalRouterContext =
+  createContext<GlobalRouterContextValue | null>(null);
 
-export function createDummyNavigation(path: string): NavigationContextValue {
+export function createStaticRouter(path: string): GlobalRouterContextValue {
   return {
-    key: path,
-    isNavigating: false,
-    navigate() {
-      throw new Error("Cannot call navigate on the Server.");
+    state: parsePath(path),
+    navigation: {
+      key: path,
+      isNavigating: false,
+      navigate() {
+        throw new Error("Cannot call navigate on the Server.");
+      },
     },
   };
 }
 
 export function useNavigationContext() {
-  const ctx = useContext(NavigationContext);
-  if (!ctx) throw new Error("Missing Navigationcontext");
-  return ctx;
+  const ctx = useContext(GlobalRouterContext);
+  if (!ctx) throw new Error("Missing GlobalRouterContext");
+  return ctx.navigation;
 }

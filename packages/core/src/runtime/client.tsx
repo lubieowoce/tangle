@@ -4,13 +4,14 @@ import { createFromReadableStream } from "react-server-dom-webpack/client.browse
 import { HTMLPage } from "./page";
 import {
   ClientRouter,
-  LayoutCacheContext,
+  SegmentContext,
   RenderCurrentPathFromCache,
   createCache,
   createLayoutCacheNode,
   createLayoutCacheRoot,
   getPathFromDOMState,
 } from "./router/client-router";
+import { parsePath } from "./router/paths";
 
 declare var __RSC_CHUNKS__: string[];
 
@@ -68,7 +69,12 @@ const init = async () => {
     startTransition(() => {
       hydrateRoot(
         document,
-        <LayoutCacheContext.Provider value={layoutCache}>
+        <SegmentContext.Provider
+          value={{
+            cacheNode: layoutCache,
+            remainingPath: parsePath(initialPath),
+          }}
+        >
           <ClientRouter cache={cache} initialPath={initialPath}>
             <HTMLPage>
               <Suspense>
@@ -76,7 +82,7 @@ const init = async () => {
               </Suspense>
             </HTMLPage>
           </ClientRouter>
-        </LayoutCacheContext.Provider>
+        </SegmentContext.Provider>
       );
     });
   });

@@ -16,12 +16,14 @@ import {
 import { Thenable } from "react__shared/ReactTypes";
 import {
   NavigateOptions,
-  NavigationContext,
+  GlobalRouterContext,
   NavigationContextValue,
   useNavigationContext,
+  GlobalRouterContextValue,
 } from "./navigation-context";
 import { FLIGHT_REQUEST_HEADER } from "../shared";
 import { createFromFetch } from "react-server-dom-webpack/client.browser";
+import { ParsedPath, parsePath } from "./paths";
 
 export function Link({
   href,
@@ -61,6 +63,7 @@ export const ClientRouter = ({
   initialPath: string;
 }>) => {
   const [pathKey, setPathKey] = useState<string>(initialPath);
+  const state = useMemo(() => parsePath(pathKey), [pathKey]);
   const [isNavigating, startTransition] = useTransition();
 
   useEffect(() => {
@@ -123,10 +126,19 @@ export const ClientRouter = ({
     }),
     [pathKey, isNavigating, cache]
   );
+
+  const ctx: GlobalRouterContextValue = useMemo(
+    () => ({
+      navigation,
+      state,
+    }),
+    [state, navigation]
+  );
+
   return (
-    <NavigationContext.Provider value={navigation}>
+    <GlobalRouterContext.Provider value={ctx}>
       {children}
-    </NavigationContext.Provider>
+    </GlobalRouterContext.Provider>
   );
 };
 
@@ -170,10 +182,15 @@ type LayoutCache = {
   children: Map<string, LayoutCache>;
 };
 
-export const LayoutCacheContext = createContext<LayoutCache | null>(null);
+type SegmentContextValue = {
+  remainingPath: ParsedPath;
+  cacheNode: LayoutCache;
+};
 
-const useLayoutCacheContext = () => {
-  const ctx = useContext(LayoutCacheContext);
+export const SegmentContext = createContext<SegmentContextValue | null>(null);
+
+const useSegmentContext = () => {
+  const ctx = useContext(SegmentContext);
   if (!ctx) {
     throw new Error("Missing LayoutCacheContext.Provider");
   }
@@ -181,19 +198,23 @@ const useLayoutCacheContext = () => {
 };
 
 export const RouterSegment = ({
-  segmentPath,
   children,
   isRootLayout,
 }: PropsWithChildren<{
   segmentPath: string;
   isRootLayout: boolean;
 }>) => {
-  const parentCache = useLayoutCacheContext();
-  console.log("RouterSegmentLayout", segmentPath);
+  const { cacheNode: parentCacheNode, remainingPath } = useSegmentContext();
 
-  if (!parentCache.children.has(segmentPath)) {
+  const [segmentPath, pathBelowSegment] = useMemo(() => {
+    const [segmentPath, ...restOfPath] = remainingPath;
+    return [segmentPath, restOfPath];
+  }, [remainingPath]);
+  console.log("RouterSegmentLayout", segmentPath, pathBelowSegment);
+
+  if (!parentCacheNode.children.has(segmentPath)) {
     console.log("storing subtree for segment", segmentPath);
-    parentCache.children.set(
+    parentCacheNode.children.set(
       segmentPath,
       createLayoutCacheNode(segmentPath, children)
     );
@@ -201,14 +222,18 @@ export const RouterSegment = ({
     console.log("already got cached subtree for segment", segmentPath);
   }
 
-  const ownCache = parentCache.children.get(segmentPath)!;
+  const ownCacheNode = parentCacheNode.children.get(segmentPath)!;
+  const ctxForSegmentsBelow: SegmentContextValue = useMemo(
+    () => ({ cacheNode: ownCacheNode, remainingPath: pathBelowSegment }),
+    [ownCacheNode]
+  );
 
-  const cachedChildren = ownCache.subTree;
+  const cachedChildren = ownCacheNode.subTree;
 
   return (
-    <LayoutCacheContext.Provider value={ownCache}>
+    <SegmentContext.Provider value={ctxForSegmentsBelow}>
       {cachedChildren}
-    </LayoutCacheContext.Provider>
+    </SegmentContext.Provider>
   );
 };
 

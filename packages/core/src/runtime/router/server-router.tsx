@@ -27,6 +27,11 @@ export function createServerRouter(routes: RouteDefinition) {
 
     let tree: JSX.Element | null = null;
 
+    if (segment.layout && segment.page) {
+      // TODO
+      throw new Error("Not supported yet: segment and page on the same level");
+    }
+
     if (restOfPath.length > 0) {
       console.log("recursing", restOfPath);
       // more path remaining, need to recurse
@@ -44,6 +49,8 @@ export function createServerRouter(routes: RouteDefinition) {
       }
       const { default: Page } = await segment.page();
       const cacheKey = getSegmentKey(segment, params);
+      // TODO: this won't work if we've got a layout on the same level as the page,
+      // because we'll do the same segmentPath twice... need to disambiguate them somehow
       tree = (
         <RouterSegment segmentPath={segmentPath} isRootLayout={false}>
           <Page key={cacheKey} params={params} />

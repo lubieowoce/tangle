@@ -15,14 +15,15 @@ import {
 } from "react";
 import { HTMLPage } from "./page";
 import {
-  createDummyNavigation,
-  NavigationContext,
+  createStaticRouter,
+  GlobalRouterContext,
 } from "./router/navigation-context";
 import {
-  LayoutCacheContext,
+  SegmentContext,
   createLayoutCacheNode,
   createLayoutCacheRoot,
 } from "./router/client-router";
+import { parsePath } from "./router/paths";
 
 export type ScriptsManifest = {
   main: string;
@@ -47,15 +48,20 @@ export function getSSRDomStream(
   console.log("SSRing response");
   const domStream = renderToPipeableStream(
     // TODO: integrate NavigationContext with router!
-    <LayoutCacheContext.Provider value={createLayoutCacheRoot()}>
-      <NavigationContext.Provider value={createDummyNavigation(path)}>
+    <SegmentContext.Provider
+      value={{
+        remainingPath: parsePath(path),
+        cacheNode: createLayoutCacheRoot(),
+      }}
+    >
+      <GlobalRouterContext.Provider value={createStaticRouter(path)}>
         <HTMLPage>
           <Suspense>
             <ServerComponentWrapper />
           </Suspense>
         </HTMLPage>
-      </NavigationContext.Provider>
-    </LayoutCacheContext.Provider>,
+      </GlobalRouterContext.Provider>
+    </SegmentContext.Provider>,
     {
       bootstrapScripts: [`${ASSETS_ROUTE}/${scriptsManifest.main}`],
       // onShellReady() {
