@@ -16,6 +16,7 @@ import { createNoopStream } from "./utils";
 
 import type { ClientManifest } from "react-server-dom-webpack/server.node";
 import type { SSRManifest } from "react-server-dom-webpack/client.node";
+import type { Transform } from "node:stream";
 
 const CLIENT_ASSETS_DIR = path.resolve(__dirname, "../client");
 
@@ -77,19 +78,7 @@ app.get("*", async (req, res) => {
 
     const rscStream = renderRSCRoot(path, undefined, webpackMapForClient);
 
-    rscStream.on("data", (chunk: Buffer) => {
-      console.log("RSC chunk", chunk.toString("utf-8"));
-      finalOutputStream.write(
-        [
-          `<script>`,
-          `(() => {`,
-          `  var chunks = window.__RSC_CHUNKS__ || (window.__RSC_CHUNKS__ = []);`,
-          `  chunks.push(${JSON.stringify(chunk.toString("utf8"))});`,
-          `})();`,
-          `</script>`,
-        ].join("\n")
-      );
-    });
+    injectRSCPayloadIntoOutput(rscStream, finalOutputStream);
 
     const domStream = getSSRDomStream(
       path,
@@ -105,5 +94,37 @@ app.get("*", async (req, res) => {
     finalOutputStream.pipe(res);
   }
 });
+
+function injectRSCPayloadIntoOutput(
+  rscStream: Transform,
+  finalOutputStream: Transform
+) {
+  rscStream.on("data", (chunk: Buffer) => {
+    console.log("RSC chunk", chunk.toString("utf-8"));
+    finalOutputStream.write(
+      [
+        `<script>`,
+        `(() => {`,
+        `  var chunks = window.__RSC_CHUNKS__ || (window.__RSC_CHUNKS__ = []);`,
+        `  chunks.push(${JSON.stringify(chunk.toString("utf8"))});`,
+        `})();`,
+        `</script>`,
+      ].join("\n")
+    );
+  });
+
+  rscStream.on("close", () => {
+    finalOutputStream.write(
+      [
+        `<script>`,
+        `(() => {`,
+        `  var chunks = window.__RSC_CHUNKS__ || (window.__RSC_CHUNKS__ = []);`,
+        `  chunks.isComplete = true;`,
+        `})();`,
+        `</script>`,
+      ].join("\n")
+    );
+  });
+}
 
 app.listen(8080);
