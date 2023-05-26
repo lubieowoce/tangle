@@ -11,6 +11,8 @@ import ReactFlightWebpackPlugin, {
   Options as ReactFlightWebpackPluginOptions,
 } from "react-server-dom-webpack/plugin";
 
+import type { ClientReferenceMetadata } from "react-server-dom-webpack/src/ReactFlightClientWebpackBundlerConfig";
+
 import { runWebpack } from "./run-webpack";
 import Webpack, {
   Configuration,
@@ -385,12 +387,7 @@ type SSRManifest = {
 
 type SSRManifestActual = {
   [id: string]: {
-    [exportName: string]: {
-      id: string | number;
-      name: string;
-      chunks: (string | number)[];
-      async: boolean;
-    };
+    [exportName: string]: ClientReferenceMetadata;
   };
 };
 
@@ -527,6 +524,8 @@ class RSCServerPlugin {
   constructor(public options: RSCPluginOptions) {}
 
   apply(compiler: Compiler) {
+    const ensureString = (id: string | number): string => id + "";
+
     // Rewrite the SSR manifest that RSDW generated to match the real moduleIds
     compiler.hooks.make.tap(RSCServerPlugin.pluginName, (compilation) => {
       compilation.hooks.processAssets.tap(
@@ -537,8 +536,8 @@ class RSCServerPlugin {
         () => {
           type Rewrites = {
             [id: string]: {
-              moduleId: string | number;
-              chunkIds: (string | number)[];
+              moduleId: string;
+              chunkIds: string[];
             };
           };
           const ssrManifestSpecifierRewrite: Rewrites = {};
@@ -550,7 +549,8 @@ class RSCServerPlugin {
           compilation.chunkGroups.forEach((chunkGroup) => {
             const chunkIds = chunkGroup.chunks
               .map((c) => c.id)
-              .filter((id) => id !== null) as (string | number)[];
+              .filter((id) => id !== null)
+              .map((id) => ensureString(id!)); // we want numeric ids to be strings.
 
             const visitModule = (
               mod: Module & { modules?: Module[] },
@@ -579,7 +579,7 @@ class RSCServerPlugin {
                 getOriginalPathFromVirtual(mod.resource)
               ).href;
               ssrManifestSpecifierRewrite[currentIdInSSRManifest] = {
-                moduleId,
+                moduleId: ensureString(moduleId),
                 chunkIds,
               };
             };
@@ -613,7 +613,7 @@ class RSCServerPlugin {
                 };
                 finalSSRManifest[clientModuleId] ||= {};
                 finalSSRManifest[clientModuleId][exportName] = newExportInfo;
-                toRewrite.delete(exportInfo.specifier + "");
+                toRewrite.delete(ensureString(exportInfo.specifier));
               }
             }
           }
