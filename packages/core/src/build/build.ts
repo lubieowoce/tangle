@@ -141,14 +141,22 @@ export const build = async ({
 
   const sharedPlugins = (): Configuration["plugins"] & unknown[] => {
     const serverRouter = path.join(INTERNAL_CODE, "router/server-router.js");
+    const teeLog = <T>(x: T): T => {
+      console.log(x);
+      return x;
+    };
     return [
       new VirtualModulesPlugin({
-        [opts.server.rootComponentModule]: [
-          `import { createServerRouter } from ${stringLiteral(serverRouter)};`,
-          `const routes = ${generateRoutesExport(parsedRoutes)};`,
-          `const ServerRoot = createServerRouter(routes);`,
-          `export default ServerRoot;`,
-        ].join("\n"),
+        [opts.server.rootComponentModule]: teeLog(
+          [
+            `import { createServerRouter } from ${stringLiteral(
+              serverRouter
+            )};`,
+            `const routes = ${generateRoutesExport(parsedRoutes)};`,
+            `const ServerRoot = createServerRouter(routes);`,
+            `export default ServerRoot;`,
+          ].join("\n")
+        ),
       }),
     ];
   };
