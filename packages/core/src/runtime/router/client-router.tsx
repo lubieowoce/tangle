@@ -24,6 +24,7 @@ import {
 import { FLIGHT_REQUEST_HEADER, ROUTER_STATE_HEADER } from "../shared";
 import { createFromFetch } from "react-server-dom-webpack/client.browser";
 import { ParsedPath, parsePath, takeSegment } from "./paths";
+import { Use } from "../support/use";
 
 export function Link({
   href,
@@ -138,25 +139,21 @@ export const ClientRouter = ({
           const request = fetch(newPath, {
             headers: {
               [FLIGHT_REQUEST_HEADER]: "1",
-              // hack -- trick the current server-side machinery into skipping existing segments
-              // (it'll keep going until it finds one that doesn't match...)
+              // This tells our server-side router to skip rendering layouts we already have in the cache.
+              // This is not an optional optimization, it's required for correctness.
+              // We put the response in some nested place in the cache,
+              // and it'll be rendered *within* those cached layouts,
+              // so this response can't contain the layouts above its level -- we'd render them twice!
               [ROUTER_STATE_HEADER]: JSON.stringify(existingSegments),
             },
           });
-          const fetchedRSC = createFromFetch(request, {});
+          const fetchedTreeThenable = createFromFetch<ReactNode>(request, {});
 
           // TODO: idk about this one, would be nicer to just store a promise
           // (i.e. allow the cache to store in-flight data in a more sensible manner)
-          const RSCResponseWrapper = () => {
-            return use(fetchedRSC);
-          };
-
-          // DEBUG
-          RSCResponseWrapper[
-            "displayName"
-          ] = `RSCResponseWrapper:${JSON.stringify(cacheInstallPath)}`;
-
-          cacheNode.subTree = <RSCResponseWrapper />;
+          cacheNode.subTree = (
+            <Use thenable={fetchedTreeThenable} debugLabel={cacheInstallPath} />
+          );
         };
 
         if (instant) {

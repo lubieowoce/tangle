@@ -24,6 +24,7 @@ import {
   createLayoutCacheRoot,
 } from "./router/client-router";
 import { parsePath } from "./router/paths";
+import { Use } from "./support/use";
 
 export type ScriptsManifest = {
   main: string;
@@ -40,11 +41,6 @@ export function getSSRDomStream(
     throwOnMissingProperty(webpackMapForSSR, "webpackMapForSSR [ssr]")
   );
 
-  const ServerComponentWrapper = () => {
-    console.log("Rendering ServerComponentWrapper");
-    return use(clientTreeThenable);
-  };
-
   console.log("SSRing response");
   const domStream = renderToPipeableStream(
     // TODO: integrate NavigationContext with router!
@@ -57,7 +53,7 @@ export function getSSRDomStream(
       <GlobalRouterContext.Provider value={createStaticRouter(path)}>
         <HTMLPage>
           <Suspense>
-            <ServerComponentWrapper />
+            <Use thenable={clientTreeThenable} />
           </Suspense>
         </HTMLPage>
       </GlobalRouterContext.Provider>
