@@ -23,6 +23,7 @@ import { FLIGHT_REQUEST_HEADER, ROUTER_STATE_HEADER } from "../shared";
 import { createFromFetch } from "react-server-dom-webpack/client.browser";
 import { ParsedPath, parsePath, takeSegment } from "./paths";
 import { Use } from "../support/use";
+import { Thenable } from "react__shared/ReactTypes";
 
 export function Link({
   href,
@@ -148,11 +149,22 @@ export const ClientRouter = ({
           });
           const fetchedTreeThenable = createFromFetch<ReactNode>(request, {});
 
-          // TODO: idk about this one, would be nicer to just store a promise
-          // (i.e. allow the cache to store in-flight data in a more sensible manner)
-          cacheNode.subTree = (
-            <Use thenable={fetchedTreeThenable} debugLabel={cacheInstallPath} />
+          cacheNode.pending = fetchedTreeThenable;
+          fetchedTreeThenable.then(
+            (subTree) => {
+              cacheNode.pending = undefined;
+              cacheNode.subTree = subTree;
+            },
+            (_error) => {
+              cacheNode.pending = undefined;
+              cacheNode.subTree = <>Oops, something went wrong</>;
+            }
           );
+          // // TODO: idk about this one, would be nicer to just store a promise
+          // // (i.e. allow the cache to store in-flight data in a more sensible manner)
+          // cacheNode.subTree = (
+          //   <Use thenable={fetchedTreeThenable} debugLabel={cacheInstallPath} />
+          // );
         };
 
         if (instant) {
@@ -193,26 +205,12 @@ export const createLayoutCacheRoot = (): LayoutCacheNode => {
   return {
     segment: "<root>",
     subTree: null,
-    children: new Map(),
+    childNodes: new Map(),
   };
 };
 
-const getOrCreateCacheNode = (
-  cacheNode: LayoutCacheNode,
-  key: string
-): [cacheNode: LayoutCacheNode, didExist: boolean] => {
-  const existingNode = cacheNode.children.get(key);
-  if (existingNode) {
-    return [existingNode, true];
-  } else {
-    const newNode = createLayoutCacheNode(key, null);
-    cacheNode.children.set(key, newNode);
-    return [newNode, false];
-  }
-};
-
 const getChildNode = (cacheNode: LayoutCacheNode, key: string) => {
-  return cacheNode.children.get(key);
+  return cacheNode.childNodes.get(key);
 };
 
 const addChildNode = (
@@ -220,7 +218,7 @@ const addChildNode = (
   key: string,
   child: LayoutCacheNode
 ) => {
-  if (cacheNode.children.has(key)) {
+  if (cacheNode.childNodes.has(key)) {
     console.warn(
       "overriting existing child, this should't really happen...",
       cacheNode,
@@ -228,7 +226,7 @@ const addChildNode = (
       child
     );
   }
-  return cacheNode.children.set(key, child);
+  return cacheNode.childNodes.set(key, child);
 };
 
 const createShallowestCacheNodeForPath = (
@@ -261,7 +259,7 @@ const hasCachePath = (
   path: ParsedPath
 ): boolean => {
   if (path.length === 0) throw new Error("oops, this shouldn't happen");
-  const nodeForFirstSegment = cacheNode.children.get(path[0]);
+  const nodeForFirstSegment = cacheNode.childNodes.get(path[0]);
   if (path.length === 1 || !nodeForFirstSegment) {
     return !!nodeForFirstSegment;
   }
@@ -274,13 +272,14 @@ export const createLayoutCacheNode = (
 ): LayoutCacheNode => ({
   segment,
   subTree,
-  children: new Map(),
+  childNodes: new Map(),
 });
 
 type LayoutCacheNode = {
   segment: string;
   subTree: ReactNode;
-  children: Map<string, LayoutCacheNode>;
+  pending?: Thenable<ReactNode>;
+  childNodes: Map<string, LayoutCacheNode>;
 };
 
 type SegmentContextValue = {
@@ -301,11 +300,11 @@ const useSegmentContext = () => {
 
 const debugCache = (cacheNode: LayoutCacheNode) => {
   const walk = (node: LayoutCacheNode): Record<string, any> | string => {
-    if (!node.children.size) {
+    if (!node.childNodes.size) {
       return node.subTree === null ? "<empty>" : "content ...";
     }
     return Object.fromEntries(
-      [...node.children.entries()].map(([k, v]) => [`${k}`, walk(v)])
+      [...node.childNodes.entries()].map(([k, v]) => [`${k}`, walk(v)])
     );
   };
 
@@ -335,9 +334,9 @@ export const RouterSegment = ({
     debugCache(parentCacheNode)
   );
 
-  if (!parentCacheNode.children.has(segmentPath)) {
+  if (!parentCacheNode.childNodes.has(segmentPath)) {
     console.log("storing subtree for segment", segmentPath);
-    parentCacheNode.children.set(
+    parentCacheNode.childNodes.set(
       segmentPath,
       createLayoutCacheNode(segmentPath, children)
     );
@@ -346,17 +345,22 @@ export const RouterSegment = ({
     console.log("already got cached subtree for segment", segmentPath);
   }
 
-  const ownCacheNode = parentCacheNode.children.get(segmentPath)!;
+  const ownCacheNode = parentCacheNode.childNodes.get(segmentPath)!;
   const ctxForSegmentsBelow: SegmentContextValue = useMemo(
     () => ({ cacheNode: ownCacheNode, remainingPath: pathBelowSegment }),
     [ownCacheNode, pathBelowSegment]
   );
 
-  const cachedChildren = ownCacheNode.subTree;
+  const pendingSubtree = ownCacheNode.pending;
+  const cachedSubtree = ownCacheNode.subTree;
 
   return (
     <SegmentContext.Provider value={ctxForSegmentsBelow}>
-      {cachedChildren}
+      {pendingSubtree ? (
+        <Use thenable={pendingSubtree} debugLabel={remainingPath} />
+      ) : (
+        cachedSubtree
+      )}
     </SegmentContext.Provider>
   );
 };
