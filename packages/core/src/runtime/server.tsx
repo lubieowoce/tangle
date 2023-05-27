@@ -12,7 +12,7 @@ import {
 
 import { renderRSCRoot } from "./server-rsc";
 import { getSSRDomStream, ScriptsManifest } from "./server-ssr";
-import { createNoopStream } from "./utils";
+import { catchAsync, createNoopStream } from "./utils";
 
 import type { ClientManifest } from "react-server-dom-webpack/server.node";
 import type { SSRManifest } from "react-server-dom-webpack/client.node";
@@ -58,42 +58,48 @@ console.log(
 
 app.use(ASSETS_ROUTE, expressStatic(CLIENT_ASSETS_DIR));
 
-app.get("*", async (req, res) => {
-  const url = new URL(req.url, `http://${req.headers.host}`);
-  // const props: AnyServerRootProps = pathToParams(url);
-  const path = req.path;
-  if (req.header(FLIGHT_REQUEST_HEADER)) {
-    const existingState = JSON.parse(req.header(ROUTER_STATE_HEADER)!);
-    console.log("=====================");
-    console.log("rendering RSC");
-    console.log("router state", existingState);
-    const rscStream = renderRSCRoot(path, existingState, webpackMapForClient);
-    res.header("content-type", RSC_CONTENT_TYPE);
-    rscStream.pipe(res);
-  } else {
-    console.log("=====================");
-    console.log("rendering RSC for SSR");
+// TODO: distinguish which paths should hit the router somehow
+app.get("/favicon.ico", (_, res) => res.status(404).send());
 
-    const finalOutputStream = createNoopStream();
+app.get(
+  "*",
+  catchAsync(async (req, res) => {
+    // const url = new URL(req.url, `http://${req.headers.host}`);
+    // const props: AnyServerRootProps = pathToParams(url);
+    const path = req.path;
+    if (req.header(FLIGHT_REQUEST_HEADER)) {
+      const existingState = JSON.parse(req.header(ROUTER_STATE_HEADER)!);
+      console.log("=====================");
+      console.log("rendering RSC");
+      console.log("router state", existingState);
+      const rscStream = renderRSCRoot(path, existingState, webpackMapForClient);
+      res.header("content-type", RSC_CONTENT_TYPE);
+      rscStream.pipe(res);
+    } else {
+      console.log("=====================");
+      console.log("rendering RSC for SSR");
 
-    const rscStream = renderRSCRoot(path, undefined, webpackMapForClient);
+      const finalOutputStream = createNoopStream();
 
-    injectRSCPayloadIntoOutput(rscStream, finalOutputStream);
+      const rscStream = renderRSCRoot(path, undefined, webpackMapForClient);
 
-    const domStream = getSSRDomStream(
-      path,
-      rscStream,
-      scriptsManifest,
-      webpackMapForSSR
-    );
+      injectRSCPayloadIntoOutput(rscStream, finalOutputStream);
 
-    // FIXME: this causes the inline scripts to go in front of <html>, that's bad.
-    // figure out how combine the streams properly
-    res.header("content-type", "text/html; charset=utf-8");
-    domStream.pipe(finalOutputStream);
-    finalOutputStream.pipe(res);
-  }
-});
+      const domStream = getSSRDomStream(
+        path,
+        rscStream,
+        scriptsManifest,
+        webpackMapForSSR
+      );
+
+      // FIXME: this causes the inline scripts to go in front of <html>, that's bad.
+      // figure out how combine the streams properly
+      res.header("content-type", "text/html; charset=utf-8");
+      domStream.pipe(finalOutputStream);
+      finalOutputStream.pipe(res);
+    }
+  })
+);
 
 function injectRSCPayloadIntoOutput(
   rscStream: Transform,

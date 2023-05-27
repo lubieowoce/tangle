@@ -1,3 +1,4 @@
+import { PropsWithChildren, Suspense } from "react";
 import { RouterSegment } from "./client-router";
 import { ParsedPath, parsePath, takeSegmentMaybe } from "./paths";
 import {
@@ -101,7 +102,12 @@ export function createServerRouter(routes: RouteDefinition) {
         // we haven't found the root yet, so skip this level. we only need the part from the root & below.
         return treeFromLowerSegments;
       } else {
-        tree = treeFromLowerSegments;
+        // tree = treeFromLowerSegments;
+        tree = (
+          <Suspense fallback={<SegmentFallback path={restOfPath} />}>
+            {treeFromLowerSegments}
+          </Suspense>
+        );
       }
     } else {
       console.log("stopping walk", segmentPath);
@@ -178,4 +184,12 @@ export function createServerRouter(routes: RouteDefinition) {
   }
 
   return buildServerJSX;
+}
+
+function SegmentFallback({ path }: { path: ParsedPath }) {
+  return (
+    <div style={{ color: "lightgrey" }}>
+      Loading segment {JSON.stringify(path)}...
+    </div>
+  );
 }

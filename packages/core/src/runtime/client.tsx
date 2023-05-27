@@ -13,6 +13,7 @@ import {
   createLayoutCacheRoot,
   getPathFromDOMState,
 } from "./router/client-router";
+import { Use } from "./support/use";
 
 type InitialChunks = string[] & { isComplete?: boolean };
 declare var __RSC_CHUNKS__: InitialChunks;
@@ -101,26 +102,14 @@ const init = async () => {
   Object.defineProperty(window, "LAYOUT_CACHE", { get: () => layoutCache });
 
   const initialPath = getPathFromDOMState();
-  const initialKey = initialPath;
   // cache.set(initialKey, initialServerTreeThenable);
-
-  // console.log(cache);
-
-  const Root = () => {
-    return use(initialServerTreeThenable);
-  };
 
   onDocumentLoad(() => {
     startTransition(() => {
       hydrateRoot(
         document,
-        // TODO: ClientRouter renders a segment context, and that intercepts children... iffy
         <ClientRouter cache={layoutCache} initialPath={initialPath}>
-          <HTMLPage>
-            <Suspense fallback="Loading... (global boundary)">
-              <Root />
-            </Suspense>
-          </HTMLPage>
+          <Use thenable={initialServerTreeThenable} debugLabel={initialPath} />
         </ClientRouter>
       );
     });

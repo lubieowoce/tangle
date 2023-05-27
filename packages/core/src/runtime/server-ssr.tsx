@@ -43,21 +43,16 @@ export function getSSRDomStream(
 
   console.log("SSRing response");
   const domStream = renderToPipeableStream(
-    // TODO: integrate NavigationContext with router!
-    <SegmentContext.Provider
-      value={{
-        remainingPath: parsePath(path),
-        cacheNode: createLayoutCacheRoot(),
-      }}
-    >
-      <GlobalRouterContext.Provider value={createStaticRouter(path)}>
-        <HTMLPage>
-          <Suspense>
-            <Use thenable={clientTreeThenable} />
-          </Suspense>
-        </HTMLPage>
-      </GlobalRouterContext.Provider>
-    </SegmentContext.Provider>,
+    <GlobalRouterContext.Provider value={createStaticRouter(path)}>
+      <SegmentContext.Provider
+        value={{
+          cacheNode: createLayoutCacheRoot(),
+          remainingPath: parsePath(path),
+        }}
+      >
+        <Use thenable={clientTreeThenable} />
+      </SegmentContext.Provider>
+    </GlobalRouterContext.Provider>,
     {
       bootstrapScripts: [`${ASSETS_ROUTE}/${scriptsManifest.main}`],
       // onShellReady() {

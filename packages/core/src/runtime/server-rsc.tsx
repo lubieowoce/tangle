@@ -8,6 +8,8 @@ import { throwOnMissingProperty } from "./shared";
 import buildServerJSX from "./generated/server-root";
 import { createNoopStream } from "./utils";
 import { ParsedPath } from "./router/paths";
+// import { Suspense } from "react";
+// import { Use } from "./support/use";
 
 export function renderRSCRoot(
   path: string,
