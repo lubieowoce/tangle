@@ -78,7 +78,10 @@ export function createServerRouter(routes: RouteDefinition) {
 
     if (segment.layout && segment.page) {
       // TODO
-      throw new Error("Not supported yet: segment and page on the same level");
+      throw new Error(
+        "Internal error: got segment and page on the same level.\n" +
+          "Pages should be a child with the name '__PAGE__' instead."
+      );
     }
 
     if (restOfPath.length > 0) {
@@ -112,8 +115,6 @@ export function createServerRouter(routes: RouteDefinition) {
       }
       const { default: Page } = await segment.page();
       const cacheKey = getSegmentKey(segment, params);
-      // TODO: this won't work if we've got a layout on the same level as the page,
-      // because we'll do the same segmentPath twice... need to disambiguate them somehow
 
       tree = <Page key={cacheKey} params={params} />;
 

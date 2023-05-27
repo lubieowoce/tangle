@@ -2,6 +2,23 @@ import { arrayLiteral, literal, stringLiteral } from "../codegen-helpers";
 import { RouteInfo } from "./types";
 
 export const generateRoutesExport = (routes: RouteInfo): string => {
+  if (routes.page && routes.segment !== "__PAGE__") {
+    // segments with a `page` get a different name
+    // to disambiguate them from the layout in our nested cache
+    return generateRoutesExport({
+      ...routes,
+      page: null,
+      children: [
+        {
+          ...routes,
+          segment: "__PAGE__",
+          layout: null,
+          page: routes.page,
+        },
+        ...(routes.children ?? []),
+      ],
+    });
+  }
   return `{
       segment: ${stringLiteral(routes.segment)},
       page: ${

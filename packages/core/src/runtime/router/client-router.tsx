@@ -7,8 +7,6 @@ import {
   useMemo,
   useState,
   useTransition,
-  // @ts-ignore  TODO: enable react@next types
-  use,
   createContext,
   useContext,
   useReducer,
@@ -135,6 +133,7 @@ export const ClientRouter = ({
             newPath,
             cacheInstallPath,
             cacheNode,
+            existingSegments,
           });
           const request = fetch(newPath, {
             headers: {

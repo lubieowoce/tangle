@@ -2,13 +2,16 @@ export type ParsedPath = string[];
 
 export function parsePath(rawPath: string): ParsedPath {
   rawPath = rawPath.replace(/^\//, "").replace(/\/$/, "");
-  if (rawPath === "") return [""];
-  return ["", ...rawPath.split("/")];
+  if (rawPath === "") return ["", "__PAGE__"];
+  return ["", ...rawPath.split("/"), "__PAGE__"];
 }
 
 export function serializePath(path: ParsedPath): string {
   if (path[0] === "/") {
     [, ...path] = path;
+  }
+  if (path.at(-1) === "__PAGE__") {
+    path = path.slice(0, -1);
   }
   return "/" + path.join("/");
 }
