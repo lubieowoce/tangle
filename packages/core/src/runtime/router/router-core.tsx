@@ -39,6 +39,9 @@ export type RouteDefinition = {
     FC<PropsWithChildren<{ params: SegmentParams }>>
   > | null;
   page: ImportDefault<FC<PropsWithChildren<{ params: SegmentParams }>>> | null;
+  loading: ImportDefault<
+    FC<PropsWithChildren<{ params: SegmentParams }>>
+  > | null;
   children: RouteDefinition[] | null;
 };
 

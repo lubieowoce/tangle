@@ -18,6 +18,13 @@ export const generateRoutesExport = (routes: RouteInfo): string => {
             )})`
           : literal(null)
       },
+      loading: ${
+        routes.loading
+          ? `() => import(/* webpackMode: "eager" */ ${stringLiteral(
+              routes.loading
+            )})`
+          : literal(null)
+      },
       children: ${
         routes.children
           ? arrayLiteral(

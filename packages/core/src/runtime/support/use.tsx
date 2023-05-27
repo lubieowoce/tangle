@@ -1,6 +1,6 @@
 import {
   ReactNode,
-  // @ts-ignore use exists!
+  // @ts-expect-error  use exists!
   use,
 } from "react";
 import { Thenable } from "react__shared/ReactTypes";

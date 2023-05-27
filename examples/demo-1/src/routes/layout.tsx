@@ -8,6 +8,7 @@ export default function Root({ children }: PropsWithChildren<{}>) {
   return (
     <HTMLPage>
       <main>
+        {/* @ts-ignore  async component */}
         <DummyLayout params={{}}>{children}</DummyLayout>
       </main>
     </HTMLPage>

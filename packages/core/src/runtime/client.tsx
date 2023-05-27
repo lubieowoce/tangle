@@ -1,13 +1,6 @@
-import {
-  startTransition,
-  Suspense,
-  type ReactNode,
-  // @ts-ignore use exists!
-  use,
-} from "react";
+import { startTransition, type ReactNode } from "react";
 import { hydrateRoot } from "react-dom/client";
 import { createFromReadableStream } from "react-server-dom-webpack/client.browser";
-import { HTMLPage } from "./page";
 import {
   ClientRouter,
   createLayoutCacheRoot,

@@ -1,4 +1,4 @@
-import { PropsWithChildren, Suspense } from "react";
+import { Suspense } from "react";
 import { RouterSegment } from "./client-router";
 import { ParsedPath, parsePath, takeSegmentMaybe } from "./paths";
 import {
@@ -102,12 +102,7 @@ export function createServerRouter(routes: RouteDefinition) {
         // we haven't found the root yet, so skip this level. we only need the part from the root & below.
         return treeFromLowerSegments;
       } else {
-        // tree = treeFromLowerSegments;
-        tree = (
-          <Suspense fallback={<SegmentFallback path={restOfPath} />}>
-            {treeFromLowerSegments}
-          </Suspense>
-        );
+        tree = treeFromLowerSegments;
       }
     } else {
       console.log("stopping walk", segmentPath);
@@ -121,6 +116,17 @@ export function createServerRouter(routes: RouteDefinition) {
       // because we'll do the same segmentPath twice... need to disambiguate them somehow
 
       tree = <Page key={cacheKey} params={params} />;
+
+      // add a loading boundary above the page, but below the layout.
+      // that way, if the layout is ready but the content is not, we can show a loading state.
+      if (segment.loading) {
+        const { default: Loading } = await segment.loading();
+        tree = (
+          <Suspense fallback={<Loading key={cacheKey} params={params} />}>
+            {tree}
+          </Suspense>
+        );
+      }
 
       // don't wrap the tree in a segment if this is the root of a nested fetch.
       // because in that case, we'll already be rendered by an existing RouterSegment
@@ -148,6 +154,20 @@ export function createServerRouter(routes: RouteDefinition) {
           {tree}
         </Layout>
       );
+
+      // add a loading boundary again, *above* the layout.
+      // that way, if the layout isn't ready, we still get a loading state.
+      // TODO: i'm not 100% sure if this makes sense, reusing the same `loading` might be confusing.
+      // i guess we'll see!
+      if (segment.loading) {
+        const { default: Loading } = await segment.loading();
+        tree = (
+          <Suspense fallback={<Loading key={cacheKey} params={params} />}>
+            {tree}
+          </Suspense>
+        );
+      }
+
       if (!isFetchRoot) {
         tree = (
           <RouterSegment
@@ -184,12 +204,4 @@ export function createServerRouter(routes: RouteDefinition) {
   }
 
   return buildServerJSX;
-}
-
-function SegmentFallback({ path }: { path: ParsedPath }) {
-  return (
-    <div style={{ color: "lightgrey" }}>
-      Loading segment {JSON.stringify(path)}...
-    </div>
-  );
 }

@@ -6,6 +6,7 @@ import { RouteInfo } from "./types";
 
 const IS_PAGE = "page" + MODULE_EXTENSIONS_GLOB;
 const IS_LAYOUT = "layout" + MODULE_EXTENSIONS_GLOB;
+const IS_LOADING = "loading" + MODULE_EXTENSIONS_GLOB;
 
 export const isRoot = (info: RouteInfo) => info.segment === "";
 
@@ -19,6 +20,7 @@ export function findRoutes(
     segment: basename(relative(routesRootDir, routesDir)),
     page: mapMaybe(micromatchFirst(dirContents, IS_PAGE), toAbsolute),
     layout: mapMaybe(micromatchFirst(dirContents, IS_LAYOUT), toAbsolute),
+    loading: mapMaybe(micromatchFirst(dirContents, IS_LOADING), toAbsolute),
     children: null,
   };
 

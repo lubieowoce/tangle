@@ -55,7 +55,7 @@ const deepProxyHandlers = {
       case "toJSON":
         return undefined;
       case Symbol.toPrimitive.toString():
-        // @ts-ignore
+        // @ts-expect-error  indexing using a symbol
         return Object.prototype[Symbol.toPrimitive];
       case "Provider":
         throw new Error(
@@ -114,7 +114,7 @@ const proxyHandlers = {
       case "toJSON":
         return undefined;
       case Symbol.toPrimitive.toString():
-        // @ts-ignore
+        // @ts-expect-error  indexing using a symbol
         return Object.prototype[Symbol.toPrimitive];
       case "__esModule":
         // Something is conditionally checking which export to use. We'll pretend to be
