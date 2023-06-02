@@ -1,14 +1,18 @@
 import { Link } from "@owoce/tangle";
-import { getProfileFromDb } from "../../../server/db";
+import { getDbClient, getProfileFromDb } from "../../../server/db";
 import { Timestamp } from "../../../components/timestamp";
 
 type Params = { profileId: string };
 
 export default async function ProfileView({ params }: { params: Params }) {
   const profileId = Number(params.profileId ?? "0");
-  const { profile, nextProfileId, prevProfileId } = await getProfileFromDb({
-    profileId,
-  });
+  const dbClient = await getDbClient();
+  const { profile, nextProfileId, prevProfileId } = await getProfileFromDb(
+    dbClient,
+    {
+      profileId,
+    }
+  );
   return (
     <div
       style={{

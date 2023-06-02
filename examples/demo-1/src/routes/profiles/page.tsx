@@ -1,8 +1,9 @@
 import { Link } from "@owoce/tangle";
-import { getAllProfilesFromFb } from "../../server/db";
+import { getAllProfilesFromFb, getDbClient } from "../../server/db";
 
 export default async function AllProfilesView({ params }: { params: {} }) {
-  const profiles = await getAllProfilesFromFb();
+  const dbClient = await getDbClient();
+  const profiles = await getAllProfilesFromFb(dbClient);
   return (
     <div>
       {profiles.map(({ profileId, name }) => (
