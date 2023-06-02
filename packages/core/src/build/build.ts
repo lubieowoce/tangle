@@ -58,11 +58,9 @@ export type BuildReturn = { server: { path: string } };
 
 export const build = async ({
   appPath,
-  serverRoot,
   paths: pathsFile,
 }: {
   appPath: string;
-  serverRoot: string;
   paths: string;
 }): Promise<BuildReturn> => {
   const DIST_PATH = path.join(appPath, "dist");
@@ -70,7 +68,6 @@ export const build = async ({
 
   const opts = {
     user: {
-      rootComponentModule: path.resolve(appPath, serverRoot),
       routesDir: path.resolve(appPath, "src/routes"),
       pathsModule: path.resolve(appPath, pathsFile),
       tsConfig: path.resolve(appPath, "tsconfig.json"),
@@ -83,7 +80,7 @@ export const build = async ({
       entry: path.join(INTERNAL_CODE, "server.js"),
       ssrModule: path.join(INTERNAL_CODE, "server-ssr.js"),
       rscModule: path.join(INTERNAL_CODE, "server-rsc.js"),
-      rootComponentModule: path.join(INTERNAL_CODE, "generated/server-root.js"),
+      genratedRoutesModule: path.join(INTERNAL_CODE, "generated/routes.js"),
       destDir: path.join(DIST_PATH, "server"),
     },
     moduleDir: INTERNAL_CODE,
@@ -140,22 +137,14 @@ export const build = async ({
   const parsedRoutes = findRoutes(opts.user.routesDir, opts.user.routesDir);
 
   const sharedPlugins = (): Configuration["plugins"] & unknown[] => {
-    const serverRouter = path.join(INTERNAL_CODE, "router/server-router.js");
     const teeLog = <T>(x: T): T => {
       console.log(x);
       return x;
     };
     return [
       new VirtualModulesPlugin({
-        [opts.server.rootComponentModule]: teeLog(
-          [
-            `import { createServerRouter } from ${stringLiteral(
-              serverRouter
-            )};`,
-            `const routes = ${generateRoutesExport(parsedRoutes)};`,
-            `const ServerRoot = createServerRouter(routes);`,
-            `export default ServerRoot;`,
-          ].join("\n")
+        [opts.server.genratedRoutesModule]: teeLog(
+          `export default ${generateRoutesExport(parsedRoutes)};`
         ),
       }),
     ];

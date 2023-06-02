@@ -5,18 +5,16 @@ import {
 
 import { throwOnMissingProperty } from "./shared";
 
-import buildServerJSX from "./generated/server-root";
+import { serverRouter } from "./root";
 import { createNoopStream } from "./utils";
 import { ParsedPath } from "./router/paths";
-// import { Suspense } from "react";
-// import { Use } from "./support/use";
 
-export function renderRSCRoot(
+export async function renderRSCRoot(
   path: string,
   existingState: ParsedPath | undefined,
   webpackMapForClient: ClientManifest
 ) {
-  const tree = buildServerJSX({
+  const tree = await serverRouter({
     path,
     existingState,
   });

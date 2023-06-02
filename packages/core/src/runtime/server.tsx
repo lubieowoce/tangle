@@ -72,7 +72,11 @@ app.get(
       console.log("=====================");
       console.log("rendering RSC");
       console.log("router state", existingState);
-      const rscStream = renderRSCRoot(path, existingState, webpackMapForClient);
+      const rscStream = await renderRSCRoot(
+        path,
+        existingState,
+        webpackMapForClient
+      );
       res.header("content-type", RSC_CONTENT_TYPE);
       rscStream.pipe(res);
     } else {
@@ -81,7 +85,11 @@ app.get(
 
       const finalOutputStream = createNoopStream();
 
-      const rscStream = renderRSCRoot(path, undefined, webpackMapForClient);
+      const rscStream = await renderRSCRoot(
+        path,
+        undefined,
+        webpackMapForClient
+      );
 
       injectRSCPayloadIntoOutput(rscStream, finalOutputStream);
 
