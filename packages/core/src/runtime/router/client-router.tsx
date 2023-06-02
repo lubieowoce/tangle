@@ -9,7 +9,7 @@ import {
   useTransition,
   createContext,
   useContext,
-  useReducer,
+  Thenable,
 } from "react";
 
 import {
@@ -23,7 +23,6 @@ import { FLIGHT_REQUEST_HEADER, ROUTER_STATE_HEADER } from "../shared";
 import { createFromFetch } from "react-server-dom-webpack/client.browser";
 import { ParsedPath, parsePath, takeSegment } from "./paths";
 import { Use } from "../support/use";
-import { Thenable } from "react__shared/ReactTypes";
 import { __DEV__ } from "../support/is-dev";
 
 export function Link({
@@ -456,3 +455,5 @@ function fetchSubtreeIntoNode(
     }
   );
 }
+
+const x = <a></a>;

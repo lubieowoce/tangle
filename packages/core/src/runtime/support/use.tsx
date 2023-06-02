@@ -1,9 +1,4 @@
-import {
-  ReactNode,
-  // @ts-expect-error  use exists!
-  use,
-} from "react";
-import { Thenable } from "react__shared/ReactTypes";
+import { ReactElement, Thenable, ReactNode, use } from "react";
 
 export function Use({
   thenable,
@@ -12,5 +7,5 @@ export function Use({
   /** This prop is unused, but shows up in the react DevTools  */
   debugLabel?: any;
 }) {
-  return use(thenable);
+  return use(thenable) as ReactElement;
 }

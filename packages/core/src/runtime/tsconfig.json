@@ -11,10 +11,7 @@
     "esModuleInterop": true,
     "skipLibCheck": true,
     "jsx": "react-jsx",
-    "typeRoots": [
-      "../../../../types",
-      "../../node_modules/@types",
-      "../../../../node_modules/@types"
-    ]
+    "moduleResolution": "bundler",
+    "types": ["react/next"]
   }
 }

@@ -1,3 +1,5 @@
+/// <reference types="react/next" />
+
 declare module "react-server-dom-webpack" {
   export {};
 }
@@ -46,11 +48,7 @@ declare module "react-server/src/ReactFlightServerConfig" {
 //==================
 
 declare module "react-server-dom-webpack/src/ReactFlightClientNodeBundlerConfig" {
-  import type {
-    Thenable,
-    FulfilledThenable,
-    RejectedThenable,
-  } from "react__shared/ReactTypes";
+  import type { Thenable, FulfilledThenable, RejectedThenable } from "react";
 
   export type SSRManifest = {
     [clientId: string]: {
@@ -137,7 +135,7 @@ declare module "react-server-dom-webpack/src/ReactFlightDOMServerNode" {
   import type { Writable, PassThrough } from "node:stream";
   import type { ReactElement } from "react";
   import type { ReactClientValue } from "react-server/src/ReactFlightServer";
-  import type { ServerContextJSONValue } from "react__shared/ReactTypes";
+  import type { ServerContextJSONValue } from "react";
   import type { ClientManifest } from "react-server-dom-webpack/src/ReactFlightServerWebpackBundlerConfig";
 
   export { ClientManifest }; // reexport for convenience
@@ -165,7 +163,7 @@ declare module "react-server-dom-webpack/src/ReactFlightDOMServerNode" {
 declare module "react-server-dom-webpack/src/ReactFlightDOMServerEdge" {
   import type { ReadableStream } from "node:stream/web";
   import type { ReactElement } from "react";
-  import type { ServerContextJSONValue } from "react__shared/ReactTypes";
+  import type { ServerContextJSONValue } from "react";
   import type { ClientManifest } from "react-server-dom-webpack/src/ReactFlightServerWebpackBundlerConfig";
   import type { ServerManifest } from "react-client/src/ReactFlightClientHostConfig";
 
@@ -195,7 +193,7 @@ declare module "react-server-dom-webpack/src/ReactFlightDOMServerEdge" {
 //================
 
 declare module "react-server-dom-webpack/src/ReactFlightDOMClientBrowser" {
-  import type { Thenable } from "react__shared/ReactTypes";
+  import type { Thenable } from "react";
 
   // https://github.com/facebook/react/blob/main/packages/react-server-dom-webpack/src/ReactFlightDOMClientBrowser.js
 
@@ -222,7 +220,7 @@ declare module "react-server-dom-webpack/src/ReactFlightDOMClientBrowser" {
 }
 
 declare module "react-server-dom-webpack/src/ReactFlightDOMClientNode" {
-  import type { Thenable } from "react__shared/ReactTypes";
+  import type { Thenable } from "react";
   import type { Readable } from "node:stream";
   import type { SSRManifest } from "react-client/src/ReactFlightClientHostConfig";
 
@@ -235,7 +233,7 @@ declare module "react-server-dom-webpack/src/ReactFlightDOMClientNode" {
 }
 
 declare module "react-server-dom-webpack/src/ReactFlightDOMClientEdge" {
-  import type { Thenable } from "react__shared/ReactTypes";
+  import type { Thenable } from "react";
   import type { ReadableStream } from "node:stream/web";
   import type { SSRManifest } from "react-client/src/ReactFlightClientHostConfig";
 
@@ -266,7 +264,7 @@ declare module "react-server/src/ReactFlightServer" {
     ElementType as React$Element,
     ComponentType as React$AbstractComponent, // hmmm... maybe this is close enough?
   } from "react";
-  import type { ReactServerContext } from "react__shared/ReactTypes";
+  import type { ReactServerContext } from "react";
 
   import type {
     // Destination,
@@ -331,61 +329,6 @@ declare module "react/src/ReactLazy" {
     _payload: P;
     _init: (payload: P) => T;
   };
-}
-
-declare module "react__shared/ReactTypes" {
-  import type { Context as ReactContext } from "react";
-
-  // https://github.com/facebook/react/blob/main/packages/shared/ReactTypes.js
-
-  // The subset of a Thenable required by things thrown by Suspense.
-  // This doesn't require a value to be passed to either handler.
-  export interface Wakeable {
-    then(onFulfill: () => unknown, onReject: () => unknown): void | Wakeable;
-  }
-
-  // The subset of a Promise that React APIs rely on. This resolves a value.
-  // This doesn't require a return value neither from the handler nor the
-  // then function.
-  interface ThenableImpl<T> {
-    then(
-      onFulfill: (value: T) => unknown,
-      onReject: (error: unknown) => unknown
-    ): void | Wakeable;
-  }
-  interface UntrackedThenable<T> extends ThenableImpl<T> {
-    status?: void;
-  }
-
-  export interface PendingThenable<T> extends ThenableImpl<T> {
-    status: "pending";
-  }
-
-  export interface FulfilledThenable<T> extends ThenableImpl<T> {
-    status: "fulfilled";
-    value: T;
-  }
-
-  export interface RejectedThenable<T> extends ThenableImpl<T> {
-    status: "rejected";
-    reason: unknown;
-  }
-
-  export type Thenable<T> =
-    | UntrackedThenable<T>
-    | PendingThenable<T>
-    | FulfilledThenable<T>
-    | RejectedThenable<T>;
-
-  export type ServerContextJSONValue =
-    | string
-    | boolean
-    | number
-    | null
-    | readonly ServerContextJSONValue[]
-    | { [key: string]: ServerContextJSONValue };
-
-  export type ReactServerContext<T = any> = ReactContext<T>;
 }
 
 //================

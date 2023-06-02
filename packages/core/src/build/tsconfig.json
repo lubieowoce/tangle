@@ -6,11 +6,6 @@
     "module": "CommonJS",
     "lib": ["es2022", "DOM"],
     "esModuleInterop": true,
-    "skipLibCheck": true,
-    "typeRoots": [
-      "../../../../types",
-      "../../node_modules/@types",
-      "../../../../node_modules/@types"
-    ]
+    "skipLibCheck": true
   }
 }

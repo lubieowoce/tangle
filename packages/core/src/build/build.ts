@@ -1,5 +1,4 @@
 /// <reference types="../types/react-server-dom-webpack" />
-// ^ not sure why TS doesn't pick this up automatically...
 
 import { LAYERS } from "./shared";
 
