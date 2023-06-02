@@ -16,13 +16,8 @@ const main = async () => {
 
   switch (command) {
     case "dev": {
-      const [, serverRoot = "src/index.tsx", paths = "src/paths.ts"] = args;
       const runDev = async () => {
-        const { server } = await build({
-          appPath,
-          serverRoot,
-          paths,
-        });
+        const { server } = await build({ appPath });
         return () => {
           const proc = spawnServer({ path: server.path });
           return () => proc.kill();
@@ -35,12 +30,7 @@ const main = async () => {
     }
 
     case "build": {
-      const [, serverRoot = "src/index.tsx", paths = "src/paths.ts"] = args;
-      const { server } = await build({
-        appPath,
-        serverRoot,
-        paths,
-      });
+      const { server } = await build({ appPath });
       console.log(server.path);
       return;
     }

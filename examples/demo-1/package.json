@@ -4,8 +4,8 @@
   "version": "1.0.0",
   "description": "",
   "scripts": {
-    "dev": "tangle dev src/index.tsx",
-    "build": "tangle build src/index.tsx",
+    "dev": "tangle dev",
+    "build": "tangle build",
     "start": "tangle start",
     "start-raw": "node dist/server/main.js"
   },

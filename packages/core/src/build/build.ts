@@ -58,10 +58,8 @@ export type BuildReturn = { server: { path: string } };
 
 export const build = async ({
   appPath,
-  paths: pathsFile,
 }: {
   appPath: string;
-  paths: string;
 }): Promise<BuildReturn> => {
   const DIST_PATH = path.join(appPath, "dist");
   const INTERNAL_CODE = rel("../runtime");
@@ -69,7 +67,6 @@ export const build = async ({
   const opts = {
     user: {
       routesDir: path.resolve(appPath, "src/routes"),
-      pathsModule: path.resolve(appPath, pathsFile),
       tsConfig: path.resolve(appPath, "tsconfig.json"),
     },
     client: {
