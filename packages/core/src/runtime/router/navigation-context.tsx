@@ -17,6 +17,7 @@ export type NavigationContextValue = {
   key: string;
   isNavigating: boolean;
   navigate(newPath: string, opts?: NavigateOptions): void;
+  refresh(): void;
 };
 
 export const GlobalRouterContext =
@@ -30,6 +31,9 @@ export function createStaticRouter(path: string): GlobalRouterContextValue {
       isNavigating: false,
       navigate() {
         throw new Error("Cannot call navigate on the Server.");
+      },
+      refresh() {
+        throw new Error("Cannot call refresh on the Server.");
       },
     },
   };

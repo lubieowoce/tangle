@@ -173,6 +173,13 @@ export const ClientRouter = ({
           startTransition(doNavigate);
         }
       },
+      refresh() {
+        throw new Error("Not implemented");
+        // const cacheNode = getRootNode(cache);
+        // startTransition(() => {
+        //   fetchSubTreeIntoNode(pathKey, [], cacheNode);
+        // });
+      },
     }),
     [pathKey, state, isNavigating, cache]
   );
@@ -199,14 +206,21 @@ export const ClientRouter = ({
   );
 };
 
-// new cache
-
 export const createLayoutCacheRoot = (): LayoutCacheNode => {
+  // TODO: it's a bit weird that the cache is a fake node in itself...
   return {
     segment: "<root>",
     subTree: null,
     childNodes: new Map(),
   };
+};
+
+const getRootNode = (cache: LayoutCacheNode) => {
+  const root = getChildNode(cache, "");
+  if (!root) {
+    throw new Error("No root cache node!");
+  }
+  return root;
 };
 
 const getChildNode = (cacheNode: LayoutCacheNode, key: string) => {
@@ -241,7 +255,7 @@ const createShallowestCacheNodeForPath = (
   const [segment, rest] = takeSegment(path);
   let childNode = getChildNode(cacheNode, segment);
   if (!childNode) {
-    childNode = createLayoutCacheNode(segment, null);
+    childNode = createBlankLayoutCacheNode(segment);
     addChildNode(cacheNode, segment, childNode);
     return [childNode, []];
   } else {
@@ -272,6 +286,14 @@ export const createLayoutCacheNode = (
 ): LayoutCacheNode => ({
   segment,
   subTree,
+  childNodes: new Map(),
+});
+
+export const createBlankLayoutCacheNode = (
+  segment: string
+): LayoutCacheNode => ({
+  segment,
+  subTree: null,
   childNodes: new Map(),
 });
 
