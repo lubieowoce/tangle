@@ -24,6 +24,7 @@ import { createFromFetch } from "react-server-dom-webpack/client.browser";
 import { ParsedPath, parsePath, takeSegment } from "./paths";
 import { Use } from "../support/use";
 import { Thenable } from "react__shared/ReactTypes";
+import { __DEV__ } from "../support/is-dev";
 
 export function Link({
   href,
@@ -50,26 +51,70 @@ export const getPathFromDOMState = () => {
   return document.location.pathname;
 };
 
+type RouterState = {
+  rawPath: string;
+  state: ParsedPath;
+  cache: LayoutCacheNode;
+};
+
+const createRouterState = (
+  rawPath: string,
+  cache?: LayoutCacheNode
+): RouterState => {
+  return {
+    rawPath,
+    state: parsePath(rawPath),
+    cache: cache ?? createLayoutCacheRoot(),
+  };
+};
+
+const changeRouterPath = (
+  router: RouterState,
+  rawPath: string
+): RouterState => {
+  return {
+    rawPath,
+    state: parsePath(rawPath),
+    cache: router.cache,
+  };
+};
+
+const useDebugCacheReal = (cache: LayoutCacheNode) => {
+  useEffect(() => {
+    const prop = "LAYOUT_CACHE";
+    (window as any)[prop] = cache;
+    return () => {
+      delete (window as any)[prop];
+    };
+  }, [cache]);
+};
+
+const useDebugCache = !__DEV__
+  ? (_cache: LayoutCacheNode) => {}
+  : useDebugCacheReal;
+
 export const ClientRouter = ({
-  cache,
+  initialCache,
   initialPath,
   children,
 }: PropsWithChildren<{
-  cache: LayoutCacheNode;
+  initialCache: LayoutCacheNode;
   initialPath: string;
 }>) => {
-  const [pathKey, setPathKey] = useState<string>(initialPath);
-  const state = useMemo(() => parsePath(pathKey), [pathKey]);
+  const [routerState, setRouterState] = useState<RouterState>(() =>
+    createRouterState(initialPath, initialCache)
+  );
   console.log("=".repeat(40));
-  console.log("ClientRouter", state);
+  console.log("ClientRouter", routerState);
   const [isNavigating, startTransition] = useTransition();
-  const [, forceRerender] = useReducer((count) => count + 1, 0);
+
+  useDebugCache(routerState.cache);
 
   useEffect(() => {
     const listener = (_event: PopStateEvent) => {
       const restoredPath = getPathFromDOMState();
       console.log("popstate", restoredPath);
-      setPathKey(restoredPath);
+      setRouterState(changeRouterPath(routerState, restoredPath));
     };
     window.addEventListener("popstate", listener);
     return () => window.removeEventListener("popstate", listener);
@@ -77,33 +122,22 @@ export const ClientRouter = ({
 
   const navigation = useMemo<NavigationContextValue>(
     () => ({
-      key: pathKey,
+      key: routerState.rawPath,
       isNavigating,
-      navigate(
-        newPath,
-        {
-          type = "push",
-          // noCache = false,
-          instant = false,
-        }: NavigateOptions = {}
-      ) {
-        const doNavigate = () => {
-          // let newKey = newPath;
-          // if (noCache) {
-          //   newKey += ":" + Date.now();
-          // }
-
-          setPathKey(newPath);
+      navigate(newPath, { type = "push" }: NavigateOptions = {}) {
+        startTransition(() => {
+          const newRouterState = changeRouterPath(routerState, newPath);
+          setRouterState(newRouterState);
 
           // TODO: do we wanna use the state for something?
-          // like the current key, if we do something like the date-key above?
           if (type === "push") {
             window.history.pushState(null, "", newPath);
           } else {
             window.history.replaceState(null, "", newPath);
           }
 
-          const newState = parsePath(newPath);
+          const { cache, state: newState } = newRouterState;
+
           const pathExistsInCache = hasCachePath(cache, newState);
           if (pathExistsInCache) {
             return;
@@ -130,48 +164,17 @@ export const ClientRouter = ({
           // }
 
           console.log("requesting RSC from server", {
-            state,
+            state: newRouterState.state,
             newPath,
             cacheInstallPath,
             cacheNode,
             existingSegments,
           });
-          const request = fetch(newPath, {
-            headers: {
-              [FLIGHT_REQUEST_HEADER]: "1",
-              // This tells our server-side router to skip rendering layouts we already have in the cache.
-              // This is not an optional optimization, it's required for correctness.
-              // We put the response in some nested place in the cache,
-              // and it'll be rendered *within* those cached layouts,
-              // so this response can't contain the layouts above its level -- we'd render them twice!
-              [ROUTER_STATE_HEADER]: JSON.stringify(existingSegments),
-            },
+          fetchSubtreeIntoNode(cacheNode, {
+            rawPath: newPath,
+            existingSegments,
           });
-          const fetchedTreeThenable = createFromFetch<ReactNode>(request, {});
-
-          cacheNode.pending = fetchedTreeThenable;
-          fetchedTreeThenable.then(
-            (subTree) => {
-              cacheNode.pending = undefined;
-              cacheNode.subTree = subTree;
-            },
-            (_error) => {
-              cacheNode.pending = undefined;
-              cacheNode.subTree = <>Oops, something went wrong</>;
-            }
-          );
-          // // TODO: idk about this one, would be nicer to just store a promise
-          // // (i.e. allow the cache to store in-flight data in a more sensible manner)
-          // cacheNode.subTree = (
-          //   <Use thenable={fetchedTreeThenable} debugLabel={cacheInstallPath} />
-          // );
-        };
-
-        if (instant) {
-          doNavigate();
-        } else {
-          startTransition(doNavigate);
-        }
+        });
       },
       refresh() {
         throw new Error("Not implemented");
@@ -181,23 +184,23 @@ export const ClientRouter = ({
         // });
       },
     }),
-    [pathKey, state, isNavigating, cache]
+    [routerState, isNavigating]
   );
 
   const ctx: GlobalRouterContextValue = useMemo(
     () => ({
       navigation,
-      state,
+      state: routerState.state,
     }),
-    [state, navigation]
+    [routerState.state, navigation]
   );
 
   return (
     <GlobalRouterContext.Provider value={ctx}>
       <SegmentContext.Provider
         value={{
-          cacheNode: cache,
-          remainingPath: state,
+          cacheNode: routerState.cache,
+          remainingPath: routerState.state,
         }}
       >
         {children}
@@ -386,3 +389,36 @@ export const RouterSegment = ({
     </SegmentContext.Provider>
   );
 };
+function fetchSubtreeIntoNode(
+  cacheNode: LayoutCacheNode,
+  toFetch: {
+    rawPath: string;
+    existingSegments: ParsedPath;
+  }
+) {
+  const { rawPath, existingSegments } = toFetch;
+  const request = fetch(rawPath, {
+    headers: {
+      [FLIGHT_REQUEST_HEADER]: "1",
+      // This tells our server-side router to skip rendering layouts we already have in the cache.
+      // This is not an optional optimization, it's required for correctness.
+      // We put the response in some nested place in the cache,
+      // and it'll be rendered *within* those cached layouts,
+      // so this response can't contain the layouts above its level -- we'd render them twice!
+      [ROUTER_STATE_HEADER]: JSON.stringify(existingSegments),
+    },
+  });
+  const fetchedTreeThenable = createFromFetch<ReactNode>(request, {});
+
+  cacheNode.pending = fetchedTreeThenable;
+  return fetchedTreeThenable.then(
+    (subTree) => {
+      cacheNode.pending = undefined;
+      cacheNode.subTree = subTree;
+    },
+    (_error) => {
+      cacheNode.pending = undefined;
+      cacheNode.subTree = <>Oops, something went wrong</>;
+    }
+  );
+}

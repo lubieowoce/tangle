@@ -3,8 +3,6 @@ import { createContext, useContext } from "react";
 import { ParsedPath, parsePath } from "./paths";
 
 export type NavigateOptions = {
-  noCache?: boolean;
-  instant?: boolean;
   type?: "push" | "replace";
 };
 

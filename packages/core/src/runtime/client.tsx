@@ -7,6 +7,7 @@ import {
   getPathFromDOMState,
 } from "./router/client-router";
 import { Use } from "./support/use";
+import { __DEV__ } from "./support/is-dev";
 
 type InitialChunks = string[] & { isComplete?: boolean };
 declare var __RSC_CHUNKS__: InitialChunks;
@@ -30,6 +31,10 @@ const getStreamFromInitialChunks = (initialChunks: InitialChunks) => {
   const onStreamFinished = async () => {
     isComplete = true;
     await writer.close();
+    if (!__DEV__) {
+      // we don't need these anymore, so we can free the memory.
+      clearArray(__RSC_CHUNKS__);
+    }
   };
 
   // process everything that got written before this script loaded.
@@ -75,6 +80,12 @@ const getStreamFromInitialChunks = (initialChunks: InitialChunks) => {
   return stream.readable;
 };
 
+const clearArray = (arr: any[]) => {
+  while (arr.length > 0) {
+    arr.pop();
+  }
+};
+
 const onDocumentLoad = (fn: () => void) => {
   if (document.readyState !== "loading") {
     setTimeout(fn);
@@ -90,10 +101,7 @@ const init = async () => {
   const initialStream = getStreamFromInitialChunks(__RSC_CHUNKS__);
   const initialServerTreeThenable =
     createFromReadableStream<ReactNode>(initialStream);
-  // const cache = createCache();
   const layoutCache = createLayoutCacheRoot();
-  Object.defineProperty(window, "LAYOUT_CACHE", { get: () => layoutCache });
-
   const initialPath = getPathFromDOMState();
   // cache.set(initialKey, initialServerTreeThenable);
 
@@ -101,7 +109,7 @@ const init = async () => {
     startTransition(() => {
       hydrateRoot(
         document,
-        <ClientRouter cache={layoutCache} initialPath={initialPath}>
+        <ClientRouter initialCache={layoutCache} initialPath={initialPath}>
           <Use thenable={initialServerTreeThenable} debugLabel={initialPath} />
         </ClientRouter>
       );
