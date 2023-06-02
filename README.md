@@ -1,7 +1,7 @@
 # Tangle - a React Server Components thing
 
 This is a tangle of hacks, or, if you will, a work-in-progress implementation of an RSC framework.
-There's a lot of embarassing bits! There's not even a working `build` command yet!
+There's a lot of embarassing bits, but it kinda works!
 
 Though it does manage to do SSR in the same process as the main server, which is kinda cool. Just don't look at `build.ts` to find out how, it's rough.
 
@@ -9,15 +9,83 @@ Though it does manage to do SSR in the same process as the main server, which is
 
 - [x] `use client`
 - [x] SSR (...with a quirks mode warning)
-- [ ] routing
+- [x] routing (kinda)
 - [ ] actions
 - [ ] a half-decent build process
 
 ### Usage
 
-Currently, the framework assumes there's a server component at `src/index.tsx`, and serves that under `localhost:8080/`.
-There's a `useNavigation` thingy that you can use to change the current props.
-As a stopgap for a router, you define a `src/paths.ts` that exports functions for converting the url to props and vice versa.
+Define something like this in the `scripts` field of your `package.json`:
+
+```
+"dev": "tangle dev",
+"build": "tangle build",
+"start": "tangle start"
+```
+
+### Routing
+
+Tangle has a basic filesystem router with an API intended to match NextJS's App Router .
+The build expects the routes to live at `src/routes`.
+
+Example file layout:
+
+```
+examples/demo-1/src
+└── routes
+   ├── layout.tsx <--- must exist
+   ├── page.tsx
+   ├── profile
+   │   ├── layout.tsx
+   │   ├── loading.tsx  <-- adds a loading state, displayed when navigating
+   │   └── [profileId]  <-- introduces a `profileId` param, as in `/profile/[profileId]`
+   │       ├── layout.tsx
+   │       ├── loading.tsx
+   │       ├── page.tsx
+   │       └── foo
+   │           └── page.tsx
+   └── profiles
+       ├── layout.tsx
+       └── page.tsx
+```
+
+#### `layout`
+
+A `layout` file should export a server component.
+
+```tsx
+export default function MyLayout(props: {
+  params: Record<string, string>;
+  children: ReactNode;
+});
+```
+
+It'll receive:
+
+- `params`: `Record<string, string>`, all the params from `[someParam]` segments above it and itself
+- `children`: the contents from segments below, down to the currently matched `page`
+
+Layouts preserve state when navigating between their child segments.
+You must define a root layout (`routes/layout.tsx`) with `<html>` in it.
+You can use `HTMLPage` if you don't feel like typing all of that out.
+
+#### `page`
+
+A `page` file should export a server component.
+
+```tsx
+export default function MyPage(props: { params: Record<string, string> });
+```
+
+Same as layout, it'll receive all the params from the layouts above.
+
+#### `loading`
+
+```tsx
+export default function MyLoading(props: { params: Record<string, string> });
+```
+
+The tree returned from `loading` will be displayed as a loading state when navigating between pages on that level.
 
 ### Demo
 
