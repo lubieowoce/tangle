@@ -12,7 +12,7 @@ import {
   createStaticRouter,
   GlobalRouterContext,
 } from "./router/navigation-context";
-import { SegmentContext, createLayoutCacheRoot } from "./router/client-router";
+import { SegmentContext, createEmptyLayoutCache } from "./router/client-router";
 import { parsePath } from "./router/paths";
 import { Use } from "./support/use";
 
@@ -36,7 +36,7 @@ export function getSSRDomStream(
     <GlobalRouterContext.Provider value={createStaticRouter(path)}>
       <SegmentContext.Provider
         value={{
-          cacheNode: createLayoutCacheRoot(),
+          cacheNode: createEmptyLayoutCache(),
           remainingPath: parsePath(path),
         }}
       >

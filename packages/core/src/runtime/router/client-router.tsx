@@ -64,7 +64,7 @@ const createRouterState = (
   return {
     rawPath,
     state: parsePath(rawPath),
-    cache: cache ?? createLayoutCacheRoot(),
+    cache: cache ?? createEmptyLayoutCache(),
   };
 };
 
@@ -83,8 +83,18 @@ const useDebugCacheReal = (cache: LayoutCacheNode) => {
   useEffect(() => {
     const prop = "LAYOUT_CACHE";
     (window as any)[prop] = cache;
+    Object.defineProperties(window, {
+      [prop]: { value: cache, configurable: true },
+      [prop + "_S"]: {
+        get() {
+          return debugCache(cache);
+        },
+        configurable: true,
+      },
+    });
     return () => {
       delete (window as any)[prop];
+      delete (window as any)[prop + "_S"];
     };
   }, [cache]);
 };
@@ -127,7 +137,6 @@ export const ClientRouter = ({
       navigate(newPath, { type = "push" }: NavigateOptions = {}) {
         startTransition(() => {
           const newRouterState = changeRouterPath(routerState, newPath);
-          setRouterState(newRouterState);
 
           // TODO: do we wanna use the state for something?
           if (type === "push") {
@@ -140,6 +149,7 @@ export const ClientRouter = ({
 
           const pathExistsInCache = hasCachePath(cache, newState);
           if (pathExistsInCache) {
+            setRouterState(newRouterState);
             return;
           }
 
@@ -174,14 +184,31 @@ export const ClientRouter = ({
             rawPath: newPath,
             existingSegments,
           });
+
+          setRouterState(newRouterState);
         });
       },
       refresh() {
-        throw new Error("Not implemented");
-        // const cacheNode = getRootNode(cache);
-        // startTransition(() => {
-        //   fetchSubTreeIntoNode(pathKey, [], cacheNode);
-        // });
+        startTransition(() => {
+          // blow away the existing cache.
+          // TODO: not sure if we should try to copy anything over.
+          // i think it makes sense to invalidate everything under this layout,
+          // and until we support layout groups, that's literally everything we've got,
+          // so no point in copying anything
+          const newRouterState: RouterState = {
+            ...routerState,
+            cache: createEmptyLayoutCacheWithRoot(),
+          };
+          console.log("newRouterState", newRouterState);
+
+          const cacheNode = getRootNode(newRouterState.cache);
+          fetchSubtreeIntoNode(cacheNode, {
+            rawPath: newRouterState.rawPath,
+            existingSegments: [],
+          });
+
+          setRouterState(newRouterState);
+        });
       },
     }),
     [routerState, isNavigating]
@@ -209,13 +236,19 @@ export const ClientRouter = ({
   );
 };
 
-export const createLayoutCacheRoot = (): LayoutCacheNode => {
+export const createEmptyLayoutCache = (): LayoutCacheNode => {
   // TODO: it's a bit weird that the cache is a fake node in itself...
   return {
     segment: "<root>",
     subTree: null,
     childNodes: new Map(),
   };
+};
+
+export const createEmptyLayoutCacheWithRoot = (): LayoutCacheNode => {
+  const cache = createEmptyLayoutCache();
+  addChildNode(cache, "", createBlankLayoutCacheNode(""));
+  return cache;
 };
 
 const getRootNode = (cache: LayoutCacheNode) => {
@@ -389,6 +422,7 @@ export const RouterSegment = ({
     </SegmentContext.Provider>
   );
 };
+
 function fetchSubtreeIntoNode(
   cacheNode: LayoutCacheNode,
   toFetch: {

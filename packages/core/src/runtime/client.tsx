@@ -3,7 +3,7 @@ import { hydrateRoot } from "react-dom/client";
 import { createFromReadableStream } from "react-server-dom-webpack/client.browser";
 import {
   ClientRouter,
-  createLayoutCacheRoot,
+  createEmptyLayoutCache,
   getPathFromDOMState,
 } from "./router/client-router";
 import { Use } from "./support/use";
@@ -101,7 +101,7 @@ const init = async () => {
   const initialStream = getStreamFromInitialChunks(__RSC_CHUNKS__);
   const initialServerTreeThenable =
     createFromReadableStream<ReactNode>(initialStream);
-  const layoutCache = createLayoutCacheRoot();
+  const layoutCache = createEmptyLayoutCache();
   const initialPath = getPathFromDOMState();
   // cache.set(initialKey, initialServerTreeThenable);
 
