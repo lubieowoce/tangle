@@ -1,32 +1,69 @@
 "use client";
 import * as React from "react";
+import { useNavigationContext } from "..";
 
-type ErrorBoundaryProps = React.PropsWithChildren<{
+type SegmentErrorBoundaryProps = React.PropsWithChildren<{
   errorFallback: React.ReactElement;
 }>;
-type ErrorBoundaryState = { hasError: boolean };
 
-export class ErrorBoundary extends React.Component<
+export function SegmentErrorBoundary({
+  children,
+  ...props
+}: SegmentErrorBoundaryProps) {
+  // If the path changes, we want to reset the error boundary.
+  const { key: pathKey } = useNavigationContext();
+  return (
+    <ErrorBoundary pathKey={pathKey} {...props}>
+      {children}
+    </ErrorBoundary>
+  );
+}
+
+type ErrorBoundaryProps = SegmentErrorBoundaryProps & { pathKey: string };
+type ErrorBoundaryState = { errorThrownAtKey: string | null };
+
+class ErrorBoundary extends React.Component<
   ErrorBoundaryProps,
   ErrorBoundaryState
 > {
   constructor(props: ErrorBoundaryProps) {
     super(props);
-    this.state = { hasError: false };
+    this.state = { errorThrownAtKey: null };
   }
 
-  static getDerivedStateFromError(_error: unknown) {
-    return { hasError: true };
-  }
   componentDidCatch(error: unknown, errorInfo: unknown) {
-    console.error("Error boundary triggered.");
     console.error(error, errorInfo);
+    this.setState({ errorThrownAtKey: this.props.pathKey });
+  }
+
+  static getDerivedStateFromProps(
+    props: ErrorBoundaryProps,
+    state: ErrorBoundaryState
+  ): ErrorBoundaryState | null {
+    const { pathKey } = props;
+    const { errorThrownAtKey } = state;
+
+    if (errorThrownAtKey !== null && pathKey !== errorThrownAtKey) {
+      // if an error was thrown before, but the path changed, clear the error.
+      // we don't want the error boundary to persist if a navigation might've caused it to disappear.
+      //
+      // this is especially important for error boundaries high up the tree,
+      // where the error might've bubbled up all the way to the root --
+      // if we don't reset, "Go to the homepage" would still show the error
+      // even if it didn't happen in the root page/layout.
+      return { errorThrownAtKey: null };
+    }
+    return null;
   }
 
   render() {
-    if (this.state.hasError) {
-      return this.props.errorFallback;
+    const { children, errorFallback } = this.props;
+    const { errorThrownAtKey } = this.state;
+
+    const hasError = errorThrownAtKey !== null;
+    if (hasError) {
+      return errorFallback;
     }
-    return this.props.children;
+    return children;
   }
 }

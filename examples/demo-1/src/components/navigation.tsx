@@ -12,7 +12,7 @@ export const RefreshButton = () => {
       }}
     >
       Refresh
-      {isNavigating ? "(loading...)" : null}
+      {isNavigating ? " (loading...)" : null}
     </button>
   );
 };

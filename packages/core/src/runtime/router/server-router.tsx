@@ -1,4 +1,4 @@
-import { PropsWithChildren, ReactNode, Suspense } from "react";
+import { PropsWithChildren, ReactElement, ReactNode, Suspense } from "react";
 import { RouterSegment } from "./client-router";
 import { ParsedPath, parsePath, takeSegmentMaybe } from "./paths";
 import {
@@ -6,7 +6,7 @@ import {
   SegmentParams,
   getMatchForSegment,
 } from "./router-core";
-import { ErrorBoundary } from "./error-boundary";
+import { SegmentErrorBoundary } from "./error-boundary";
 import { preloadComponent } from "./preload-component";
 
 export type ServerRouterOptions = {
@@ -48,7 +48,12 @@ type SegmentMatchInfo = ReturnType<typeof getMatchForSegment> & {
   params: SegmentParams;
   isFetchRoot: boolean;
   key: string;
-} & SegmentMatchComponent;
+  component: SegmentMatchComponent;
+  LoadingComponent: React.FC<{
+    params: SegmentParams;
+  }> | null;
+  ErrorComponent: React.FC<{}> | null;
+};
 
 type SegmentMatchComponent =
   | {
@@ -138,6 +143,14 @@ async function getSegmentsToRender(
       ? { type: "layout" as const, Component: (await segment.layout()).default }
       : { type: "layout" as const, Component: EmptySegment };
 
+    const LoadingComponent = segment.loading
+      ? (await segment.loading()).default
+      : null;
+
+    const ErrorComponent = segment.error
+      ? (await segment.error()).default
+      : null;
+
     if (isLastSegment) {
       if (component.type !== "page") {
         // TODO: notFound
@@ -183,7 +196,9 @@ async function getSegmentsToRender(
       key: accumKey,
       params,
       isFetchRoot,
-      ...component,
+      component,
+      LoadingComponent,
+      ErrorComponent,
     });
   }
   return segmentMatches;
@@ -199,29 +214,51 @@ async function getSegmentsToRender(
 // The function is technically async, but the only awaits done here should be related to
 // the `() => import(...)` fns for loading/error that we get from `RouteDefinition`,
 // which should be basically instant.
-async function segmentMatchToJSX(
+function segmentMatchToJSX(
   segmentMatch: SegmentMatchInfo,
   segmentMatchesBelow: SegmentMatchInfo[],
   options: ServerRouterOptions
-): Promise<JSX.Element | null> {
+): JSX.Element | null {
   if (options.debug) {
     console.log("segmentMatchToJSX :: segment", segmentMatch);
   }
 
   const {
     key: cacheKey,
-    Component: RawComponent,
-    type,
+    component: { type, Component: RawComponent },
+    LoadingComponent,
+    ErrorComponent,
     params,
-    segment,
     isFetchRoot,
   } = segmentMatch;
 
   let componentProps: { params: SegmentParams; children?: ReactNode };
 
+  const withError = (children: JSX.Element | null) => {
+    if (!ErrorComponent) return children;
+    return (
+      <SegmentErrorBoundary key={cacheKey} errorFallback={<ErrorComponent />}>
+        {children}
+      </SegmentErrorBoundary>
+    );
+  };
+
+  const withLoading = (children: JSX.Element | null) => {
+    if (!LoadingComponent) return children;
+    return (
+      <Suspense fallback={<LoadingComponent key={cacheKey} params={params} />}>
+        {children}
+      </Suspense>
+    );
+  };
+
   if (type === "layout") {
     const [childSegment, ...rest] = segmentMatchesBelow;
-    const children = await segmentMatchToJSX(childSegment, rest, options);
+    // add the boundaries each child has below the layout.
+    // this is useful if a fetch fails, and the child doesn't reach the client.
+    const children = withError(
+      withLoading(segmentMatchToJSX(childSegment, rest, options))
+    );
     componentProps = { params, children };
   } else {
     componentProps = { params };
@@ -231,27 +268,14 @@ async function segmentMatchToJSX(
     ? preloadComponent(RawComponent, componentProps)
     : RawComponent;
 
-  let tree = <Component key={cacheKey} {...componentProps} />;
+  let tree: JSX.Element | null = (
+    <Component key={cacheKey} {...componentProps} />
+  );
 
-  // TODO: we're putting these on both the layout and the page. is that correct?
+  // TODO: we're putting these both above and below layouts. is that correct?
   // might lead to display weirdness. maybe these should apply to the layout's children only?
-  if (segment.loading) {
-    const { default: Loading } = await segment.loading();
-    tree = (
-      <Suspense fallback={<Loading key={cacheKey} params={params} />}>
-        {tree}
-      </Suspense>
-    );
-  }
-
-  if (segment.error) {
-    const { default: Error } = await segment.error();
-    tree = (
-      <ErrorBoundary key={cacheKey} errorFallback={<Error />}>
-        {tree}
-      </ErrorBoundary>
-    );
-  }
+  // also, what if the root layout crashes?
+  tree = withError(withLoading(tree));
 
   // don't wrap the tree in a segment if this is the root of a nested fetch.
   // because in that case, we'll already be rendered by an existing RouterSegment
