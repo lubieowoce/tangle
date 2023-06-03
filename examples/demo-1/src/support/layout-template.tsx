@@ -1,5 +1,6 @@
 import { PropsWithChildren } from "react";
 import { Timestamp } from "../components/timestamp";
+import { slowdown } from "./slowdown";
 
 export const createRouteLayout = (
   name: string,
@@ -10,7 +11,7 @@ export const createRouteLayout = (
     children,
   }: PropsWithChildren<{ params: Record<string, string> }>) {
     if (opts.delay) {
-      await sleep(500);
+      await slowdown(500);
     }
     return (
       <div
@@ -27,9 +28,6 @@ export const createRouteLayout = (
       </div>
     );
   };
-
-const sleep = (ms: number) =>
-  new Promise<void>((resolve) => setTimeout(resolve, ms));
 
 export const createRouteLoading = (name: string) =>
   function DummyLoading() {

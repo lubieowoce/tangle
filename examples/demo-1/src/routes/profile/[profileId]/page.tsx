@@ -29,7 +29,7 @@ export default async function ProfileView({ params }: { params: Params }) {
           Profile id: {profileId} <Timestamp />
         </div>
         <p>{profile.description}</p>
-        <Link href={`/profile/${profileId}/foo`}>Foo</Link>
+        <Link href={`/profile/${profileId}/foo/bar`}>Foo</Link>
         <hr />
         <div style={{ display: "flex", gap: "16px", alignItems: "baseline" }}>
           {prevProfileId !== null ? (

@@ -2,6 +2,8 @@ import "server-only";
 import * as fs from "node:fs/promises";
 import * as os from "node:os";
 import * as path from "node:path";
+import { slowdown } from "../support/slowdown";
+import { cache } from "react";
 
 type DBContents = {
   profiles: Record<string, ProfileData>;
@@ -20,8 +22,7 @@ const initialContents: DBContents = {
   },
 };
 
-// TODO: wrap this in react's `cache`?
-export async function getDbClient({
+export const getDbClient = cache(async function getDbClient({
   storagePath,
 }: { storagePath?: string } = {}) {
   const storage = storagePath ?? path.join(os.tmpdir(), "tangle-demo-db.json");
@@ -45,7 +46,7 @@ export async function getDbClient({
     read,
     write,
   };
-}
+});
 
 export async function getProfileFromDb(
   dbClient: DBClient,
@@ -55,7 +56,7 @@ export async function getProfileFromDb(
     profileId: string | number;
   }
 ) {
-  await sleep(500);
+  await slowdown(700);
   const data = await dbClient.read();
   const allProfileIds = Object.keys(data.profiles).sort();
   const index = allProfileIds.indexOf(profileId + "");
@@ -76,15 +77,12 @@ export async function getProfileFromDb(
 }
 
 export async function getAllProfilesFromFb(dbClient: DBClient) {
-  await sleep(700);
+  await slowdown(1000);
   const db = await dbClient.read();
   return Object.entries(db.profiles).map(([profileId, profile]) => ({
     profileId,
     name: profile.name,
   }));
 }
-
-const sleep = (ms: number) =>
-  new Promise<void>((resolve) => setTimeout(resolve, ms));
 
 type ProfileData = { name: string; description: string };
