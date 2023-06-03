@@ -10,6 +10,7 @@ import {
   createContext,
   useContext,
   Thenable,
+  ReactElement,
 } from "react";
 
 import {
@@ -444,11 +445,25 @@ function fetchSubtreeIntoNode(
       cacheNode.pending = undefined;
       cacheNode.subTree = subTree;
     },
-    (_error) => {
+    (error) => {
       cacheNode.pending = undefined;
-      cacheNode.subTree = <>Oops, something went wrong</>;
+      // throw to the nearest error boundary.
+      // TODO: figure out how to not cache these
+      cacheNode.subTree = (
+        <ThrowFetchError rawPath={toFetch.rawPath} error={error} />
+      );
     }
   );
+}
+
+function ThrowFetchError({
+  rawPath,
+  error,
+}: {
+  rawPath: string;
+  error: unknown;
+}): ReactElement {
+  throw new Error(`Error fetching path "${rawPath}"`, { cause: error });
 }
 
 function fetchSubtree({ rawPath, existingSegments }: RSCFetchArgs) {
