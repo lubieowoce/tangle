@@ -20,7 +20,7 @@ export const throwOnMissingProperty = <TObj extends Record<string, any>>(
         throw new Error(`Missing property ${String(name)}` + msgSuffix);
       }
       const res = target[name as any];
-      console.log("accessed property" + msgSuffix + ":", name, "-->", res);
+      // console.log("accessed property" + msgSuffix + ":", name, "-->", res);
       return res;
     },
   });

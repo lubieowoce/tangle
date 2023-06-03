@@ -1,25 +1,72 @@
-import { Suspense } from "react";
+import { PropsWithChildren, Suspense } from "react";
 import { RouterSegment } from "./client-router";
 import { ParsedPath, parsePath, takeSegmentMaybe } from "./paths";
 import {
   RouteDefinition,
   SegmentParams,
   getMatchForSegment,
-  getSegmentKey,
 } from "./router-core";
 import { ErrorBoundary } from "./error-boundary";
 
 // TODO: we don't actually need to be calling this in generated code, we could just make it export the tree.
 export function createServerRouter(routes: RouteDefinition) {
-  async function pathToRouteJSX(
-    parsedPath: ParsedPath,
-    isNestedFetch: boolean,
-    /** we expect this to basically mean "skip rendering these segments" */
-    existingState: ParsedPath | undefined,
-    routes: RouteDefinition[],
-    outerParams: SegmentParams | null
-  ): Promise<JSX.Element | null> {
-    const [segmentPath, ...restOfPath] = parsedPath;
+  async function ServerRouter({
+    path,
+    existingState,
+  }: {
+    path: string;
+    existingState?: ParsedPath;
+  }) {
+    const [firstSegment, ...moreSegments] = await getSegmentsToRender(
+      path,
+      !!existingState,
+      existingState,
+      [routes]
+    );
+    return segmentMatchToJSX(firstSegment, moreSegments);
+  }
+
+  return ServerRouter;
+}
+
+type SegmentMatchInfo = ReturnType<typeof getMatchForSegment> & {
+  params: SegmentParams;
+  isFetchRoot: boolean;
+  key: string;
+} & SegmentMatchComponent;
+
+type SegmentMatchComponent =
+  | {
+      type: "layout";
+      Component: React.FC<
+        React.PropsWithChildren<{
+          params: SegmentParams;
+        }>
+      >;
+    }
+  | {
+      type: "page";
+      Component: React.FC<{
+        params: SegmentParams;
+      }>;
+    };
+
+async function getSegmentsToRender(
+  rawPath: string,
+  isNestedFetch: boolean,
+  /** we expect this to basically mean "skip rendering these segments" */
+  existingState: ParsedPath | undefined,
+  routes: RouteDefinition[]
+) {
+  const parsedPath = parsePath(rawPath);
+  const segmentMatches: SegmentMatchInfo[] = [];
+
+  let outerParams: SegmentParams = {};
+  let accumKey = "";
+  for (let i = 0; i < parsedPath.length; i++) {
+    const segmentPath = parsedPath[i];
+    accumKey += segmentPath + "/";
+    const isLastSegment = i === parsedPath.length - 1;
 
     // machinery for nested fetches.
     // TODO: might be easier to just fish the "fetch root" out without going through this function
@@ -48,24 +95,11 @@ export function createServerRouter(routes: RouteDefinition) {
       existingState.length === 0
     );
 
-    // if we're the root (and isFetchRootBelow becomes false), we have to stop
-    // child segments from thinking they're the root too, so pass `undefined` instead of `[]` --
-    // that way, we won't trip the `isFetchRoot` check above.
-    const restOfStateToPassDown = isFetchRootBelow ? restOfState : undefined;
-
-    console.log("=".repeat(40));
-    console.log("building jsx for path", { parsedPath });
-    console.log("existing states", {
-      existingState,
-      restOfStateToPassDown,
-      isFetchRootBelow,
-      isFetchRoot,
-    });
-
     // actual routing
 
     const match = getMatchForSegment({ segmentPath, routes });
     if (!match) {
+      // TODO: notFound
       throw new Error(
         `No match for segment ${JSON.stringify(
           segmentPath
@@ -75,8 +109,6 @@ export function createServerRouter(routes: RouteDefinition) {
     const { segment, params: currentSegmentParams } = match;
     const params: SegmentParams = { ...outerParams, ...currentSegmentParams };
 
-    let tree: JSX.Element | null = null;
-
     if (segment.layout && segment.page) {
       // TODO
       throw new Error(
@@ -85,143 +117,130 @@ export function createServerRouter(routes: RouteDefinition) {
       );
     }
 
-    if (restOfPath.length > 0) {
-      console.log("recursing", restOfPath);
-      // more path remaining, need to recurse
+    const component = segment.page
+      ? { type: "page" as const, Component: (await segment.page()).default }
+      : segment.layout
+      ? { type: "layout" as const, Component: (await segment.layout()).default }
+      : { type: "layout" as const, Component: EmptySegment };
+
+    if (isLastSegment) {
+      if (component.type !== "page") {
+        // TODO: notFound
+        throw new Error("Last segment must have a page");
+      }
+      if (segmentPath !== "__PAGE__") {
+        throw new Error(
+          `Internal error: the last segment of parsedPath should be "__PAGE__. Path: ${JSON.stringify(
+            parsedPath
+          )}`
+        );
+      }
+    }
+
+    // recurse in the route definitions.
+    if (!isLastSegment) {
       if (!segment.children) {
         throw new Error(
-          `More path remaining (${restOfPath}), but no child routes defined`
+          `More path remaining (${JSON.stringify(
+            parsedPath.slice(i)
+          )}), but no child routes defined`
         );
       }
-
-      const treeFromLowerSegments = await pathToRouteJSX(
-        restOfPath,
-        isNestedFetch,
-        restOfStateToPassDown,
-        segment.children,
-        params
-      );
-
-      if (isFetchRootBelow) {
-        // we haven't found the root yet, so skip this level. we only need the part from the root & below.
-        return treeFromLowerSegments;
-      } else {
-        tree = treeFromLowerSegments;
-      }
-    } else {
-      console.log("stopping walk", segmentPath);
-      // no more path remaining, render the component
-      if (!segment.page) {
-        throw new Error(`Missing component for segment ${segmentPath}`);
-      }
-      const { default: Page } = await segment.page();
-      const cacheKey = getSegmentKey(segment, params);
-
-      tree = <Page key={cacheKey} params={params} />;
-
-      // add a loading boundary above the page, but below the layout.
-      // that way, if the layout is ready but the content is not, we can show a loading state.
-      if (segment.loading) {
-        const { default: Loading } = await segment.loading();
-        tree = (
-          <Suspense fallback={<Loading key={cacheKey} params={params} />}>
-            {tree}
-          </Suspense>
-        );
-      }
-
-      if (segment.error) {
-        const { default: Error } = await segment.error();
-        tree = (
-          <ErrorBoundary key={cacheKey} errorFallback={<Error />}>
-            {tree}
-          </ErrorBoundary>
-        );
-      }
-
-      // don't wrap the tree in a segment if this is the root of a nested fetch.
-      // because in that case, we'll already be rendered by an existing RouterSegment
-      // (it has to be this way -- we need someone to read us from the cache and display us!)
-      // so adding one here will mess things up, and cause us to register subtrees a layer too deep.
-      if (!isFetchRoot) {
-        tree = (
-          <RouterSegment
-            key={segmentPath} // TODO: or cachekey?? idk
-            isRootLayout={false}
-            DEBUG_originalSegmentPath={segmentPath}
-          >
-            {tree}
-          </RouterSegment>
-        );
-      }
+      routes = segment.children;
     }
 
-    if (segment.layout) {
-      const isRootLayout = segment.segment === "";
-      const { default: Layout } = await segment.layout();
-      const cacheKey = getSegmentKey(segment, params);
-      tree = (
-        <Layout key={cacheKey} params={params}>
-          {tree}
-        </Layout>
-      );
+    // if we're the root (and isFetchRootBelow becomes false), we have to stop
+    // child segments from thinking they're the root too, so pass `undefined` instead of `[]` --
+    // that way, we won't trip the `isFetchRoot` check above.
+    existingState = isFetchRootBelow ? restOfState : undefined;
 
-      // add a loading boundary again, *above* the layout.
-      // that way, if the layout isn't ready, we still get a loading state.
-      // TODO: i'm not 100% sure if this makes sense, reusing the same `loading` might be confusing.
-      // i guess we'll see!
-      if (segment.loading) {
-        const { default: Loading } = await segment.loading();
-        tree = (
-          <Suspense fallback={<Loading key={cacheKey} params={params} />}>
-            {tree}
-          </Suspense>
-        );
-      }
+    // make the params from this segment available to the routes below.
+    outerParams = params;
 
-      if (segment.error) {
-        const { default: Error } = await segment.error();
-        tree = (
-          <ErrorBoundary key={cacheKey} errorFallback={<Error />}>
-            {tree}
-          </ErrorBoundary>
-        );
-      }
-
-      if (!isFetchRoot) {
-        tree = (
-          <RouterSegment
-            key={segmentPath}
-            isRootLayout={isRootLayout}
-            DEBUG_originalSegmentPath={segmentPath}
-          >
-            {tree}
-          </RouterSegment>
-        );
-      }
+    if (isFetchRootBelow) {
+      // we haven't found the root yet, so skip this level.
+      // we only need the part from the root & below.
+      continue;
     }
 
-    return tree;
+    segmentMatches.push({
+      segment,
+      key: accumKey,
+      params,
+      isFetchRoot,
+      ...component,
+    });
+  }
+  return segmentMatches;
+}
+
+async function segmentMatchToJSX(
+  segmentMatch: SegmentMatchInfo,
+  segmentMatchesBelow: SegmentMatchInfo[]
+): Promise<JSX.Element | null> {
+  console.log("doing segment", segmentMatch);
+  let tree: JSX.Element | null = null;
+
+  const {
+    key: cacheKey,
+    Component,
+    type,
+    params,
+    segment,
+    isFetchRoot,
+  } = segmentMatch;
+
+  if (type === "layout") {
+    const [childSegment, ...rest] = segmentMatchesBelow;
+    const children = await segmentMatchToJSX(childSegment, rest);
+    tree = (
+      <Component key={cacheKey} params={params}>
+        {children}
+      </Component>
+    );
+  } else {
+    tree = <Component key={cacheKey} params={params} />;
   }
 
-  // TODO: throw this bit away?
-  // this used to be a component, now it's not, so it's useless
-  async function buildServerJSX({
-    path,
-    existingState,
-  }: {
-    path: string;
-    existingState?: ParsedPath;
-  }) {
-    const parsedPath = parsePath(path);
-    return pathToRouteJSX(
-      parsedPath,
-      !!existingState,
-      existingState,
-      [routes],
-      null
+  // TODO: we're putting these on both the layout and the page. is that correct?
+  // might lead to display weirdness. maybe these should apply to the layout's children only?
+  if (segment.loading) {
+    const { default: Loading } = await segment.loading();
+    tree = (
+      <Suspense fallback={<Loading key={cacheKey} params={params} />}>
+        {tree}
+      </Suspense>
     );
   }
 
-  return buildServerJSX;
+  if (segment.error) {
+    const { default: Error } = await segment.error();
+    tree = (
+      <ErrorBoundary key={cacheKey} errorFallback={<Error />}>
+        {tree}
+      </ErrorBoundary>
+    );
+  }
+
+  // don't wrap the tree in a segment if this is the root of a nested fetch.
+  // because in that case, we'll already be rendered by an existing RouterSegment
+  // (it has to be this way -- we need someone to read us from the cache and display us!)
+  // so adding one here will mess things up, and cause us to register subtrees a layer too deep.
+  if (!isFetchRoot) {
+    tree = (
+      <RouterSegment
+        key={cacheKey}
+        isRootLayout={false}
+        DEBUG_originalSegmentPath={cacheKey}
+      >
+        {tree}
+      </RouterSegment>
+    );
+  }
+
+  return tree;
+}
+
+function EmptySegment({ children }: PropsWithChildren<{}>) {
+  return <>{children}</>;
 }

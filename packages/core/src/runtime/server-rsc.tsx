@@ -5,7 +5,7 @@ import {
 
 import { throwOnMissingProperty } from "./shared";
 
-import { serverRouter } from "./root";
+import { ServerRouter } from "./root";
 import { createNoopStream } from "./utils";
 import { ParsedPath } from "./router/paths";
 
@@ -14,10 +14,8 @@ export async function renderRSCRoot(
   existingState: ParsedPath | undefined,
   webpackMapForClient: ClientManifest
 ) {
-  const tree = await serverRouter({
-    path,
-    existingState,
-  });
+  // @ts-expect-error  async component
+  const tree = <ServerRouter path={path} existingState={existingState} />;
 
   return renderToPipeableStream(
     tree,
