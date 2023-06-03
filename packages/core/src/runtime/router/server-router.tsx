@@ -20,17 +20,17 @@ export type ServerRouterOptions = {
   debug?: boolean;
 };
 
-// TODO: we don't actually need to be calling this in generated code, we could just make it export the tree.
 export function createServerRouter(routes: RouteDefinition) {
   async function ServerRouter({
     path,
     existingState,
-    options = {},
+    options,
   }: {
     path: string;
     existingState?: ParsedPath;
     options?: ServerRouterOptions;
   }) {
+    options = { parallelPreload: true, debug: false, ...options };
     const isNestedFetch = !!existingState;
     const [firstSegment, ...moreSegments] = await getSegmentsToRender(
       path,
