@@ -1,4 +1,4 @@
-import { PropsWithChildren, Suspense } from "react";
+import { PropsWithChildren, ReactNode, Suspense } from "react";
 import { RouterSegment } from "./client-router";
 import { ParsedPath, parsePath, takeSegmentMaybe } from "./paths";
 import {
@@ -7,23 +7,38 @@ import {
   getMatchForSegment,
 } from "./router-core";
 import { ErrorBoundary } from "./error-boundary";
+import { preloadComponent } from "./preload-component";
+
+export type ServerRouterOptions = {
+  /** Try to preload all async segments in parallel.
+   *
+   * This is done using some nasty hacks, so it's possible to disable it
+   * if it's causing any problems.
+   */
+  parallelPreload?: boolean;
+  /** Log debug info. */
+  debug?: boolean;
+};
 
 // TODO: we don't actually need to be calling this in generated code, we could just make it export the tree.
 export function createServerRouter(routes: RouteDefinition) {
   async function ServerRouter({
     path,
     existingState,
+    options = {},
   }: {
     path: string;
     existingState?: ParsedPath;
+    options?: ServerRouterOptions;
   }) {
+    const isNestedFetch = !!existingState;
     const [firstSegment, ...moreSegments] = await getSegmentsToRender(
       path,
-      !!existingState,
+      isNestedFetch,
       existingState,
       [routes]
     );
-    return segmentMatchToJSX(firstSegment, moreSegments);
+    return segmentMatchToJSX(firstSegment, moreSegments, options);
   }
 
   return ServerRouter;
@@ -174,33 +189,49 @@ async function getSegmentsToRender(
   return segmentMatches;
 }
 
+// NOTE: `segmentMatchToJSX` is not a component on purpose.
+// it calls the side-effecting `preloadComponent` as it builds the tree.
+// This allows us to start loading all the async layouts/pages in parallel.
+// BUT this would break if it were made a component --
+// in that case, react would await every async component individually,
+// which is what we're specifically trying to avoid.
+//
+// The function is technically async, but the only awaits done here should be related to
+// the `() => import(...)` fns for loading/error that we get from `RouteDefinition`,
+// which should be basically instant.
 async function segmentMatchToJSX(
   segmentMatch: SegmentMatchInfo,
-  segmentMatchesBelow: SegmentMatchInfo[]
+  segmentMatchesBelow: SegmentMatchInfo[],
+  options: ServerRouterOptions
 ): Promise<JSX.Element | null> {
-  console.log("doing segment", segmentMatch);
-  let tree: JSX.Element | null = null;
+  if (options.debug) {
+    console.log("segmentMatchToJSX :: segment", segmentMatch);
+  }
 
   const {
     key: cacheKey,
-    Component,
+    Component: RawComponent,
     type,
     params,
     segment,
     isFetchRoot,
   } = segmentMatch;
 
+  let componentProps: { params: SegmentParams; children?: ReactNode };
+
   if (type === "layout") {
     const [childSegment, ...rest] = segmentMatchesBelow;
-    const children = await segmentMatchToJSX(childSegment, rest);
-    tree = (
-      <Component key={cacheKey} params={params}>
-        {children}
-      </Component>
-    );
+    const children = await segmentMatchToJSX(childSegment, rest, options);
+    componentProps = { params, children };
   } else {
-    tree = <Component key={cacheKey} params={params} />;
+    componentProps = { params };
   }
+
+  const Component = options?.parallelPreload
+    ? preloadComponent(RawComponent, componentProps)
+    : RawComponent;
+
+  let tree = <Component key={cacheKey} {...componentProps} />;
 
   // TODO: we're putting these on both the layout and the page. is that correct?
   // might lead to display weirdness. maybe these should apply to the layout's children only?
