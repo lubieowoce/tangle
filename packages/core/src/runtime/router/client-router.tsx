@@ -19,7 +19,11 @@ import {
   useNavigationContext,
   GlobalRouterContextValue,
 } from "./navigation-context";
-import { FLIGHT_REQUEST_HEADER, ROUTER_STATE_HEADER } from "../shared";
+import {
+  FLIGHT_REQUEST_HEADER,
+  ROUTER_STATE_HEADER,
+  RSC_CONTENT_TYPE,
+} from "../shared";
 import { createFromFetch } from "react-server-dom-webpack/client.browser";
 import { ParsedPath, parsePath, takeSegment } from "./paths";
 import { Use } from "../support/use";
@@ -422,25 +426,16 @@ export const RouterSegment = ({
   );
 };
 
+type RSCFetchArgs = {
+  rawPath: string;
+  existingSegments: ParsedPath;
+};
+
 function fetchSubtreeIntoNode(
   cacheNode: LayoutCacheNode,
-  toFetch: {
-    rawPath: string;
-    existingSegments: ParsedPath;
-  }
+  toFetch: RSCFetchArgs
 ) {
-  const { rawPath, existingSegments } = toFetch;
-  const request = fetch(rawPath, {
-    headers: {
-      [FLIGHT_REQUEST_HEADER]: "1",
-      // This tells our server-side router to skip rendering layouts we already have in the cache.
-      // This is not an optional optimization, it's required for correctness.
-      // We put the response in some nested place in the cache,
-      // and it'll be rendered *within* those cached layouts,
-      // so this response can't contain the layouts above its level -- we'd render them twice!
-      [ROUTER_STATE_HEADER]: JSON.stringify(existingSegments),
-    },
-  });
+  const request = fetchSubtree(toFetch);
   const fetchedTreeThenable = createFromFetch<ReactNode>(request, {});
 
   cacheNode.pending = fetchedTreeThenable;
@@ -456,4 +451,17 @@ function fetchSubtreeIntoNode(
   );
 }
 
-const x = <a></a>;
+function fetchSubtree({ rawPath, existingSegments }: RSCFetchArgs) {
+  return fetch(rawPath, {
+    headers: {
+      [FLIGHT_REQUEST_HEADER]: "1",
+      // This tells our server-side router to skip rendering layouts we already have in the cache.
+      // This is not an optional optimization, it's required for correctness.
+      // We put the response in some nested place in the cache,
+      // and it'll be rendered *within* those cached layouts,
+      // so this response can't contain the layouts above its level -- we'd render them twice!
+      [ROUTER_STATE_HEADER]: JSON.stringify(existingSegments),
+      accept: RSC_CONTENT_TYPE,
+    },
+  });
+}

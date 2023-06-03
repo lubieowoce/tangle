@@ -67,8 +67,17 @@ app.get(
     // const url = new URL(req.url, `http://${req.headers.host}`);
     // const props: AnyServerRootProps = pathToParams(url);
     const path = req.path;
+    res.header("vary", FLIGHT_REQUEST_HEADER);
+
     if (req.header(FLIGHT_REQUEST_HEADER)) {
+      const existingStateRaw = req.header(ROUTER_STATE_HEADER);
+      if (typeof existingStateRaw !== "string") {
+        throw new Error(
+          `Invalid "${ROUTER_STATE_HEADER}" header: ${existingStateRaw}`
+        );
+      }
       const existingState = JSON.parse(req.header(ROUTER_STATE_HEADER)!);
+
       console.log("=====================");
       console.log("rendering RSC");
       console.log("router state", existingState);
