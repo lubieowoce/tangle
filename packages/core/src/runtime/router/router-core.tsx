@@ -38,10 +38,11 @@ export type RouteDefinition = {
   layout: ImportDefault<
     FC<PropsWithChildren<{ params: SegmentParams }>>
   > | null;
-  page: ImportDefault<FC<PropsWithChildren<{ params: SegmentParams }>>> | null;
+  page: ImportDefault<FC<{ params: SegmentParams }>> | null;
   loading: ImportDefault<
     FC<PropsWithChildren<{ params: SegmentParams }>>
   > | null;
+  error: ImportDefault<FC<{}>> | null;
   children: RouteDefinition[] | null;
 };
 

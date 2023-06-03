@@ -1,9 +1,10 @@
 type Segment = string;
 
-export type RouteInfo = {
+export type FileSystemRouteInfo = {
   segment: Segment;
   page: string | null;
   layout: string | null;
   loading: string | null;
-  children: RouteInfo[] | null;
+  error: string | null;
+  children: FileSystemRouteInfo[] | null;
 };

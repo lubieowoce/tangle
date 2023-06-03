@@ -41,6 +41,7 @@ examples/demo-1/src
    │   └── [profileId]  <-- introduces a `profileId` param, as in `/profile/[profileId]`
    │       ├── layout.tsx
    │       ├── loading.tsx
+   │       ├── error.tsx  <--- adds an error boundary with a fallback
    │       ├── page.tsx
    │       └── foo
    │           └── page.tsx
@@ -85,7 +86,15 @@ Same as layout, it'll receive all the params from the layouts above.
 export default function MyLoading(props: { params: Record<string, string> });
 ```
 
-The tree returned from `loading` will be displayed as a loading state when navigating between pages on that level.
+`loading` will be rendered as a loading state when navigating between pages in its segment (or below). If multiple `loading` files are defined, the innermost one will be used.
+
+#### `error`
+
+```tsx
+export default function MyError();
+```
+
+The tree returned from `error` will be displayed if something in its segment or below threw an error. If multiple `error` files are defined, the innermost one will be used.
 
 ### Demo
 

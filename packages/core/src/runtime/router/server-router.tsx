@@ -7,6 +7,7 @@ import {
   getMatchForSegment,
   getSegmentKey,
 } from "./router-core";
+import { ErrorBoundary } from "./error-boundary";
 
 // TODO: we don't actually need to be calling this in generated code, we could just make it export the tree.
 export function createServerRouter(routes: RouteDefinition) {
@@ -129,6 +130,15 @@ export function createServerRouter(routes: RouteDefinition) {
         );
       }
 
+      if (segment.error) {
+        const { default: Error } = await segment.error();
+        tree = (
+          <ErrorBoundary key={cacheKey} errorFallback={<Error />}>
+            {tree}
+          </ErrorBoundary>
+        );
+      }
+
       // don't wrap the tree in a segment if this is the root of a nested fetch.
       // because in that case, we'll already be rendered by an existing RouterSegment
       // (it has to be this way -- we need someone to read us from the cache and display us!)
@@ -166,6 +176,15 @@ export function createServerRouter(routes: RouteDefinition) {
           <Suspense fallback={<Loading key={cacheKey} params={params} />}>
             {tree}
           </Suspense>
+        );
+      }
+
+      if (segment.error) {
+        const { default: Error } = await segment.error();
+        tree = (
+          <ErrorBoundary key={cacheKey} errorFallback={<Error />}>
+            {tree}
+          </ErrorBoundary>
         );
       }
 

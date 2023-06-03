@@ -1,7 +1,7 @@
 import { arrayLiteral, literal, stringLiteral } from "../codegen-helpers";
-import { RouteInfo } from "./types";
+import { FileSystemRouteInfo } from "./types";
 
-export const generateRoutesExport = (routes: RouteInfo): string => {
+export const generateRoutesExport = (routes: FileSystemRouteInfo): string => {
   if (routes.page && routes.segment !== "__PAGE__") {
     // segments with a `page` get a different name
     // to disambiguate them from the layout in our nested cache
@@ -19,29 +19,16 @@ export const generateRoutesExport = (routes: RouteInfo): string => {
       ],
     });
   }
+
+  const importLambda = (specifier: string) =>
+    `() => import(/* webpackMode: "eager" */ ${stringLiteral(specifier)})`;
+
   return `{
       segment: ${stringLiteral(routes.segment)},
-      page: ${
-        routes.page
-          ? `() => import(/* webpackMode: "eager" */ ${stringLiteral(
-              routes.page
-            )})`
-          : literal(null)
-      },
-      layout: ${
-        routes.layout
-          ? `() => import(/* webpackMode: "eager" */ ${stringLiteral(
-              routes.layout
-            )})`
-          : literal(null)
-      },
-      loading: ${
-        routes.loading
-          ? `() => import(/* webpackMode: "eager" */ ${stringLiteral(
-              routes.loading
-            )})`
-          : literal(null)
-      },
+      page: ${routes.page ? importLambda(routes.page) : literal(null)},
+      layout: ${routes.layout ? importLambda(routes.layout) : literal(null)},
+      loading: ${routes.loading ? importLambda(routes.loading) : literal(null)},
+      error: ${routes.error ? importLambda(routes.error) : literal(null)},
       children: ${
         routes.children
           ? arrayLiteral(
