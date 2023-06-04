@@ -30,6 +30,8 @@ import { createFromFetch } from "react-server-dom-webpack/client.browser";
 import { ParsedPath, parsePath, takeSegment } from "./paths";
 import { Use } from "../support/use";
 import { __DEV__ } from "../support/is-dev";
+import { SegmentErrorBoundary } from "./error-boundary";
+import { HTMLPage } from "..";
 
 export function Link({
   href,
@@ -60,6 +62,7 @@ type RouterState = {
   rawPath: string;
   state: ParsedPath;
   cache: LayoutCacheNode;
+  refetchKey: number;
 };
 
 const createRouterState = (
@@ -70,6 +73,7 @@ const createRouterState = (
     rawPath,
     state: parsePath(rawPath),
     cache: cache ?? createEmptyLayoutCache(),
+    refetchKey: 0,
   };
 };
 
@@ -78,9 +82,9 @@ const changeRouterPath = (
   rawPath: string
 ): RouterState => {
   return {
+    ...router,
     rawPath,
     state: parsePath(rawPath),
-    cache: router.cache,
   };
 };
 
@@ -111,10 +115,12 @@ const useDebugCache = !__DEV__
 export const ClientRouter = ({
   initialCache,
   initialPath,
+  globalErrorFallback,
   children,
 }: PropsWithChildren<{
   initialCache: LayoutCacheNode;
   initialPath: string;
+  globalErrorFallback?: ReactNode;
 }>) => {
   const [routerState, setRouterState] = useState<RouterState>(() =>
     createRouterState(initialPath, initialCache)
@@ -173,6 +179,38 @@ export const ClientRouter = ({
     [routerState]
   );
 
+  const changeRouterStateForRefetch = useCallback(() => {
+    // blow away the existing cache.
+    // TODO: not sure if we should try to copy anything over.
+    // i think it makes sense to invalidate everything under this layout,
+    // and until we support layout groups, that's literally everything we've got,
+    // so no point in copying anything.
+    //
+    // an "interesting" consequence of blowing away the whole cache is that
+    // we lose the root layout and thus any error boundaries set up by the user.
+    // meaning that, if the refetch fails, there's no one left to catch the error
+    // apart from the root `GlobalErrorBoundary`.
+    // (repro: go to `/foo`, block `/foo` in the network tab, call `refresh()`).
+    //
+    // TODO: should we just restore the previous state if the refresh() fails?
+    // but then we'd need to expose some kind of way of reacting to that error...
+    // or should we make sure that the root `error` is somehow always available? idk
+    const newRouterState: RouterState = {
+      ...routerState,
+      refetchKey: routerState.refetchKey + 1,
+      cache: createEmptyLayoutCacheWithRoot(),
+    };
+    console.log("refetch :: newRouterState", newRouterState);
+
+    const cacheNode = getRootNode(newRouterState.cache);
+    fetchSubtreeIntoNode(cacheNode, {
+      rawPath: newRouterState.rawPath,
+      existingSegments: [],
+    });
+
+    setRouterState(newRouterState);
+  }, [routerState]);
+
   const onPopState = useCallback(
     (restoredPath: string, event: PopStateEvent) => {
       console.log("popstate", restoredPath, event);
@@ -198,7 +236,10 @@ export const ClientRouter = ({
 
   const navigation = useMemo<NavigationContextValue>(
     () => ({
-      key: routerState.rawPath,
+      // NOTE: the refetchKey is mostly useful for error boundaries, which check this key
+      // to know if they should clear. bumping the refetchKey makes the state appears different,
+      // which'll clear any error boundaries that happened on the same path.
+      key: `[${routerState.refetchKey}] ${routerState.rawPath}`,
       isNavigating,
       navigate(newPath, { type = "push" }: NavigateOptions = {}) {
         startTransition(() => {
@@ -213,28 +254,16 @@ export const ClientRouter = ({
       },
       refresh() {
         startTransition(() => {
-          // blow away the existing cache.
-          // TODO: not sure if we should try to copy anything over.
-          // i think it makes sense to invalidate everything under this layout,
-          // and until we support layout groups, that's literally everything we've got,
-          // so no point in copying anything
-          const newRouterState: RouterState = {
-            ...routerState,
-            cache: createEmptyLayoutCacheWithRoot(),
-          };
-          console.log("newRouterState", newRouterState);
-
-          const cacheNode = getRootNode(newRouterState.cache);
-          fetchSubtreeIntoNode(cacheNode, {
-            rawPath: newRouterState.rawPath,
-            existingSegments: [],
-          });
-
-          setRouterState(newRouterState);
+          changeRouterStateForRefetch();
         });
       },
     }),
-    [routerState, isNavigating, changeRouterStateByPath]
+    [
+      routerState,
+      isNavigating,
+      changeRouterStateByPath,
+      changeRouterStateForRefetch,
+    ]
   );
 
   const ctx: GlobalRouterContextValue = useMemo(
@@ -253,11 +282,36 @@ export const ClientRouter = ({
           remainingPath: routerState.state,
         }}
       >
-        {children}
+        <GlobalErrorBoundary errorFallback={globalErrorFallback}>
+          {children}
+        </GlobalErrorBoundary>
       </SegmentContext.Provider>
     </GlobalRouterContext.Provider>
   );
 };
+
+function GlobalErrorBoundary({
+  errorFallback,
+  children,
+}: PropsWithChildren<{ errorFallback?: ReactNode }>) {
+  // NOTE: this sits above the root layout, so we need the HTML boilerplate
+  // -- otherwise we get issues about missing <body> etc.
+  // This isn't great, because we're basically blowing away the whole document,
+  // but works well enough for now.
+  return (
+    <HTMLPage>
+      <SegmentErrorBoundary
+        errorFallback={errorFallback ?? <RootErrorFallback />}
+      >
+        {children}
+      </SegmentErrorBoundary>
+    </HTMLPage>
+  );
+}
+
+function RootErrorFallback() {
+  return <>An error occurred. Please refresh the page.</>;
+}
 
 export const createEmptyLayoutCache = (): LayoutCacheNode => {
   // TODO: it's a bit weird that the cache is a fake node in itself...
@@ -373,7 +427,9 @@ type SegmentContextValue = {
 export const SegmentContext = createContext<SegmentContextValue | null>(null);
 
 const useSegmentContext = () => {
+  // TODO: does this actually do anything...?
   useContext(GlobalRouterContext); // make sure we're subscribed to path changes.
+
   const ctx = useContext(SegmentContext);
   if (!ctx) {
     throw new Error("Missing LayoutCacheContext.Provider");
@@ -487,7 +543,10 @@ function ThrowFetchError({
   throw new Error(`Error fetching path "${rawPath}"`, { cause: error });
 }
 
-function fetchSubtree({ rawPath, existingSegments }: RSCFetchArgs) {
+// mark the whole thing as an async function
+// that way, if fetch() throws (e.g. NetworkError),
+// we get a rejected promise instead of an exception.
+async function fetchSubtree({ rawPath, existingSegments }: RSCFetchArgs) {
   return fetch(rawPath, {
     headers: {
       [FLIGHT_REQUEST_HEADER]: "1",

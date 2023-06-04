@@ -3,7 +3,7 @@ import * as React from "react";
 import { useNavigationContext } from "..";
 
 type SegmentErrorBoundaryProps = React.PropsWithChildren<{
-  errorFallback: React.ReactElement;
+  errorFallback: React.ReactNode;
 }>;
 
 export function SegmentErrorBoundary({
