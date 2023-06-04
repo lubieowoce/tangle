@@ -11,6 +11,7 @@ import {
   useContext,
   Thenable,
   ReactElement,
+  useCallback,
 } from "react";
 
 import {
@@ -124,17 +125,76 @@ export const ClientRouter = ({
 
   useDebugCache(routerState.cache);
 
+  const changeRouterStateByPath = useCallback(
+    (newPath: string) => {
+      const newRouterState = changeRouterPath(routerState, newPath);
+      const { cache, state: newState } = newRouterState;
+
+      const pathExistsInCache = hasCachePath(cache, newState);
+      if (pathExistsInCache) {
+        setRouterState(newRouterState);
+        return;
+      }
+
+      console.log("cache before create", debugCache(cache));
+
+      const [cacheNode, existingSegments, didCreate] =
+        createShallowestCacheNodeForPath(cache, newState);
+      console.log("created node", { existingSegments });
+      console.log("cache after create", debugCache(cache));
+
+      const cacheInstallPath = [
+        ...existingSegments,
+        newState[existingSegments.length],
+      ];
+
+      if (!didCreate) {
+        // we should never modify an existing node, that might impact concurrent renders
+        throw new Error(
+          "Internal error during navigation -- node already existed in the cache: " +
+            JSON.stringify(cacheInstallPath)
+        );
+      }
+
+      console.log("requesting RSC from server", {
+        state: newRouterState.state,
+        newPath,
+        cacheInstallPath,
+        cacheNode,
+        existingSegments,
+      });
+      fetchSubtreeIntoNode(cacheNode, {
+        rawPath: newPath,
+        existingSegments,
+      });
+
+      setRouterState(newRouterState);
+    },
+    [routerState]
+  );
+
+  const onPopState = useCallback(
+    (restoredPath: string, event: PopStateEvent) => {
+      console.log("popstate", restoredPath, event);
+      // if a user did something like this
+      // /a -> /b -> refresh (/b) -> back (/a)
+      // then we may not have the restored path in the cache, so we can't just setState.
+      // go through the usual flow of fetching if it's missing.
+      changeRouterStateByPath(restoredPath);
+      // do we need a transition here?
+      // startTransition(() => changeStateByPath(restoredPath));
+    },
+    [changeRouterStateByPath]
+  );
+
   useEffect(() => {
-    const listener = (_event: PopStateEvent) => {
+    const listener = (event: PopStateEvent) => {
       const restoredPath = getPathFromDOMState();
-      console.log("popstate", restoredPath);
-      setRouterState((routerState) =>
-        changeRouterPath(routerState, restoredPath)
-      );
+      onPopState(restoredPath, event);
     };
     window.addEventListener("popstate", listener);
     return () => window.removeEventListener("popstate", listener);
-  }, []);
+  }, [onPopState]);
 
   const navigation = useMemo<NavigationContextValue>(
     () => ({
@@ -142,56 +202,13 @@ export const ClientRouter = ({
       isNavigating,
       navigate(newPath, { type = "push" }: NavigateOptions = {}) {
         startTransition(() => {
-          const newRouterState = changeRouterPath(routerState, newPath);
-
           // TODO: do we wanna use the state for something?
           if (type === "push") {
             window.history.pushState(null, "", newPath);
           } else {
             window.history.replaceState(null, "", newPath);
           }
-
-          const { cache, state: newState } = newRouterState;
-
-          const pathExistsInCache = hasCachePath(cache, newState);
-          if (pathExistsInCache) {
-            setRouterState(newRouterState);
-            return;
-          }
-
-          console.log("cache before create", debugCache(cache));
-
-          const [cacheNode, existingSegments] =
-            createShallowestCacheNodeForPath(cache, newState);
-          console.log("created node", { existingSegments });
-          console.log("cache after create", debugCache(cache));
-
-          const cacheInstallPath = [
-            ...existingSegments,
-            newState[existingSegments.length],
-          ];
-
-          // if (didExist) {
-          //   // until we support refetches, we should never stomp over an existing node
-          //   throw new Error(
-          //     "Internal error -- node already existed in the cache: " +
-          //       JSON.stringify(cacheInstallPath)
-          //   );
-          // }
-
-          console.log("requesting RSC from server", {
-            state: newRouterState.state,
-            newPath,
-            cacheInstallPath,
-            cacheNode,
-            existingSegments,
-          });
-          fetchSubtreeIntoNode(cacheNode, {
-            rawPath: newPath,
-            existingSegments,
-          });
-
-          setRouterState(newRouterState);
+          changeRouterStateByPath(newPath);
         });
       },
       refresh() {
@@ -217,7 +234,7 @@ export const ClientRouter = ({
         });
       },
     }),
-    [routerState, isNavigating]
+    [routerState, isNavigating, changeRouterStateByPath]
   );
 
   const ctx: GlobalRouterContextValue = useMemo(
@@ -288,25 +305,27 @@ const addChildNode = (
 const createShallowestCacheNodeForPath = (
   cacheNode: LayoutCacheNode,
   path: ParsedPath
-): [cacheNode: LayoutCacheNode, existingPath: ParsedPath] => {
+): [
+  cacheNode: LayoutCacheNode,
+  existingPath: ParsedPath,
+  didCreate: boolean
+] => {
   console.log("createCacheNodeForPath", path);
   if (path.length === 0) {
     // TODO: this case is weird. i'm not sure if this should ever happen.
-    return [cacheNode, []];
+    return [cacheNode, [], false];
   }
   const [segment, rest] = takeSegment(path);
   let childNode = getChildNode(cacheNode, segment);
   if (!childNode) {
     childNode = createBlankLayoutCacheNode(segment);
     addChildNode(cacheNode, segment, childNode);
-    return [childNode, []];
+    return [childNode, [], true];
   } else {
-    const [finalNode, existingPath] = createShallowestCacheNodeForPath(
-      childNode,
-      rest
-    );
+    const [finalNode, existingPath, didCreate] =
+      createShallowestCacheNodeForPath(childNode, rest);
     existingPath.unshift(segment); // safe to mutate, because no one else has access to it yet.
-    return [finalNode, existingPath];
+    return [finalNode, existingPath, didCreate];
   }
 };
 
