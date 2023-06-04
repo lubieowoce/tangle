@@ -1,7 +1,10 @@
 import { PropsWithChildren } from "react";
 import { createRouteLayout } from "../support/layout-template";
 import { HTMLPage, Link } from "@owoce/tangle";
-import { RefreshButton } from "../components/navigation";
+import {
+  FadeOnPendingNavigation,
+  RefreshButton,
+} from "../components/navigation";
 
 const DummyLayout = createRouteLayout("RootLayout (/)");
 
@@ -15,7 +18,7 @@ export default function Root({ children }: PropsWithChildren<{}>) {
             <Link href="/">Home</Link>
             <RefreshButton />
           </div>
-          {children}
+          <FadeOnPendingNavigation>{children}</FadeOnPendingNavigation>
         </DummyLayout>
       </main>
     </HTMLPage>
