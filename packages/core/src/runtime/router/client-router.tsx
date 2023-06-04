@@ -128,7 +128,9 @@ export const ClientRouter = ({
     const listener = (_event: PopStateEvent) => {
       const restoredPath = getPathFromDOMState();
       console.log("popstate", restoredPath);
-      setRouterState(changeRouterPath(routerState, restoredPath));
+      setRouterState((routerState) =>
+        changeRouterPath(routerState, restoredPath)
+      );
     };
     window.addEventListener("popstate", listener);
     return () => window.removeEventListener("popstate", listener);
@@ -376,7 +378,7 @@ const debugCache = (cacheNode: LayoutCacheNode) => {
 
 export const RouterSegment = ({
   children,
-  isRootLayout, // TODO: unused right now!,
+  // isRootLayout, // TODO: unused. do we need it, or can we remove it?
   DEBUG_originalSegmentPath,
 }: PropsWithChildren<{
   isRootLayout: boolean;

@@ -1,7 +1,7 @@
 import { Link } from "@owoce/tangle";
 import { getAllProfilesFromFb, getDbClient } from "../../server/db";
 
-export default async function AllProfilesView({ params }: { params: {} }) {
+export default async function AllProfilesView(_props: { params: {} }) {
   const dbClient = await getDbClient();
   const profiles = await getAllProfilesFromFb(dbClient);
   const meta = <title>{`All profiles`}</title>;

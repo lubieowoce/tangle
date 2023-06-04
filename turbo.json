@@ -5,6 +5,7 @@
       "outputs": ["dist/**"],
       "dependsOn": ["^build"]
     },
-    "lint": {}
+    "lint": {},
+    "typecheck": {}
   }
 }

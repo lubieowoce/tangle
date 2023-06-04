@@ -48,8 +48,6 @@ declare module "react-server/src/ReactFlightServerConfig" {
 //==================
 
 declare module "react-server-dom-webpack/src/ReactFlightClientNodeBundlerConfig" {
-  import type { Thenable, FulfilledThenable, RejectedThenable } from "react";
-
   export type SSRManifest = {
     [clientId: string]: {
       [clientExportName: string]: ClientReference<any>;
@@ -66,7 +64,7 @@ declare module "react-server-dom-webpack/src/ReactFlightClientNodeBundlerConfig"
     name: string;
   };
 
-  // eslint-disable-next-line no-unused-vars
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   export type ClientReference<T> = {
     specifier: string;
     name: string;
@@ -93,7 +91,7 @@ declare module "react-server-dom-webpack/src/ReactFlightClientWebpackBundlerConf
     async: boolean;
   };
 
-  // eslint-disable-next-line no-unused-vars
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   export type ClientReference<T> = ClientReferenceMetadata;
 }
 
@@ -110,7 +108,7 @@ declare module "react-server-dom-webpack/src/ReactFlightServerWebpackBundlerConf
 
   export type ServerReferenceId = string;
 
-  // eslint-disable-next-line no-unused-vars
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   export type ClientReference<T> = {
     $$typeof: symbol;
     $$id: string;
@@ -132,8 +130,7 @@ declare module "react-server-dom-webpack/src/ReactFlightServerWebpackBundlerConf
 //================
 
 declare module "react-server-dom-webpack/src/ReactFlightDOMServerNode" {
-  import type { Writable, PassThrough } from "node:stream";
-  import type { ReactElement } from "react";
+  import type { Writable } from "node:stream";
   import type { ReactClientValue } from "react-server/src/ReactFlightServer";
   import type { ServerContextJSONValue } from "react";
   import type { ClientManifest } from "react-server-dom-webpack/src/ReactFlightServerWebpackBundlerConfig";
@@ -162,7 +159,6 @@ declare module "react-server-dom-webpack/src/ReactFlightDOMServerNode" {
 
 declare module "react-server-dom-webpack/src/ReactFlightDOMServerEdge" {
   import type { ReadableStream } from "node:stream/web";
-  import type { ReactElement } from "react";
   import type { ServerContextJSONValue } from "react";
   import type { ClientManifest } from "react-server-dom-webpack/src/ReactFlightServerWebpackBundlerConfig";
   import type { ServerManifest } from "react-client/src/ReactFlightClientHostConfig";
@@ -269,12 +265,12 @@ declare module "react-server/src/ReactFlightServer" {
   import type {
     // Destination,
     // Chunk,
-    ClientManifest,
-    ClientReferenceMetadata,
+    // ClientManifest,
+    // ClientReferenceMetadata,
     ClientReference,
-    ClientReferenceKey,
+    // ClientReferenceKey,
     ServerReference,
-    ServerReferenceId,
+    // ServerReferenceId,
   } from "react-server/src/ReactFlightServerConfig";
 
   import type { LazyComponent } from "react/src/ReactLazy";
@@ -405,7 +401,7 @@ declare module "react-server-dom-webpack/node-loader" {
   type LoadContext = {
     conditions: Array<string>;
     format: string | null | void;
-    importAssertions: Object;
+    importAssertions: Record<string, any>;
   };
 
   type LoadFunction = (

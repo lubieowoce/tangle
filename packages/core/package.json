@@ -11,7 +11,8 @@
     "build": "rm -rf dist && npm run build:bin && npm run build:compiled",
     "build:bin": "tsup --config tsup.config.bin.js",
     "build:compiled": "tsc -p src/runtime/ && echo '{ \"type\": \"module\" }' > dist/runtime/package.json && cp -r src/types dist/",
-    "typecheck": "tsc -p src/runtime/ --noEmit"
+    "typecheck": "tsc -p src/runtime/ --noEmit",
+    "lint": "eslint src/**"
   },
   "bin": {
     "tangle": "./dist/bin/tangle.js"

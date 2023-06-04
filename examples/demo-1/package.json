@@ -7,7 +7,9 @@
     "dev": "tangle dev",
     "build": "tangle build",
     "start": "tangle start",
-    "start-raw": "node dist/server/main.js"
+    "start-raw": "node dist/server/main.js",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint src/**"
   },
   "keywords": [],
   "author": "",

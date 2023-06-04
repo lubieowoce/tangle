@@ -14,16 +14,16 @@ export function preloadComponent<
 >(Component: TComp, props: TProps): TComp {
   const prev = console.error;
   // Hide invalid hook call warning when calling component
-  console.error = function (msg) {
+  console.error = function (...args) {
+    const [msg] = args;
     if (msg.startsWith("Warning: Invalid hook call.")) {
       // ignore
     } else {
-      // @ts-expect-error argument is defined
-      prev.apply(console, arguments);
+      prev.apply(console, args);
     }
   };
   try {
-    let result = Component(props);
+    const result = Component(props);
     if (isPromise(result)) {
       // Catch promise rejections to prevent unhandledRejection errors
       result.then(

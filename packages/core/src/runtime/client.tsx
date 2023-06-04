@@ -10,6 +10,8 @@ import { Use } from "./support/use";
 import { __DEV__ } from "./support/is-dev";
 
 type InitialChunks = string[] & { isComplete?: boolean };
+
+// eslint-disable-next-line no-var
 declare var __RSC_CHUNKS__: InitialChunks;
 
 const getStreamFromInitialChunks = (initialChunks: InitialChunks) => {

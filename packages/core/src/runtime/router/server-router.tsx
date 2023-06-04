@@ -1,4 +1,4 @@
-import { PropsWithChildren, ReactElement, ReactNode, Suspense } from "react";
+import { PropsWithChildren, ReactNode, Suspense } from "react";
 import { RouterSegment } from "./client-router";
 import { ParsedPath, parsePath, takeSegmentMaybe } from "./paths";
 import {
