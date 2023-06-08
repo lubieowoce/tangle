@@ -42,6 +42,7 @@ export type RouteDefinition = {
   loading: ImportDefault<
     FC<PropsWithChildren<{ params: SegmentParams }>>
   > | null;
+  notFound: ImportDefault<FC<{ params: SegmentParams }>> | null;
   error: ImportDefault<FC<{}>> | null;
   children: RouteDefinition[] | null;
 };

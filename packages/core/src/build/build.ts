@@ -29,7 +29,10 @@ import VirtualModulesPlugin from "webpack-virtual-modules";
 import { MODULE_EXTENSIONS_LIST, MODULE_EXTENSIONS_REGEX } from "./common";
 import { findRoutes } from "./routes/find-routes";
 import { stringLiteral } from "./codegen-helpers";
-import { generateRoutesExport } from "./routes/generate-routes";
+import {
+  generateRoutesExport,
+  normalizeRoutes,
+} from "./routes/generate-routes";
 
 const rel = (p: string) => path.resolve(__dirname, p);
 
@@ -130,7 +133,9 @@ export const build = async ({
     },
   };
 
-  const parsedRoutes = findRoutes(opts.user.routesDir, opts.user.routesDir);
+  const parsedRoutes = normalizeRoutes(
+    findRoutes(opts.user.routesDir, opts.user.routesDir)
+  );
 
   const sharedPlugins = (): Configuration["plugins"] & unknown[] => {
     const teeLog = <T>(x: T): T => {

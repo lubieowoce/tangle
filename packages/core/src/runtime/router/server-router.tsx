@@ -8,6 +8,7 @@ import {
 } from "./router-core";
 import { SegmentErrorBoundary } from "./error-boundary";
 import { preloadComponent } from "./preload-component";
+import { SegmentNotFoundBoundary } from "./not-found/not-found-boundary";
 
 export type ServerRouterOptions = {
   /** Try to preload all async segments in parallel.
@@ -32,43 +33,48 @@ export function createServerRouter(routes: RouteDefinition) {
   }) {
     options = { parallelPreload: true, debug: false, ...options };
     const isNestedFetch = !!existingState;
-    const [firstSegment, ...moreSegments] = await getSegmentsToRender(
-      path,
-      isNestedFetch,
-      existingState,
-      [routes]
-    );
+    const {
+      isNotFound,
+      segmentMatches: [firstSegment, ...moreSegments],
+    } = await getSegmentsToRender(path, isNestedFetch, existingState, [routes]);
+
+    if (isNotFound) {
+      // this would probably need __DEFAULT__ routes or something
+      console.error("Oops", path, existingState, [
+        firstSegment,
+        ...moreSegments,
+      ]);
+      throw new Error("NOT IMPLEMENTED: default not-found boundary");
+    }
+
     return segmentMatchToJSX(firstSegment, moreSegments, options);
   }
 
   return ServerRouter;
 }
 
+type WithParams = {
+  params: SegmentParams;
+};
+
 type SegmentMatchInfo = ReturnType<typeof getMatchForSegment> & {
   params: SegmentParams;
   isFetchRoot: boolean;
   key: string;
   component: SegmentMatchComponent;
-  LoadingComponent: React.FC<{
-    params: SegmentParams;
-  }> | null;
+  LoadingComponent: React.FC<WithParams> | null;
+  NotFoundComponent: React.FC<WithParams> | null;
   ErrorComponent: React.FC<{}> | null;
 };
 
 type SegmentMatchComponent =
   | {
       type: "layout";
-      Component: React.FC<
-        React.PropsWithChildren<{
-          params: SegmentParams;
-        }>
-      >;
+      Component: React.FC<React.PropsWithChildren<WithParams>>;
     }
   | {
       type: "page";
-      Component: React.FC<{
-        params: SegmentParams;
-      }>;
+      Component: React.FC<WithParams>;
     };
 
 async function getSegmentsToRender(
@@ -83,6 +89,7 @@ async function getSegmentsToRender(
 
   let outerParams: SegmentParams = {};
   let accumKey = "";
+  let isNotFound = false;
   for (let i = 0; i < parsedPath.length; i++) {
     const segmentPath = parsedPath[i];
     accumKey += segmentPath + "/";
@@ -119,15 +126,38 @@ async function getSegmentsToRender(
 
     const match = getMatchForSegment({ segmentPath, routes });
     if (!match) {
-      // TODO: notFound
-      throw new Error(
-        `No match for segment ${JSON.stringify(
-          segmentPath
-        )} in\n${JSON.stringify(routes)}`
-      );
+      isNotFound = true;
+      break;
     }
+
     const { segment, params: currentSegmentParams } = match;
     const params: SegmentParams = { ...outerParams, ...currentSegmentParams };
+
+    // if we're the root (and isFetchRootBelow becomes false), we have to stop
+    // child segments from thinking they're the root too, so pass `undefined` instead of `[]` --
+    // that way, we won't trip the `isFetchRoot` check above.
+    existingState = isFetchRootBelow ? restOfState : undefined;
+
+    // make the params from this segment available to the routes below.
+    outerParams = params;
+
+    // recurse in the route definitions.
+    if (!isLastSegment) {
+      if (!segment.children) {
+        throw new Error(
+          `More path remaining (${JSON.stringify(
+            parsedPath.slice(i)
+          )}), but no child routes defined`
+        );
+      }
+      routes = segment.children;
+    }
+
+    if (isFetchRootBelow) {
+      // we haven't found the root yet, so skip this level.
+      // we only need the part from the root & below.
+      continue;
+    }
 
     if (segment.layout && segment.page) {
       // TODO
@@ -135,6 +165,20 @@ async function getSegmentsToRender(
         "Internal error: got segment and page on the same level.\n" +
           "Pages should be a child with the name '__PAGE__' instead."
       );
+    }
+
+    if (isLastSegment) {
+      if (!segment.page) {
+        // TODO: notFound
+        throw new Error("Last segment must have a page");
+      }
+      if (segmentPath !== "__PAGE__") {
+        throw new Error(
+          `Internal error: the last segment of parsedPath should be "__PAGE__. Path: ${JSON.stringify(
+            parsedPath
+          )}`
+        );
+      }
     }
 
     const component = segment.page
@@ -151,45 +195,9 @@ async function getSegmentsToRender(
       ? (await segment.error()).default
       : null;
 
-    if (isLastSegment) {
-      if (component.type !== "page") {
-        // TODO: notFound
-        throw new Error("Last segment must have a page");
-      }
-      if (segmentPath !== "__PAGE__") {
-        throw new Error(
-          `Internal error: the last segment of parsedPath should be "__PAGE__. Path: ${JSON.stringify(
-            parsedPath
-          )}`
-        );
-      }
-    }
-
-    // recurse in the route definitions.
-    if (!isLastSegment) {
-      if (!segment.children) {
-        throw new Error(
-          `More path remaining (${JSON.stringify(
-            parsedPath.slice(i)
-          )}), but no child routes defined`
-        );
-      }
-      routes = segment.children;
-    }
-
-    // if we're the root (and isFetchRootBelow becomes false), we have to stop
-    // child segments from thinking they're the root too, so pass `undefined` instead of `[]` --
-    // that way, we won't trip the `isFetchRoot` check above.
-    existingState = isFetchRootBelow ? restOfState : undefined;
-
-    // make the params from this segment available to the routes below.
-    outerParams = params;
-
-    if (isFetchRootBelow) {
-      // we haven't found the root yet, so skip this level.
-      // we only need the part from the root & below.
-      continue;
-    }
+    const NotFoundComponent = segment.notFound
+      ? (await segment.notFound()).default
+      : null;
 
     segmentMatches.push({
       segment,
@@ -199,9 +207,11 @@ async function getSegmentsToRender(
       component,
       LoadingComponent,
       ErrorComponent,
+      NotFoundComponent,
     });
   }
-  return segmentMatches;
+
+  return { isNotFound, segmentMatches };
 }
 
 // NOTE: `segmentMatchToJSX` is not a component on purpose.
@@ -228,37 +238,58 @@ function segmentMatchToJSX(
     component: { type, Component: RawComponent },
     LoadingComponent,
     ErrorComponent,
+    NotFoundComponent,
     params,
     isFetchRoot,
   } = segmentMatch;
 
-  let componentProps: { params: SegmentParams; children?: ReactNode };
-
-  const withError = (children: JSX.Element | null) => {
+  const withError = (children: JSX.Element | null, extraKey = "") => {
     if (!ErrorComponent) return children;
     return (
-      <SegmentErrorBoundary key={cacheKey} errorFallback={<ErrorComponent />}>
+      <SegmentErrorBoundary
+        key={extraKey ? cacheKey + "-" + extraKey : cacheKey}
+        fallback={<ErrorComponent />}
+      >
         {children}
       </SegmentErrorBoundary>
     );
   };
 
-  const withLoading = (children: JSX.Element | null) => {
+  const withLoading = (children: JSX.Element | null, extraKey = "") => {
     if (!LoadingComponent) return children;
     return (
-      <Suspense fallback={<LoadingComponent key={cacheKey} params={params} />}>
+      <Suspense
+        key={extraKey ? cacheKey + "-" + extraKey : cacheKey}
+        fallback={<LoadingComponent params={params} />}
+      >
         {children}
       </Suspense>
     );
   };
 
+  const withNotFound = (children: JSX.Element | null, extraKey = "") => {
+    if (!NotFoundComponent) return children;
+    return (
+      <SegmentNotFoundBoundary
+        key={extraKey ? cacheKey + "-" + extraKey : cacheKey}
+        fallback={<NotFoundComponent params={params} />}
+      >
+        {children}
+      </SegmentNotFoundBoundary>
+    );
+  };
+
+  const wrapWithBoundaries = (el: JSX.Element | null, extraKey = "") =>
+    withError(withNotFound(withLoading(el, extraKey), extraKey), extraKey);
+
+  let componentProps: { params: SegmentParams; children?: ReactNode };
+
   if (type === "layout") {
     const [childSegment, ...rest] = segmentMatchesBelow;
     // add the boundaries each child has below the layout.
     // this is useful if a fetch fails, and the child doesn't reach the client.
-    const children = withError(
-      withLoading(segmentMatchToJSX(childSegment, rest, options))
-    );
+    const rawChildren = segmentMatchToJSX(childSegment, rest, options);
+    const children = wrapWithBoundaries(rawChildren, "below-component");
     componentProps = { params, children };
   } else {
     componentProps = { params };
@@ -275,7 +306,7 @@ function segmentMatchToJSX(
   // TODO: we're putting these both above and below layouts. is that correct?
   // might lead to display weirdness. maybe these should apply to the layout's children only?
   // also, what if the root layout crashes?
-  tree = withError(withLoading(tree));
+  tree = wrapWithBoundaries(tree, "above-component");
 
   // don't wrap the tree in a segment if this is the root of a nested fetch.
   // because in that case, we'll already be rendered by an existing RouterSegment

@@ -1,48 +1,62 @@
 "use client";
 import * as React from "react";
-import { useNavigationContext } from "./navigation-context";
+import { useNavigationContext } from "../../router/navigation-context";
+import { isNotFound } from "./not-found";
 
-type SegmentErrorBoundaryProps = React.PropsWithChildren<{
+type SegmentNotFoundProps = React.PropsWithChildren<{
   fallback: React.ReactNode;
 }>;
 
-export function SegmentErrorBoundary({
+export function SegmentNotFoundBoundary({
   children,
   ...props
-}: SegmentErrorBoundaryProps) {
+}: SegmentNotFoundProps) {
   // If the path changes, we want to reset the error boundary.
   const { key: pathKey } = useNavigationContext();
   return (
-    <ErrorBoundary pathKey={pathKey} {...props}>
+    <NotFoundBoundary pathKey={pathKey} {...props}>
       {children}
-    </ErrorBoundary>
+    </NotFoundBoundary>
   );
 }
 
-type ErrorBoundaryProps = SegmentErrorBoundaryProps & { pathKey: string };
-type ErrorBoundaryState = {
+type NotFoundBoundaryProps = SegmentNotFoundProps & { pathKey: string };
+type NotFoundBoundaryState = {
   isTriggered: boolean;
   triggeredAtKey: string | null;
 };
 
-class ErrorBoundary extends React.Component<
-  ErrorBoundaryProps,
-  ErrorBoundaryState
+class NotFoundBoundary extends React.Component<
+  NotFoundBoundaryProps,
+  NotFoundBoundaryState
 > {
-  constructor(props: ErrorBoundaryProps) {
+  constructor(props: NotFoundBoundaryProps) {
     super(props);
     this.state = { isTriggered: false, triggeredAtKey: null };
   }
 
-  static getDerivedStateFromError(error: unknown): Partial<ErrorBoundaryState> {
-    console.error("ErrorBoundary :: getDerivedStateFromError", error);
-    return { isTriggered: true };
+  static getDerivedStateFromError(
+    error: unknown
+  ): Partial<NotFoundBoundaryState> | null {
+    console.log(
+      "NotFoundBoundary :: getDerivedStateFromError",
+      error,
+      isNotFound(error)
+    );
+    // only catch NotFound, rethrow everything else.
+    if (isNotFound(error)) {
+      console.log("NotFoundBoundary :: intercepting error");
+      return { isTriggered: true };
+    } else {
+      console.log("NotFoundBoundary :: rethrowing error");
+      throw error;
+    }
   }
 
   static getDerivedStateFromProps(
-    props: ErrorBoundaryProps,
-    state: ErrorBoundaryState
-  ): Partial<ErrorBoundaryState> | null {
+    props: NotFoundBoundaryProps,
+    state: NotFoundBoundaryState
+  ): Partial<NotFoundBoundaryState> | null {
     const { pathKey } = props;
     const { isTriggered, triggeredAtKey } = state;
 
@@ -68,9 +82,9 @@ class ErrorBoundary extends React.Component<
 
   render() {
     const { children, fallback } = this.props;
-    const { triggeredAtKey } = this.state;
+    const { isTriggered, triggeredAtKey } = this.state;
 
-    const hasError = triggeredAtKey !== null;
+    const hasError = isTriggered && triggeredAtKey !== null;
     if (hasError) {
       return fallback;
     }

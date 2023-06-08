@@ -8,6 +8,7 @@ const IS_PAGE = "page" + MODULE_EXTENSIONS_GLOB;
 const IS_LAYOUT = "layout" + MODULE_EXTENSIONS_GLOB;
 const IS_LOADING = "loading" + MODULE_EXTENSIONS_GLOB;
 const IS_ERROR = "error" + MODULE_EXTENSIONS_GLOB;
+const IS_NOTFOUND = "not-found" + MODULE_EXTENSIONS_GLOB;
 
 export const isRoot = (info: FileSystemRouteInfo) => info.segment === "";
 
@@ -23,6 +24,7 @@ export function findRoutes(
     layout: mapMaybe(micromatchFirst(dirContents, IS_LAYOUT), toAbsolute),
     loading: mapMaybe(micromatchFirst(dirContents, IS_LOADING), toAbsolute),
     error: mapMaybe(micromatchFirst(dirContents, IS_ERROR), toAbsolute),
+    notFound: mapMaybe(micromatchFirst(dirContents, IS_NOTFOUND), toAbsolute),
     children: null,
   };
 

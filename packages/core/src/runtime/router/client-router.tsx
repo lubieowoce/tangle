@@ -300,9 +300,7 @@ function GlobalErrorBoundary({
   // but works well enough for now.
   return (
     <HTMLPage>
-      <SegmentErrorBoundary
-        errorFallback={errorFallback ?? <RootErrorFallback />}
-      >
+      <SegmentErrorBoundary fallback={errorFallback ?? <RootErrorFallback />}>
         {children}
       </SegmentErrorBoundary>
     </HTMLPage>

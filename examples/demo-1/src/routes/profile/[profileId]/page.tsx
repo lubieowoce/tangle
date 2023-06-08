@@ -1,4 +1,4 @@
-import { Link } from "@owoce/tangle";
+import { Link, notFound } from "@owoce/tangle";
 import { getDbClient, getProfileFromDb } from "../../../server/db";
 import { Timestamp } from "../../../components/timestamp";
 
@@ -12,7 +12,10 @@ export default async function ProfileView({ params }: { params: Params }) {
     {
       profileId,
     }
-  );
+  ).catch(() => {
+    console.log("failed to fetch profile " + profileId + ", throwing notFound");
+    notFound();
+  });
   const meta = <title>{`Profile: ${profile.name}`}</title>;
   return (
     <>

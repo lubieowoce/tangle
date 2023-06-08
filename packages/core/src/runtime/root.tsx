@@ -1,4 +1,4 @@
-import { createServerRouter } from "./router/server-router";
+import { createServerRouter } from "./router/index.server";
 import routes from "./generated/routes";
 
 export const ServerRouter = createServerRouter(routes);

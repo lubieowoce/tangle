@@ -5,7 +5,7 @@ import {
   ClientRouter,
   createEmptyLayoutCache,
   getPathFromDOMState,
-} from "./router/client-router";
+} from "./router/index.client";
 import { Use } from "./support/use";
 import { __DEV__ } from "./support/is-dev";
 

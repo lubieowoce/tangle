@@ -1,6 +1,6 @@
 // import type { AnyServerRootProps } from "../shared";
 
-import type { RouteDefinition } from "../router/router-core";
+import type { RouteDefinition } from "../router/index.server";
 
 const placeholder = (): RouteDefinition => {
   throw new Error(

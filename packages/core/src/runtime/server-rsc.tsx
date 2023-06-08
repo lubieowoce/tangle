@@ -7,7 +7,7 @@ import { throwOnMissingProperty } from "./shared";
 
 import { ServerRouter } from "./root";
 import { createNoopStream } from "./utils";
-import { ParsedPath } from "./router/paths";
+import { ParsedPath } from "./router/index.server";
 
 export async function renderRSCRoot(
   path: string,

@@ -11,9 +11,10 @@ import { ReactNode } from "react";
 import {
   createStaticRouter,
   GlobalRouterContext,
-} from "./router/navigation-context";
-import { SegmentContext, createEmptyLayoutCache } from "./router/client-router";
-import { parsePath } from "./router/paths";
+  SegmentContext,
+  createEmptyLayoutCache,
+  parsePath,
+} from "./router/index.client";
 import { Use } from "./support/use";
 
 export type ScriptsManifest = {
