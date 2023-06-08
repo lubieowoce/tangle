@@ -61,13 +61,16 @@ app.use(ASSETS_ROUTE, expressStatic(CLIENT_ASSETS_DIR));
 // TODO: distinguish which paths should hit the router somehow
 app.get("/favicon.ico", (_, res) => res.status(404).send());
 
+// these headers influence the returned content
+const varyHeader = [FLIGHT_REQUEST_HEADER, ROUTER_STATE_HEADER].join(", ");
+
 app.get(
   "*",
   catchAsync(async (req, res) => {
     // const url = new URL(req.url, `http://${req.headers.host}`);
     // const props: AnyServerRootProps = pathToParams(url);
     const path = req.path;
-    res.header("vary", FLIGHT_REQUEST_HEADER);
+    res.header("vary", varyHeader);
 
     if (req.header(FLIGHT_REQUEST_HEADER)) {
       const existingStateRaw = req.header(ROUTER_STATE_HEADER);
