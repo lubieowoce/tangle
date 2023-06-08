@@ -1,7 +1,7 @@
 import type { Readable } from "node:stream";
 import { renderToPipeableStream } from "react-dom/server";
 
-import { ASSETS_ROUTE, throwOnMissingProperty } from "./shared";
+import { ASSETS_ROUTE } from "./shared";
 import {
   createFromNodeStream,
   SSRManifest,
@@ -29,7 +29,7 @@ export function getSSRDomStream(
 ) {
   const clientTreeThenable = createFromNodeStream<ReactNode>(
     rscStream,
-    throwOnMissingProperty(webpackMapForSSR, "webpackMapForSSR [ssr]")
+    webpackMapForSSR
   );
 
   console.log("SSRing response");

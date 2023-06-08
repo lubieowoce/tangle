@@ -1,5 +1,3 @@
-"use server";
-
 import { FlashOnMount } from "./animate-on-mount";
 
 export function Timestamp() {

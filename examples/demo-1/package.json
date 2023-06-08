@@ -16,8 +16,8 @@
   "license": "MIT",
   "dependencies": {
     "client-only": "^0.0.1",
-    "react": "18.3.0-next-b14f8da15-20230403",
-    "react-dom": "18.3.0-next-b14f8da15-20230403",
+    "react": "18.3.0-canary-910045696-20230607",
+    "react-dom": "18.3.0-canary-910045696-20230607",
     "server-only": "^0.0.1"
   },
   "devDependencies": {

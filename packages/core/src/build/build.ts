@@ -53,10 +53,17 @@ const getVirtualPathProxy = (p: string) =>
 const getOriginalPathFromVirtual = (p: string) =>
   p.replace(/\.(__ssr__|__proxy__)\./, ".");
 
-const REACT_MODULES_REGEX =
-  /\/(react|react-server|react-dom|react-is|scheduler)\//;
+// const REACT_MODULES_REGEX =
+//   /\/(react|react-server|react-dom|react-is|scheduler)\//;
 
 export type BuildReturn = { server: { path: string } };
+
+const LOG_OPTIONS = {
+  importRewrites: false,
+  generatedCode: false,
+  manifestRewrites: false,
+  ssrManifest: true,
+};
 
 export const build = async ({
   appPath,
@@ -105,6 +112,20 @@ export const build = async ({
     minimize: false, // terser is breaking with `__name is not defined` for some reason...
   };
 
+  // Force all user code to use OUR version of react.
+  // TODO: require.resolve() might be wonky w.r.t import conditions... not sure
+  const reactResolutions = Object.fromEntries(
+    [
+      "react",
+      "react/jsx-runtime",
+      "react/jsx-dev-runtime",
+      "react-dom",
+      "react-dom/client",
+      "react-dom/server",
+    ].map((name) => [`${name}$`, require.resolve(name)])
+  );
+  console.log("forced react resolutions:", reactResolutions);
+
   const shared: Configuration = {
     mode: BUILD_MODE,
     // devtool: false,
@@ -113,6 +134,7 @@ export const build = async ({
       modules: [appPath, "node_modules"],
       extensions: MODULE_EXTENSIONS_LIST,
       fullySpecified: false, // annoying to deal with
+      alias: reactResolutions,
     },
     module: {
       rules: [
@@ -139,7 +161,7 @@ export const build = async ({
 
   const sharedPlugins = (): Configuration["plugins"] & unknown[] => {
     const teeLog = <T>(x: T): T => {
-      console.log(x);
+      LOG_OPTIONS.generatedCode && console.log(x);
       return x;
     };
     return [
@@ -189,6 +211,7 @@ export const build = async ({
   };
   await runWebpack(analysisConfig);
 
+  console.log("analysis context");
   console.log(analysisCtx);
 
   // =================
@@ -268,10 +291,10 @@ export const build = async ({
         {
           // assign modules to layers
           oneOf: [
-            {
-              test: REACT_MODULES_REGEX,
-              layer: LAYERS.shared,
-            },
+            // {
+            //   test: REACT_MODULES_REGEX,
+            //   layer: LAYERS.shared,
+            // },
             {
               test: opts.server.rscModule,
               layer: LAYERS.rsc,
@@ -294,12 +317,12 @@ export const build = async ({
         {
           // assign import conditions per layer
           oneOf: [
-            {
-              issuerLayer: LAYERS.shared,
-              resolve: {
-                conditionNames: serverImportConditions,
-              },
-            },
+            // {
+            //   issuerLayer: LAYERS.shared,
+            //   resolve: {
+            //     conditionNames: serverImportConditions,
+            //   },
+            // },
             {
               issuerLayer: LAYERS.ssr,
               resolve: {
@@ -616,8 +639,12 @@ class RSCServerPlugin {
             }
           }
 
-          console.log("manifest rewrites", ssrManifestSpecifierRewrite);
-          console.log("final ssr manifest", finalSSRManifest);
+          if (LOG_OPTIONS.manifestRewrites) {
+            console.log("manifest rewrites", ssrManifestSpecifierRewrite);
+          }
+          if (LOG_OPTIONS.ssrManifest) {
+            console.log("final ssr manifest", finalSSRManifest);
+          }
 
           if (toRewrite.size > 0) {
             throw new Error(
@@ -645,7 +672,9 @@ function moduleReplacements(analysisCtx: RSCAnalysisCtx) {
     {
       const virtualPath = getVirtualPathSSR(resource);
       const source = mod.originalSource()!.buffer().toString("utf-8");
-      console.log("VirtualModule (ssr):" + virtualPath, "\n" + source + "\n");
+      if (LOG_OPTIONS.generatedCode) {
+        console.log("VirtualModule (ssr):" + virtualPath, "\n" + source + "\n");
+      }
       virtualModules[virtualPath] = source;
     }
     {
@@ -654,10 +683,12 @@ function moduleReplacements(analysisCtx: RSCAnalysisCtx) {
         resource,
         exports: analysisCtx.exports.client.get(resource)!,
       });
-      console.log(
-        "VirtualModule (proxy): " + virtualPath,
-        "\n" + source + "\n"
-      );
+      if (LOG_OPTIONS.generatedCode) {
+        console.log(
+          "VirtualModule (proxy): " + virtualPath,
+          "\n" + source + "\n"
+        );
+      }
       virtualModules[virtualPath] = source;
     }
   }
@@ -677,16 +708,19 @@ function moduleReplacements(analysisCtx: RSCAnalysisCtx) {
             : getVirtualPathProxy(originalResource);
 
           const label = `(${isSSR ? "ssr" : "proxy"})`;
-          console.log(
-            `${label} preparing replacement: `,
-            resolveData.createData.resource
-          );
-          console.log(
-            `${label} issued from: ${resolveData.contextInfo.issuer} (${resolveData.contextInfo.issuerLayer})`
-          );
-          console.log(`${label} rewriting request to`, newResource);
-          // console.log(resolveData);
-          console.log();
+
+          if (LOG_OPTIONS.importRewrites) {
+            console.log(
+              `${label} preparing replacement: `,
+              resolveData.createData.resource
+            );
+            console.log(
+              `${label} issued from: ${resolveData.contextInfo.issuer} (${resolveData.contextInfo.issuerLayer})`
+            );
+            console.log(`${label} rewriting request to`, newResource);
+            // console.log(resolveData);
+            console.log();
+          }
 
           resolveData.request = newResource;
           resolveData.createData.request =
