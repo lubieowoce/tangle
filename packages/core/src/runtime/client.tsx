@@ -5,9 +5,10 @@ import {
   ClientRouter,
   createEmptyLayoutCache,
   getPathFromDOMState,
-} from "./router/index.client";
+} from "@owoce/tangle-router";
 import { Use } from "./support/use";
 import { __DEV__ } from "./support/is-dev";
+import { fetchSubtree } from "./router-integration/index.client";
 
 type InitialChunks = string[] & { isComplete?: boolean };
 
@@ -111,7 +112,11 @@ const init = async () => {
     startTransition(() => {
       hydrateRoot(
         document,
-        <ClientRouter initialCache={layoutCache} initialPath={initialPath}>
+        <ClientRouter
+          initialCache={layoutCache}
+          initialPath={initialPath}
+          fetchSubtree={fetchSubtree}
+        >
           <Use thenable={initialServerTreeThenable} debugLabel={initialPath} />
         </ClientRouter>
       );

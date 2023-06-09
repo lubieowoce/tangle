@@ -1,4 +1,4 @@
-import { Link } from "@owoce/tangle";
+import { Link } from "@owoce/tangle/client";
 import { getAllProfilesFromFb, getDbClient } from "../../server/db";
 
 export default async function AllProfilesView(_props: { params: {} }) {

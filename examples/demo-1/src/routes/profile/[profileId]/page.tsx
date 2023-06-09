@@ -1,4 +1,5 @@
-import { Link, notFound } from "@owoce/tangle";
+import { Link } from "@owoce/tangle/client";
+import { notFound } from "@owoce/tangle/server";
 import { getDbClient, getProfileFromDb } from "../../../server/db";
 import { Timestamp } from "../../../components/timestamp";
 

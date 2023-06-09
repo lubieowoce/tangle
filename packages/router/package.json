@@ -14,8 +14,24 @@
   "homepage": "https://github.com/lubieowoce/tangle#readme",
   "module": "dist/index.js",
   "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "react-server": "./dist/index.server.js",
+      "node": "./dist/index.client.js",
+      "default": "./dist/index.client.js"
+    },
+    "./client": {
+      "types": "./dist/index.client.d.ts",
+      "default": "./dist/index.client.js"
+    },
+    "./server": {
+      "types": "./dist/index.server.d.ts",
+      "react-server": "./dist/index.server.js",
+      "default": "./dist/server-only-error.js"
+    }
+  },
   "scripts": {
-    "build": "tsc",
+    "build": "rm -rf dist/* && tsc",
     "typecheck": "tsc --noEmit",
     "lint": "eslint src/**"
   },

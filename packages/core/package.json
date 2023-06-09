@@ -14,6 +14,22 @@
     "typecheck": "tsc -p src/runtime/ --noEmit",
     "lint": "eslint src/**"
   },
+  "exports": {
+    ".": {
+      "react-server": "./dist/runtime/index.server.js",
+      "node": "./dist/runtime/index.client.js",
+      "default": "./dist/runtime/index.client.js"
+    },
+    "./client": {
+      "types": "./dist/runtime/index.client.d.ts",
+      "default": "./dist/runtime/index.client.js"
+    },
+    "./server": {
+      "types": "./dist/runtime/index.server.d.ts",
+      "react-server": "./dist/runtime/index.server.js",
+      "default": "./dist/runtime/server-only-error.js"
+    }
+  },
   "bin": {
     "tangle": "./dist/bin/tangle.js"
   },
@@ -24,6 +40,7 @@
   "author": "",
   "license": "MIT",
   "dependencies": {
+    "@owoce/tangle-router": "^0.0.1",
     "chokidar": "^3.5.3",
     "enhanced-resolve": "^5.14.1",
     "express": "^4.18.2",

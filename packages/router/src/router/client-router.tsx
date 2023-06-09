@@ -21,17 +21,11 @@ import {
   useNavigationContext,
   GlobalRouterContextValue,
 } from "./navigation-context";
-import {
-  FLIGHT_REQUEST_HEADER,
-  ROUTER_STATE_HEADER,
-  RSC_CONTENT_TYPE,
-} from "../shared";
-import { createFromFetch } from "react-server-dom-webpack/client";
+
 import { ParsedPath, parsePath, takeSegment } from "./paths";
 import { Use } from "../support/use";
 import { __DEV__ } from "../support/is-dev";
 import { SegmentErrorBoundary } from "./error-boundary";
-import { HTMLPage } from "..";
 
 export function Link({
   href,
@@ -116,11 +110,13 @@ export const ClientRouter = ({
   initialCache,
   initialPath,
   globalErrorFallback,
+  fetchSubtree,
   children,
 }: PropsWithChildren<{
   initialCache: LayoutCacheNode;
   initialPath: string;
   globalErrorFallback?: ReactNode;
+  fetchSubtree: FetchSubtreeFn;
 }>) => {
   const [routerState, setRouterState] = useState<RouterState>(() =>
     createRouterState(initialPath, initialCache)
@@ -169,14 +165,18 @@ export const ClientRouter = ({
         cacheNode,
         existingSegments,
       });
-      fetchSubtreeIntoNode(cacheNode, {
-        rawPath: newPath,
-        existingSegments,
-      });
+      fetchSubtreeIntoNode(
+        cacheNode,
+        {
+          rawPath: newPath,
+          existingSegments,
+        },
+        fetchSubtree
+      );
 
       setRouterState(newRouterState);
     },
-    [routerState]
+    [routerState, fetchSubtree]
   );
 
   const changeRouterStateForRefetch = useCallback(() => {
@@ -203,13 +203,17 @@ export const ClientRouter = ({
     console.log("refetch :: newRouterState", newRouterState);
 
     const cacheNode = getRootNode(newRouterState.cache);
-    fetchSubtreeIntoNode(cacheNode, {
-      rawPath: newRouterState.rawPath,
-      existingSegments: [],
-    });
+    fetchSubtreeIntoNode(
+      cacheNode,
+      {
+        rawPath: newRouterState.rawPath,
+        existingSegments: [],
+      },
+      fetchSubtree
+    );
 
     setRouterState(newRouterState);
-  }, [routerState]);
+  }, [routerState, fetchSubtree]);
 
   const onPopState = useCallback(
     (restoredPath: string, event: PopStateEvent) => {
@@ -299,11 +303,17 @@ function GlobalErrorBoundary({
   // This isn't great, because we're basically blowing away the whole document,
   // but works well enough for now.
   return (
-    <HTMLPage>
-      <SegmentErrorBoundary fallback={errorFallback ?? <RootErrorFallback />}>
-        {children}
-      </SegmentErrorBoundary>
-    </HTMLPage>
+    <html>
+      <head>
+        <meta charSet="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+      </head>
+      <body>
+        <SegmentErrorBoundary fallback={errorFallback ?? <RootErrorFallback />}>
+          {children}
+        </SegmentErrorBoundary>
+      </body>
+    </html>
   );
 }
 
@@ -502,6 +512,8 @@ export const RouterSegment = ({
   );
 };
 
+type FetchSubtreeFn = (args: RSCFetchArgs) => Thenable<ReactNode>;
+
 type RSCFetchArgs = {
   rawPath: string;
   existingSegments: ParsedPath;
@@ -509,10 +521,10 @@ type RSCFetchArgs = {
 
 function fetchSubtreeIntoNode(
   cacheNode: LayoutCacheNode,
-  toFetch: RSCFetchArgs
+  toFetch: RSCFetchArgs,
+  fetchSubtree: FetchSubtreeFn
 ) {
-  const request = fetchSubtree(toFetch);
-  const fetchedTreeThenable = createFromFetch<ReactNode>(request, {});
+  const fetchedTreeThenable = fetchSubtree(toFetch);
 
   cacheNode.pending = fetchedTreeThenable;
   return fetchedTreeThenable.then(
@@ -539,22 +551,4 @@ function ThrowFetchError({
   error: unknown;
 }): ReactElement {
   throw new Error(`Error fetching path "${rawPath}"`, { cause: error });
-}
-
-// mark the whole thing as an async function
-// that way, if fetch() throws (e.g. NetworkError),
-// we get a rejected promise instead of an exception.
-async function fetchSubtree({ rawPath, existingSegments }: RSCFetchArgs) {
-  return fetch(rawPath, {
-    headers: {
-      [FLIGHT_REQUEST_HEADER]: "1",
-      // This tells our server-side router to skip rendering layouts we already have in the cache.
-      // This is not an optional optimization, it's required for correctness.
-      // We put the response in some nested place in the cache,
-      // and it'll be rendered *within* those cached layouts,
-      // so this response can't contain the layouts above its level -- we'd render them twice!
-      [ROUTER_STATE_HEADER]: JSON.stringify(existingSegments),
-      accept: RSC_CONTENT_TYPE,
-    },
-  });
 }
