@@ -1,7 +1,6 @@
 /// <reference types="../types/react-server-dom-webpack" />
-// ^ not sure why TS doesn't pick this up automatically...
 
-import { LAYERS } from "./shared.js";
+import { LAYERS } from "./shared";
 
 import { readFileSync } from "node:fs";
 import { pathToFileURL } from "node:url";
@@ -10,6 +9,8 @@ import path from "node:path";
 import ReactFlightWebpackPlugin, {
   Options as ReactFlightWebpackPluginOptions,
 } from "react-server-dom-webpack/plugin";
+
+import type { ClientReferenceMetadata } from "react-server-dom-webpack/src/ReactFlightClientWebpackBundlerConfig";
 
 import { runWebpack } from "./run-webpack";
 import Webpack, {
@@ -21,9 +22,17 @@ import Webpack, {
   AsyncDependenciesBlock,
   Compilation,
   WebpackError,
+  dependencies as webpackDependencies,
 } from "webpack";
 
 import VirtualModulesPlugin from "webpack-virtual-modules";
+import { MODULE_EXTENSIONS_LIST, MODULE_EXTENSIONS_REGEX } from "./common";
+import { findRoutes } from "./routes/find-routes";
+import { stringLiteral } from "./codegen-helpers";
+import {
+  generateRoutesExport,
+  normalizeRoutes,
+} from "./routes/generate-routes";
 
 const rel = (p: string) => path.resolve(__dirname, p);
 
@@ -44,27 +53,29 @@ const getVirtualPathProxy = (p: string) =>
 const getOriginalPathFromVirtual = (p: string) =>
   p.replace(/\.(__ssr__|__proxy__)\./, ".");
 
-const moduleExtensions = [".ts", ".tsx", ".js", ".jsx"];
-const MODULE_EXTENSIONS_REGEX = /\.(ts|tsx|js|jsx)$/;
-const REACT_MODULES_REGEX =
-  /\/(react|react-server|react-dom|react-is|scheduler)\//;
+// const REACT_MODULES_REGEX =
+//   /\/(react|react-server|react-dom|react-is|scheduler)\//;
+
+export type BuildReturn = { server: { path: string } };
+
+const LOG_OPTIONS = {
+  importRewrites: false,
+  generatedCode: false,
+  manifestRewrites: false,
+  ssrManifest: true,
+};
 
 export const build = async ({
   appPath,
-  serverRoot,
-  paths: pathsFile,
 }: {
   appPath: string;
-  serverRoot: string;
-  paths: string;
-}) => {
+}): Promise<BuildReturn> => {
   const DIST_PATH = path.join(appPath, "dist");
   const INTERNAL_CODE = rel("../runtime");
 
   const opts = {
     user: {
-      rootComponentModule: path.resolve(appPath, serverRoot),
-      pathsModule: path.resolve(appPath, pathsFile),
+      routesDir: path.resolve(appPath, "src/routes"),
       tsConfig: path.resolve(appPath, "tsconfig.json"),
     },
     client: {
@@ -75,8 +86,7 @@ export const build = async ({
       entry: path.join(INTERNAL_CODE, "server.js"),
       ssrModule: path.join(INTERNAL_CODE, "server-ssr.js"),
       rscModule: path.join(INTERNAL_CODE, "server-rsc.js"),
-      rootComponentModule: path.join(INTERNAL_CODE, "user/server-root.js"),
-      pathsModule: path.join(INTERNAL_CODE, "user/paths.js"),
+      genratedRoutesModule: path.join(INTERNAL_CODE, "generated/routes.js"),
       destDir: path.join(DIST_PATH, "server"),
     },
     moduleDir: INTERNAL_CODE,
@@ -102,14 +112,29 @@ export const build = async ({
     minimize: false, // terser is breaking with `__name is not defined` for some reason...
   };
 
+  // Force all user code to use OUR version of react.
+  // TODO: require.resolve() might be wonky w.r.t import conditions... not sure
+  const reactResolutions = Object.fromEntries(
+    [
+      "react",
+      "react/jsx-runtime",
+      "react/jsx-dev-runtime",
+      "react-dom",
+      "react-dom/client",
+      "react-dom/server",
+    ].map((name) => [`${name}$`, require.resolve(name)])
+  );
+  console.log("forced react resolutions:", reactResolutions);
+
   const shared: Configuration = {
     mode: BUILD_MODE,
     // devtool: false,
     devtool: "source-map",
     resolve: {
       modules: [appPath, "node_modules"],
-      extensions: moduleExtensions,
+      extensions: MODULE_EXTENSIONS_LIST,
       fullySpecified: false, // annoying to deal with
+      alias: reactResolutions,
     },
     module: {
       rules: [
@@ -130,20 +155,20 @@ export const build = async ({
     },
   };
 
+  const parsedRoutes = normalizeRoutes(
+    findRoutes(opts.user.routesDir, opts.user.routesDir)
+  );
+
   const sharedPlugins = (): Configuration["plugins"] & unknown[] => {
+    const teeLog = <T>(x: T): T => {
+      LOG_OPTIONS.generatedCode && console.log(x);
+      return x;
+    };
     return [
       new VirtualModulesPlugin({
-        [opts.server.rootComponentModule]: [
-          `import ServerRoot from ${JSON.stringify(
-            opts.user.rootComponentModule
-          )};`,
-          `export default ServerRoot;`,
-        ].join("\n"),
-        [opts.server.pathsModule]: [
-          `export { pathToParams, paramsToPath } from ${JSON.stringify(
-            opts.user.pathsModule
-          )};`,
-        ].join("\n"),
+        [opts.server.genratedRoutesModule]: teeLog(
+          `export default ${generateRoutesExport(parsedRoutes)};`
+        ),
       }),
     ];
   };
@@ -186,6 +211,7 @@ export const build = async ({
   };
   await runWebpack(analysisConfig);
 
+  console.log("analysis context");
   console.log(analysisCtx);
 
   // =================
@@ -265,10 +291,10 @@ export const build = async ({
         {
           // assign modules to layers
           oneOf: [
-            {
-              test: REACT_MODULES_REGEX,
-              layer: LAYERS.shared,
-            },
+            // {
+            //   test: REACT_MODULES_REGEX,
+            //   layer: LAYERS.shared,
+            // },
             {
               test: opts.server.rscModule,
               layer: LAYERS.rsc,
@@ -291,12 +317,12 @@ export const build = async ({
         {
           // assign import conditions per layer
           oneOf: [
-            {
-              issuerLayer: LAYERS.shared,
-              resolve: {
-                conditionNames: serverImportConditions,
-              },
-            },
+            // {
+            //   issuerLayer: LAYERS.shared,
+            //   resolve: {
+            //     conditionNames: serverImportConditions,
+            //   },
+            // },
             {
               issuerLayer: LAYERS.ssr,
               resolve: {
@@ -316,153 +342,8 @@ export const build = async ({
     },
     plugins: [
       ...sharedPlugins(),
-      new NormalModuleReplacementPlugin(
-        MODULE_EXTENSIONS_REGEX,
-        (resolveData /*: ResolveData */) => {
-          const originalResource = resolveData.createData.resource;
-
-          if (analysisCtx.getTypeForResource(originalResource) === "client") {
-            // console.log("replacement", resolveData);
-            const isSSR = resolveData.contextInfo.issuerLayer === LAYERS.ssr;
-            const newResource = isSSR
-              ? getVirtualPathSSR(originalResource)
-              : getVirtualPathProxy(originalResource);
-
-            const label = `(${isSSR ? "ssr" : "proxy"})`;
-            console.log(
-              `${label} preparing replacement: `,
-              resolveData.createData.resource
-            );
-            console.log(
-              `${label} issued from: ${resolveData.contextInfo.issuer} (${resolveData.contextInfo.issuerLayer})`
-            );
-            console.log(`${label} rewriting request to`, newResource);
-            // console.log(resolveData);
-            console.log();
-
-            resolveData.request = newResource;
-            resolveData.createData.request =
-              resolveData.createData.request.replace(
-                originalResource,
-                newResource
-              );
-            resolveData.createData.resource = newResource;
-            resolveData.createData.userRequest = newResource;
-            // console.log(resolveData);
-          }
-        }
-      ),
-      new VirtualModulesPlugin({
-        ...Object.fromEntries(
-          [...analysisCtx.modules.client.entries()].map(([resource, mod]) => {
-            const virtualPath = getVirtualPathSSR(resource);
-            const source = mod.originalSource()!.buffer().toString("utf-8");
-            console.log(
-              "VirtualModule (ssr):" + virtualPath,
-              "\n" + source + "\n"
-            );
-            return [virtualPath, source];
-          })
-        ),
-        ...Object.fromEntries(
-          [...analysisCtx.modules.client.entries()].map(([resource]) => {
-            const virtualPath = getVirtualPathProxy(resource);
-            const source = createProxyModule({
-              resource,
-              exports: analysisCtx.exports.client.get(resource)!,
-            });
-            console.log(
-              "VirtualModule (proxy): " + virtualPath,
-              "\n" + source + "\n"
-            );
-            return [virtualPath, source];
-          })
-        ),
-      }),
-      function AddSSRDependency(compiler) {
-        const pluginName = "AddSSRDependency";
-        const SSR_CHUNK_NAME = "ssr[index]";
-
-        let clientFileNameFound = false;
-
-        const dependencies = Webpack.dependencies;
-
-        class ClientReferenceDependency extends dependencies.ModuleDependency {
-          constructor(request: string) {
-            super(request);
-          }
-
-          get type(): string {
-            return "client-reference";
-          }
-        }
-
-        compiler.hooks.thisCompilation.tap(
-          pluginName,
-          (compilation, { normalModuleFactory }) => {
-            compilation.dependencyFactories.set(
-              ClientReferenceDependency,
-              normalModuleFactory
-            );
-            compilation.dependencyTemplates.set(
-              ClientReferenceDependency,
-              new dependencies.NullDependency.Template()
-            );
-
-            tapParserJS(normalModuleFactory, pluginName, (parser) => {
-              parser.hooks.program.tap(pluginName, () => {
-                const module = parser.state.module;
-
-                if (module.resource !== rsdwSSRClientFileName) {
-                  return;
-                }
-
-                clientFileNameFound = true;
-
-                for (const [
-                  clientModuleResource,
-                ] of analysisCtx.modules.client.entries()) {
-                  const dep = new ClientReferenceDependency(
-                    // this kicks off the imports for some SSR modules, so they might not go through
-                    // our SSR/proxy resolution hacks in NormalModuleReplacementPlugin
-                    getVirtualPathSSR(clientModuleResource)
-                  );
-
-                  const block = new AsyncDependenciesBlock(
-                    {
-                      name: SSR_CHUNK_NAME,
-                    },
-                    undefined,
-                    dep.request
-                  );
-
-                  block.addDependency(dep);
-                  module.addBlock(block);
-                }
-              });
-            });
-          }
-        );
-
-        compiler.hooks.make.tap(pluginName, (compilation) => {
-          compilation.hooks.processAssets.tap(
-            {
-              name: pluginName,
-              stage: Compilation.PROCESS_ASSETS_STAGE_REPORT,
-            },
-            function () {
-              if (clientFileNameFound === false) {
-                compilation.warnings.push(
-                  new WebpackError(
-                    `Client runtime at ${rsdwSSRClientImportName} was not found.`
-                  )
-                );
-                return;
-              }
-            }
-          );
-        });
-      },
+      ...moduleReplacements(analysisCtx),
+      createSSRDependencyPlugin(analysisCtx),
       new RSCServerPlugin({
         // ctx,
         ssrManifestFromClient: ssrManifestFromRSDW,
@@ -501,12 +382,12 @@ const createProxyModule = ({
 
   const manifestId = getManifestId(resource);
   const generatedCode = [
-    `import { createProxy } from ${JSON.stringify(CREATE_PROXY_MOD_PATH)};`,
+    `import { createProxy } from ${stringLiteral(CREATE_PROXY_MOD_PATH)};`,
     ``,
     `const proxy = /*@__PURE__*/ createProxy(${JSON.stringify(manifestId)});`,
   ];
   const proxyExpr = (exportName: string) =>
-    `(/*@__PURE__*/ proxy[${JSON.stringify(exportName)}])`;
+    `(/*@__PURE__*/ proxy[${stringLiteral(exportName)}])`;
 
   for (const exportName of exports) {
     const expr = proxyExpr(exportName);
@@ -527,12 +408,7 @@ type SSRManifest = {
 
 type SSRManifestActual = {
   [id: string]: {
-    [exportName: string]: {
-      id: string | number;
-      name: string;
-      chunks: (string | number)[];
-      async: boolean;
-    };
+    [exportName: string]: ClientReferenceMetadata;
   };
 };
 
@@ -669,6 +545,8 @@ class RSCServerPlugin {
   constructor(public options: RSCPluginOptions) {}
 
   apply(compiler: Compiler) {
+    const ensureString = (id: string | number): string => id + "";
+
     // Rewrite the SSR manifest that RSDW generated to match the real moduleIds
     compiler.hooks.make.tap(RSCServerPlugin.pluginName, (compilation) => {
       compilation.hooks.processAssets.tap(
@@ -679,8 +557,8 @@ class RSCServerPlugin {
         () => {
           type Rewrites = {
             [id: string]: {
-              moduleId: string | number;
-              chunkIds: (string | number)[];
+              moduleId: string;
+              chunkIds: string[];
             };
           };
           const ssrManifestSpecifierRewrite: Rewrites = {};
@@ -692,7 +570,8 @@ class RSCServerPlugin {
           compilation.chunkGroups.forEach((chunkGroup) => {
             const chunkIds = chunkGroup.chunks
               .map((c) => c.id)
-              .filter((id) => id !== null) as (string | number)[];
+              .filter((id) => id !== null)
+              .map((id) => ensureString(id!)); // we want numeric ids to be strings.
 
             const visitModule = (
               mod: Module & { modules?: Module[] },
@@ -721,7 +600,7 @@ class RSCServerPlugin {
                 getOriginalPathFromVirtual(mod.resource)
               ).href;
               ssrManifestSpecifierRewrite[currentIdInSSRManifest] = {
-                moduleId,
+                moduleId: ensureString(moduleId),
                 chunkIds,
               };
             };
@@ -755,13 +634,17 @@ class RSCServerPlugin {
                 };
                 finalSSRManifest[clientModuleId] ||= {};
                 finalSSRManifest[clientModuleId][exportName] = newExportInfo;
-                toRewrite.delete(exportInfo.specifier + "");
+                toRewrite.delete(ensureString(exportInfo.specifier));
               }
             }
           }
 
-          console.log("manifest rewrites", ssrManifestSpecifierRewrite);
-          console.log("final ssr manifest", finalSSRManifest);
+          if (LOG_OPTIONS.manifestRewrites) {
+            console.log("manifest rewrites", ssrManifestSpecifierRewrite);
+          }
+          if (LOG_OPTIONS.ssrManifest) {
+            console.log("final ssr manifest", finalSSRManifest);
+          }
 
           if (toRewrite.size > 0) {
             throw new Error(
@@ -780,3 +663,160 @@ class RSCServerPlugin {
     });
   }
 }
+
+function moduleReplacements(analysisCtx: RSCAnalysisCtx) {
+  // TODO: use .apply() instead of just putting these in the plugin array
+
+  const virtualModules: Record<string, string> = {};
+  for (const [resource, mod] of analysisCtx.modules.client.entries()) {
+    {
+      const virtualPath = getVirtualPathSSR(resource);
+      const source = mod.originalSource()!.buffer().toString("utf-8");
+      if (LOG_OPTIONS.generatedCode) {
+        console.log("VirtualModule (ssr):" + virtualPath, "\n" + source + "\n");
+      }
+      virtualModules[virtualPath] = source;
+    }
+    {
+      const virtualPath = getVirtualPathProxy(resource);
+      const source = createProxyModule({
+        resource,
+        exports: analysisCtx.exports.client.get(resource)!,
+      });
+      if (LOG_OPTIONS.generatedCode) {
+        console.log(
+          "VirtualModule (proxy): " + virtualPath,
+          "\n" + source + "\n"
+        );
+      }
+      virtualModules[virtualPath] = source;
+    }
+  }
+
+  return [
+    new VirtualModulesPlugin(virtualModules),
+    new NormalModuleReplacementPlugin(
+      MODULE_EXTENSIONS_REGEX,
+      (resolveData /*: ResolveData */) => {
+        const originalResource = resolveData.createData.resource;
+
+        if (analysisCtx.getTypeForResource(originalResource) === "client") {
+          // console.log("replacement", resolveData);
+          const isSSR = resolveData.contextInfo.issuerLayer === LAYERS.ssr;
+          const newResource = isSSR
+            ? getVirtualPathSSR(originalResource)
+            : getVirtualPathProxy(originalResource);
+
+          const label = `(${isSSR ? "ssr" : "proxy"})`;
+
+          if (LOG_OPTIONS.importRewrites) {
+            console.log(
+              `${label} preparing replacement: `,
+              resolveData.createData.resource
+            );
+            console.log(
+              `${label} issued from: ${resolveData.contextInfo.issuer} (${resolveData.contextInfo.issuerLayer})`
+            );
+            console.log(`${label} rewriting request to`, newResource);
+            // console.log(resolveData);
+            console.log();
+          }
+
+          resolveData.request = newResource;
+          resolveData.createData.request =
+            resolveData.createData.request.replace(
+              originalResource,
+              newResource
+            );
+          resolveData.createData.resource = newResource;
+          resolveData.createData.userRequest = newResource;
+          // console.log(resolveData);
+        }
+      }
+    ),
+  ];
+}
+
+const createSSRDependencyPlugin = (analysisCtx: RSCAnalysisCtx) =>
+  function AddSSRDependencyPlugin(compiler: Webpack.Compiler) {
+    const pluginName = "AddSSRDependency";
+    const SSR_CHUNK_NAME = "ssr[index]";
+
+    let clientFileNameFound = false;
+
+    class ClientReferenceDependency extends webpackDependencies.ModuleDependency {
+      constructor(request: string) {
+        super(request);
+      }
+
+      get type(): string {
+        return "client-reference";
+      }
+    }
+
+    compiler.hooks.thisCompilation.tap(
+      pluginName,
+      (compilation, { normalModuleFactory }) => {
+        compilation.dependencyFactories.set(
+          ClientReferenceDependency,
+          normalModuleFactory
+        );
+        compilation.dependencyTemplates.set(
+          ClientReferenceDependency,
+          new webpackDependencies.NullDependency.Template()
+        );
+
+        tapParserJS(normalModuleFactory, pluginName, (parser) => {
+          parser.hooks.program.tap(pluginName, () => {
+            const module = parser.state.module;
+
+            if (module.resource !== rsdwSSRClientFileName) {
+              return;
+            }
+
+            clientFileNameFound = true;
+
+            for (const [
+              clientModuleResource,
+            ] of analysisCtx.modules.client.entries()) {
+              const dep = new ClientReferenceDependency(
+                // this kicks off the imports for some SSR modules, so they might not go through
+                // our SSR/proxy resolution hacks in NormalModuleReplacementPlugin
+                getVirtualPathSSR(clientModuleResource)
+              );
+
+              const block = new AsyncDependenciesBlock(
+                {
+                  name: SSR_CHUNK_NAME,
+                },
+                undefined,
+                dep.request
+              );
+
+              block.addDependency(dep);
+              module.addBlock(block);
+            }
+          });
+        });
+      }
+    );
+
+    compiler.hooks.make.tap(pluginName, (compilation) => {
+      compilation.hooks.processAssets.tap(
+        {
+          name: pluginName,
+          stage: Compilation.PROCESS_ASSETS_STAGE_REPORT,
+        },
+        function () {
+          if (clientFileNameFound === false) {
+            compilation.warnings.push(
+              new WebpackError(
+                `Client runtime at ${rsdwSSRClientImportName} was not found.`
+              )
+            );
+            return;
+          }
+        }
+      );
+    });
+  };

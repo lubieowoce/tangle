@@ -1,54 +1,49 @@
 import type { Readable } from "node:stream";
 import { renderToPipeableStream } from "react-dom/server";
 
-import {
-  AnyServerRootProps,
-  ASSETS_ROUTE,
-  throwOnMissingProperty,
-} from "./shared";
+import { ASSETS_ROUTE } from "./shared";
 import {
   createFromNodeStream,
   SSRManifest,
 } from "react-server-dom-webpack/client.node";
 
+import { ReactNode } from "react";
 import {
-  ReactNode,
-  Suspense,
-  // @ts-ignore  bad type definitions
-  use,
-} from "react";
-import { HTMLPage } from "./page";
-import { createDummyNavigation, NavigationContext } from "./navigation-context";
+  createStaticRouter,
+  GlobalRouterContext,
+  SegmentContext,
+  createEmptyLayoutCache,
+  parsePath,
+} from "./router/index.client";
+import { Use } from "./support/use";
 
 export type ScriptsManifest = {
   main: string;
 };
 
 export function getSSRDomStream(
-  props: AnyServerRootProps,
+  path: string,
   rscStream: Readable,
   scriptsManifest: ScriptsManifest,
   webpackMapForSSR: NonNullable<SSRManifest>
 ) {
   const clientTreeThenable = createFromNodeStream<ReactNode>(
     rscStream,
-    throwOnMissingProperty(webpackMapForSSR, "webpackMapForSSR [ssr]")
+    webpackMapForSSR
   );
-
-  const ServerComponentWrapper = () => {
-    console.log("Rendering ServerComponentWrapper");
-    return use(clientTreeThenable);
-  };
 
   console.log("SSRing response");
   const domStream = renderToPipeableStream(
-    <NavigationContext.Provider value={createDummyNavigation(props)}>
-      <HTMLPage>
-        <Suspense>
-          <ServerComponentWrapper />
-        </Suspense>
-      </HTMLPage>
-    </NavigationContext.Provider>,
+    <GlobalRouterContext.Provider value={createStaticRouter(path)}>
+      <SegmentContext.Provider
+        value={{
+          cacheNode: createEmptyLayoutCache(),
+          remainingPath: parsePath(path),
+        }}
+      >
+        <Use thenable={clientTreeThenable} />
+      </SegmentContext.Provider>
+    </GlobalRouterContext.Provider>,
     {
       bootstrapScripts: [`${ASSETS_ROUTE}/${scriptsManifest.main}`],
       // onShellReady() {

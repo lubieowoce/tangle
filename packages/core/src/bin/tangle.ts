@@ -1,7 +1,8 @@
 #!/usr/bin/env node
-import { spawn } from "child_process";
+import { spawn, ChildProcess } from "child_process";
 import chokidar, { WatchOptions } from "chokidar";
 import path from "node:path";
+import fs from "node:fs";
 
 import { build } from "../build/build";
 
@@ -12,17 +13,13 @@ const main = async () => {
     throw new Error("No command given");
   }
   const appPath = process.cwd();
+
   switch (command) {
     case "dev": {
-      const [, serverRoot = "src/index.tsx", paths = "src/paths.ts"] = args;
       const runDev = async () => {
-        const { server } = await build({
-          appPath,
-          serverRoot,
-          paths,
-        });
+        const { server } = await build({ appPath });
         return () => {
-          const proc = spawnServer({ path: server.path, watchDir: appPath });
+          const proc = spawnServer({ path: server.path });
           return () => proc.kill();
         };
       };
@@ -31,6 +28,32 @@ const main = async () => {
         ignored: path.join(appPath, "dist"),
       });
     }
+
+    case "build": {
+      const { server } = await build({ appPath });
+      console.log(server.path);
+      return;
+    }
+
+    case "start": {
+      const assumedServerOutputRelative = "dist/server/main.js";
+      const assumedServerOutput = path.join(
+        appPath,
+        assumedServerOutputRelative
+      );
+      if (!fs.existsSync(assumedServerOutput)) {
+        console.error(
+          `No build output found.\n(expected '${assumedServerOutput}')`
+        );
+        process.exit(1);
+      }
+      const serverProc = spawnServer({ path: assumedServerOutput });
+      return awaitProcess(serverProc).catch((err) => {
+        console.error(err);
+        process.exit(1);
+      });
+    }
+
     default: {
       throw new Error("Unknown command: " + command);
     }
@@ -83,7 +106,7 @@ const runWithReload = async (
   });
 };
 
-const spawnServer = (opts: { path: string; watchDir: string }) => {
+const spawnServer = (opts: { path: string }) => {
   // return new Promise<void>((resolve, reject) => {
   const proc = spawn(process.argv[0], [opts.path], {
     stdio: "inherit",
@@ -99,19 +122,22 @@ const spawnServer = (opts: { path: string; watchDir: string }) => {
     },
   });
   return proc;
+};
 
-  // proc.on("exit", (code) => {
-  //   if (code !== 0) {
-  //     return reject(
-  //       Error(`server process exited with nonzero exit code: ${code}`)
-  //     );
-  //   }
-  //   return resolve();
-  // });
-  // proc.on("error", (err) => {
-  //   reject(err);
-  // });
-  // });
+const awaitProcess = (proc: ChildProcess) => {
+  return new Promise<void>((resolve, reject) => {
+    proc.on("exit", (code) => {
+      if (code !== 0) {
+        return reject(
+          Error(`server process exited with nonzero exit code: ${code}`)
+        );
+      }
+      return resolve();
+    });
+    proc.on("error", (err) => {
+      reject(err);
+    });
+  });
 };
 
 main();

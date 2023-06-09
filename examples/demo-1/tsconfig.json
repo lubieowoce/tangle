@@ -1,7 +1,7 @@
 {
   "include": ["src/**/*.ts", "src/**/*.tsx"],
   "compilerOptions": {
-    "moduleResolution": "node",
+    "moduleResolution": "bundler",
     "strict": true,
     "target": "ESNext",
     "module": "ES2022",

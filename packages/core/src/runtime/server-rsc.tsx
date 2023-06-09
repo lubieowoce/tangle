@@ -3,18 +3,19 @@ import {
   ClientManifest,
 } from "react-server-dom-webpack/server.node";
 
-import { AnyServerRootProps, throwOnMissingProperty } from "./shared";
-
-import ServerRoot from "./user/server-root";
+import { ServerRouter } from "./root";
 import { createNoopStream } from "./utils";
+import { ParsedPath } from "./router/index.server";
 
-export function renderRSCRoot(
-  props: AnyServerRootProps,
+export async function renderRSCRoot(
+  path: string,
+  existingState: ParsedPath | undefined,
   webpackMapForClient: ClientManifest
 ) {
-  const elem = <ServerRoot {...props} />;
-  return renderToPipeableStream(
-    elem,
-    throwOnMissingProperty(webpackMapForClient, "webpackMapForClient [rsc]")
-  ).pipe(createNoopStream());
+  // @ts-expect-error  async component
+  const tree = <ServerRouter path={path} existingState={existingState} />;
+
+  return renderToPipeableStream(tree, webpackMapForClient).pipe(
+    createNoopStream()
+  );
 }

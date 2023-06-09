@@ -1,22 +1,26 @@
 "use client";
 import { FormEvent, useState } from "react";
-import { NavigateOptions, useNavigationContext } from "@owoce/tangle";
+import { useNavigationContext } from "@owoce/tangle";
 import { Card } from "./common";
 import { colorSets } from "./theme";
+
+// TODO: get server actions working
+
+const SUBMIT_URL = `/`;
 
 export function ClientInputForm({ input: initialInput }: { input: string }) {
   const { navigate, isNavigating } = useNavigationContext();
   const [inputState, setInputState] = useState(initialInput);
 
-  const handleSubmit = (opts: Partial<NavigateOptions>) => (e: FormEvent) => {
+  const handleSubmit = (e: FormEvent) => {
     e.preventDefault();
     e.stopPropagation();
-    navigate({ input: inputState }, { noCache: true, ...opts });
+    navigate(`${SUBMIT_URL}?input=${encodeURIComponent(inputState)}`);
   };
   return (
     <Card {...colorSets.client}>
       <form
-        onSubmit={handleSubmit({ instant: false })}
+        onSubmit={handleSubmit}
         style={{
           display: "flex",
           gap: "16px",
@@ -30,9 +34,6 @@ export function ClientInputForm({ input: initialInput }: { input: string }) {
           onChange={(e) => setInputState(e.target.value)}
         />
         <input type="submit" value="Submit" />
-        <button type="button" onClick={handleSubmit({ instant: true })}>
-          Submit (no transition)
-        </button>
         {isNavigating && "Loading..."}
       </form>
     </Card>

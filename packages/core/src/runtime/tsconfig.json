@@ -4,6 +4,7 @@
     "strict": true,
     "outDir": "../../dist/runtime",
     "declaration": true,
+    "declarationMap": true,
     "target": "ESNext",
     "module": "ES2022",
     "lib": ["es2022", "DOM"],
@@ -11,6 +12,7 @@
     "esModuleInterop": true,
     "skipLibCheck": true,
     "jsx": "react-jsx",
-    "typeRoots": ["../../../../types", "node_modules/@types"]
+    "moduleResolution": "bundler",
+    "types": ["react/next"]
   }
 }

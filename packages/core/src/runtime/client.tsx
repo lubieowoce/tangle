@@ -1,34 +1,20 @@
-import {
-  PropsWithChildren,
-  startTransition,
-  Suspense,
-  // @ts-ignore
-  use,
-  useMemo,
-  useState,
-  useTransition,
-  type ReactNode,
-} from "react";
+import { startTransition, type ReactNode } from "react";
 import { hydrateRoot } from "react-dom/client";
+import { createFromReadableStream } from "react-server-dom-webpack/client.browser";
 import {
-  createFromFetch,
-  createFromReadableStream,
-} from "react-server-dom-webpack/client.browser";
-import type { Thenable } from "react__shared/ReactTypes";
-import { HTMLPage } from "./page";
-import {
-  getKey,
-  NavigateOptions,
-  NavigationContext,
-  NavigationContextValue,
-  useNavigationContext,
-} from "./navigation-context";
-import { AnyServerRootProps, FLIGHT_REQUEST_HEADER } from "./shared";
-import { paramsToPath, pathToParams } from "./user/paths";
+  ClientRouter,
+  createEmptyLayoutCache,
+  getPathFromDOMState,
+} from "./router/index.client";
+import { Use } from "./support/use";
+import { __DEV__ } from "./support/is-dev";
 
-declare var __RSC_CHUNKS__: string[];
+type InitialChunks = string[] & { isComplete?: boolean };
 
-const intoStream = (initialChunks: string[]) => {
+// eslint-disable-next-line no-var
+declare var __RSC_CHUNKS__: InitialChunks;
+
+const getStreamFromInitialChunks = (initialChunks: InitialChunks) => {
   // probably not the best way to do it (idk streams too well)
   // but it works so it's probably fine for now
   const stream = new TransformStream<Uint8Array, Uint8Array>();
@@ -39,21 +25,68 @@ const intoStream = (initialChunks: string[]) => {
   const encoder = new TextEncoder();
 
   const onChunkReceived = (chunk: string) => {
-    writer.write(encoder.encode(chunk));
+    return writer.write(encoder.encode(chunk));
   };
+
+  let isComplete = initialChunks.isComplete ?? false;
+
+  const onStreamFinished = async () => {
+    isComplete = true;
+    await writer.close();
+    if (!__DEV__) {
+      // we don't need these anymore, so we can free the memory.
+      clearArray(__RSC_CHUNKS__);
+    }
+  };
+
+  // process everything that got written before this script loaded.
+
   for (const chunk of initialChunks) {
     console.log("processing initial RSC chunk\n", chunk);
+    // TODO: could the `await` cause a race here?
+    // i don't think so, because the chunks will still get written into the same array,
+    // so i think we should process them here just fine. but who knows!
+
+    // await onChunkReceived(chunk);
     onChunkReceived(chunk);
   }
 
-  initialChunks.push = ((chunk: string) => {
-    console.log("received RSC chunk after init\n", chunk);
-    onChunkReceived(chunk);
-  }) as typeof Array.prototype.push;
+  if (initialChunks.isComplete) {
+    // the server told us that no more chunks are coming,
+    // so we're done here.
+    onStreamFinished();
+  } else {
+    // the server didn't set the `isComplete` flag yet,
+    // so more chunks are coming.
+    // intercept the Array.push and put them into the stream as well.
+    Object.defineProperties(initialChunks, {
+      push: {
+        value: ((chunk: string) => {
+          console.log("received RSC chunk after init\n", chunk);
+          Array.prototype.push.call(initialChunks, chunk); // mostly for debugging
+          onChunkReceived(chunk);
+        }) as typeof Array.prototype.push,
+      },
+      isComplete: {
+        get() {
+          return isComplete;
+        },
+        set(_) {
+          // there's no way to await a set but we don't really care
+          onStreamFinished();
+        },
+      },
+    });
+  }
+
   return stream.readable;
 };
 
-// const root = createRoot(document.getElementById(ROOT_DOM_NODE_ID)!);
+const clearArray = (arr: any[]) => {
+  while (arr.length > 0) {
+    arr.pop();
+  }
+};
 
 const onDocumentLoad = (fn: () => void) => {
   if (document.readyState !== "loading") {
@@ -65,92 +98,22 @@ const onDocumentLoad = (fn: () => void) => {
   }
 };
 
-const createCache = () => new Map<string, Thenable<ReactNode>>();
-type ServerResponseCache = ReturnType<typeof createCache>;
-
-const ClientNavigationProvider = ({
-  cache,
-  initialProps,
-  children,
-}: PropsWithChildren<{
-  cache: ServerResponseCache;
-  initialProps: AnyServerRootProps;
-}>) => {
-  const [key, setKey] = useState(() => getKey(initialProps));
-  const [isNavigating, startTransition] = useTransition();
-  // TODO: handle popState, allow pushState
-  const navigation = useMemo<NavigationContextValue>(
-    () => ({
-      key,
-      isNavigating,
-      navigate(
-        newProps,
-        { noCache = false, instant = false }: NavigateOptions = {}
-      ) {
-        const doNavigate = () => {
-          let newKey = getKey(newProps);
-          if (noCache) {
-            newKey += "-" + Date.now();
-          }
-          setKey(newKey);
-
-          const newPath = paramsToPath(newProps);
-          window.history.replaceState(null, "", newPath);
-
-          if (cache.has(newKey)) return;
-          cache.set(
-            newKey,
-            createFromFetch(
-              fetch(newPath, { headers: { [FLIGHT_REQUEST_HEADER]: "1" } }),
-              {}
-            )
-          );
-        };
-        if (instant) {
-          doNavigate();
-        } else {
-          startTransition(doNavigate);
-        }
-      },
-    }),
-    [key, isNavigating, cache]
-  );
-  return (
-    <NavigationContext.Provider value={navigation}>
-      {children}
-    </NavigationContext.Provider>
-  );
-};
-
-const ServerComponentWrapper = ({ cache }: { cache: ServerResponseCache }) => {
-  const { key } = useNavigationContext();
-  return use(cache.get(key));
-};
-
 const init = async () => {
   console.log("client-side init!");
-  const initialStream = intoStream(__RSC_CHUNKS__);
+  const initialStream = getStreamFromInitialChunks(__RSC_CHUNKS__);
   const initialServerTreeThenable =
     createFromReadableStream<ReactNode>(initialStream);
-  const cache = createCache();
-
-  const initialProps = pathToParams(new URL(window.location.href));
-  const initialKey = getKey(initialProps);
-  cache.set(initialKey, initialServerTreeThenable);
-
-  console.log(cache);
+  const layoutCache = createEmptyLayoutCache();
+  const initialPath = getPathFromDOMState();
+  // cache.set(initialKey, initialServerTreeThenable);
 
   onDocumentLoad(() => {
     startTransition(() => {
       hydrateRoot(
         document,
-        <ClientNavigationProvider cache={cache} initialProps={initialProps}>
-          <HTMLPage>
-            <Suspense>
-              <ServerComponentWrapper cache={cache} />
-            </Suspense>
-          </HTMLPage>
-        </ClientNavigationProvider>
+        <ClientRouter initialCache={layoutCache} initialPath={initialPath}>
+          <Use thenable={initialServerTreeThenable} debugLabel={initialPath} />
+        </ClientRouter>
       );
     });
   });
