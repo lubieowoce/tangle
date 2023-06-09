@@ -106,18 +106,22 @@ const useDebugCache = !__DEV__
   ? (_cache: LayoutCacheNode) => {}
   : useDebugCacheReal;
 
+export type ClientRouterProps = {
+  initialCache: LayoutCacheNode;
+  initialPath: string;
+  globalErrorFallback?: ReactNode;
+  globalErrorIncludeDocument?: boolean;
+  fetchSubtree: FetchSubtreeFn;
+};
+
 export const ClientRouter = ({
   initialCache,
   initialPath,
   globalErrorFallback,
+  globalErrorIncludeDocument,
   fetchSubtree,
   children,
-}: PropsWithChildren<{
-  initialCache: LayoutCacheNode;
-  initialPath: string;
-  globalErrorFallback?: ReactNode;
-  fetchSubtree: FetchSubtreeFn;
-}>) => {
+}: PropsWithChildren<ClientRouterProps>) => {
   const [routerState, setRouterState] = useState<RouterState>(() =>
     createRouterState(initialPath, initialCache)
   );
@@ -286,7 +290,10 @@ export const ClientRouter = ({
           remainingPath: routerState.state,
         }}
       >
-        <GlobalErrorBoundary errorFallback={globalErrorFallback}>
+        <GlobalErrorBoundary
+          includeDocument={globalErrorIncludeDocument}
+          errorFallback={globalErrorFallback}
+        >
           {children}
         </GlobalErrorBoundary>
       </SegmentContext.Provider>
@@ -296,8 +303,22 @@ export const ClientRouter = ({
 
 function GlobalErrorBoundary({
   errorFallback,
+  includeDocument = true,
   children,
-}: PropsWithChildren<{ errorFallback?: ReactNode }>) {
+}: PropsWithChildren<{
+  errorFallback?: ReactNode;
+  includeDocument?: boolean;
+}>) {
+  const el = (
+    <SegmentErrorBoundary fallback={errorFallback ?? <RootErrorFallback />}>
+      {children}
+    </SegmentErrorBoundary>
+  );
+
+  if (!includeDocument) {
+    return el;
+  }
+
   // NOTE: this sits above the root layout, so we need the HTML boilerplate
   // -- otherwise we get issues about missing <body> etc.
   // This isn't great, because we're basically blowing away the whole document,
@@ -308,11 +329,7 @@ function GlobalErrorBoundary({
         <meta charSet="utf-8" />
         <meta name="viewport" content="width=device-width, initial-scale=1" />
       </head>
-      <body>
-        <SegmentErrorBoundary fallback={errorFallback ?? <RootErrorFallback />}>
-          {children}
-        </SegmentErrorBoundary>
-      </body>
+      <body>{el}</body>
     </html>
   );
 }
@@ -512,16 +529,16 @@ export const RouterSegment = ({
   );
 };
 
-type FetchSubtreeFn = (args: RSCFetchArgs) => Thenable<ReactNode>;
+export type FetchSubtreeFn = (args: FetchSubtreeArgs) => Thenable<ReactNode>;
 
-type RSCFetchArgs = {
+export type FetchSubtreeArgs = {
   rawPath: string;
   existingSegments: ParsedPath;
 };
 
 function fetchSubtreeIntoNode(
   cacheNode: LayoutCacheNode,
-  toFetch: RSCFetchArgs,
+  toFetch: FetchSubtreeArgs,
   fetchSubtree: FetchSubtreeFn
 ) {
   const fetchedTreeThenable = fetchSubtree(toFetch);

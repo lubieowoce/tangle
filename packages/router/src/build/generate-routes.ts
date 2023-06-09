@@ -108,12 +108,12 @@ export const generateRoutesExport = (
     children: ${
       route.children
         ? arrayLiteral(
-            route.children.map((child) => generateRoutesExport(child), opts)
+            route.children.map((child) => generateRoutesExport(child, opts))
           )
         : literal(null)
     },
   }`;
 };
 
-const importLambdaDefault = (specifier: string) =>
+export const importLambdaDefault = (specifier: string) =>
   `() => import(/* webpackMode: "eager" */ ${stringLiteral(specifier)})`;

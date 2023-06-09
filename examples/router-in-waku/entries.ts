@@ -1,20 +1,18 @@
 import { defineEntries } from "waku/server";
 
 export default defineEntries(
-  // getEntry
-  async (id) => {
+  async function getEntry(id) {
     switch (id) {
-      case "App":
-        return import("./src/App.js");
+      case "ServerRouter":
+        return import("./src/server-router.js");
       default:
         return null;
     }
   },
-  // getBuilder
-  async () => {
+  async function getBuilder(_root, _unstable_renderForBuild) {
     return {
       "/": {
-        elements: [["App", { name: "Waku" }]],
+        elements: [["ServerRouter", { path: "/" }]],
       },
     };
   }
