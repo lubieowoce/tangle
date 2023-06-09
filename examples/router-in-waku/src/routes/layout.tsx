@@ -1,3 +1,5 @@
+// import "server-only"; // this should work, but crashes the build...
+
 import { Link } from "@owoce/tangle-router/client";
 import { PropsWithChildren } from "react";
 import { SmallCounter } from "../SmallCounter.js";
