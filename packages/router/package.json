@@ -1,0 +1,28 @@
+{
+  "name": "@owoce/tangle-router",
+  "version": "0.0.1",
+  "description": "An RSC-based nested router",
+  "author": "https://github.com/lubieowoce",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/lubieowoce/tangle/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/lubieowoce/tangle.git"
+  },
+  "homepage": "https://github.com/lubieowoce/tangle#readme",
+  "module": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsc",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint src/**"
+  },
+  "peerDependencies": {
+    "react": "^18.2.0"
+  },
+  "devDependencies": {
+    "@types/react": "18.2.5"
+  }
+}

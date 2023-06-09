@@ -8,7 +8,7 @@
   "scripts": {
     "example": "npm run -w examples/demo-1 dev",
     "example:prod": "NODE_ENV=production npm run -w examples/demo-1 dev",
-    "build": "turbo run build --filter './packages/core'",
+    "build": "turbo run build --filter './packages/core' --filter './packages/router'",
     "clean": "find . -name dist -type d -not -path './node_modules/*' -exec rm -rf {} +",
     "install-links": "npm ci"
   },
