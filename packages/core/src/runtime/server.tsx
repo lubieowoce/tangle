@@ -14,8 +14,8 @@ import { renderRSCRoot } from "./server-rsc";
 import { getSSRDomStream, ScriptsManifest } from "./server-ssr";
 import { catchAsync, createNoopStream } from "./utils";
 
-import type { ClientManifest } from "react-server-dom-webpack/server.node";
-import type { SSRManifest } from "react-server-dom-webpack/client.node";
+import type { ClientManifest } from "react-server-dom-webpack/server";
+import type { SSRManifest } from "react-server-dom-webpack/client";
 import type { Transform } from "node:stream";
 
 const CLIENT_ASSETS_DIR = path.resolve(__dirname, "../client");

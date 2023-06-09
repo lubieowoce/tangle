@@ -25,6 +25,7 @@
   "license": "MIT",
   "dependencies": {
     "chokidar": "^3.5.3",
+    "enhanced-resolve": "^5.14.1",
     "express": "^4.18.2",
     "micromatch": "^4.0.5",
     "react": "18.3.0-canary-910045696-20230607",

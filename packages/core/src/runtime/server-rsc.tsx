@@ -1,7 +1,7 @@
 import {
   renderToPipeableStream,
   ClientManifest,
-} from "react-server-dom-webpack/server.node";
+} from "react-server-dom-webpack/server";
 
 import { ServerRouter } from "./root";
 import { createNoopStream } from "./utils";

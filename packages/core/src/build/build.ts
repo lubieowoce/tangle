@@ -34,13 +34,10 @@ import {
   normalizeRoutes,
 } from "./routes/generate-routes";
 
+import { CachedInputFileSystem, ResolverFactory } from "enhanced-resolve";
+import fs from "fs";
+
 const rel = (p: string) => path.resolve(__dirname, p);
-
-const rsdwSSRClientImportName = "react-server-dom-webpack/client.node";
-// const clientImportName = "react-server-dom-webpack/client"; // TODO: handle others?
-const rsdwSSRClientFileName = require.resolve(rsdwSSRClientImportName);
-
-console.log({ rsdwSSRClientFileName });
 
 const getVirtualPathSSR = (p: string) =>
   p.replace(MODULE_EXTENSIONS_REGEX, ".__ssr__.$1"); // FIXME: kinda hacky... idk
@@ -53,16 +50,24 @@ const getVirtualPathProxy = (p: string) =>
 const getOriginalPathFromVirtual = (p: string) =>
   p.replace(/\.(__ssr__|__proxy__)\./, ".");
 
-// const REACT_MODULES_REGEX =
-//   /\/(react|react-server|react-dom|react-is|scheduler)\//;
-
 export type BuildReturn = { server: { path: string } };
 
 const LOG_OPTIONS = {
   importRewrites: false,
   generatedCode: false,
   manifestRewrites: false,
-  ssrManifest: true,
+  ssrManifest: false,
+  reactResolutions: false,
+};
+
+const IMPORT_CONDITIONS_CLIENT = ["browser", "import", "require", "webpack"];
+const IMPORT_CONDITIONS_SSR = ["node", "import", "require", "webpack"];
+const IMPORT_CONDITIONS_RSC = ["react-server", ...IMPORT_CONDITIONS_SSR];
+
+const IMPORT_CONDITIONS = {
+  client: IMPORT_CONDITIONS_CLIENT,
+  ssr: IMPORT_CONDITIONS_SSR,
+  rsc: IMPORT_CONDITIONS_RSC,
 };
 
 export const build = async ({
@@ -112,20 +117,6 @@ export const build = async ({
     minimize: false, // terser is breaking with `__name is not defined` for some reason...
   };
 
-  // Force all user code to use OUR version of react.
-  // TODO: require.resolve() might be wonky w.r.t import conditions... not sure
-  const reactResolutions = Object.fromEntries(
-    [
-      "react",
-      "react/jsx-runtime",
-      "react/jsx-dev-runtime",
-      "react-dom",
-      "react-dom/client",
-      "react-dom/server",
-    ].map((name) => [`${name}$`, require.resolve(name)])
-  );
-  console.log("forced react resolutions:", reactResolutions);
-
   const shared: Configuration = {
     mode: BUILD_MODE,
     // devtool: false,
@@ -134,7 +125,6 @@ export const build = async ({
       modules: [appPath, "node_modules"],
       extensions: MODULE_EXTENSIONS_LIST,
       fullySpecified: false, // annoying to deal with
-      alias: reactResolutions,
     },
     module: {
       rules: [
@@ -187,6 +177,8 @@ export const build = async ({
     entry: { main: opts.server.entry },
     resolve: {
       ...shared.resolve,
+      // TODO: do we need react aliases here?
+      // could we be missing some import conditions or something?
     },
     module: {
       ...shared.module,
@@ -222,12 +214,17 @@ export const build = async ({
     [...analysisCtx.modules.client.keys()];
 
   const INTERMEDIATE_SSR_MANIFEST = "ssr-manifest-intermediate.json";
+  const reactResolutionsClient = await getReactPackagesResolutions({
+    importer: opts.client.entry,
+    conditionNames: IMPORT_CONDITIONS.client,
+  });
 
   const clientConfig: Configuration = {
     ...shared,
     entry: opts.client.entry,
     resolve: {
       ...shared.resolve,
+      alias: reactResolutionsClient.aliases,
     },
     module: {
       ...shared.module,
@@ -277,7 +274,46 @@ export const build = async ({
 
   console.log("building server...");
 
-  const serverImportConditions = ["node", "import", "require"];
+  const reactResolutionsServer = {
+    ssr: await getReactPackagesResolutions({
+      importer: opts.server.ssrModule,
+      conditionNames: IMPORT_CONDITIONS.ssr,
+    }),
+    rsc: await getReactPackagesResolutions({
+      importer: opts.server.rscModule,
+      conditionNames: IMPORT_CONDITIONS.rsc,
+    }),
+  };
+
+  if (LOG_OPTIONS.reactResolutions) {
+    console.log("react resolutions and aliases", {
+      client: reactResolutionsClient,
+      ...reactResolutionsServer,
+    });
+  }
+
+  // module.rules for server stuff.
+  // For some reason, we need to add this onto absolutely every `rules` entry,
+  // otherwise the `conditionNames` don't come through
+  // and `react-server-dom-webpack/server` is resolved incorrectly.
+  // NOTE:
+  //  technically we've got some redundancy here, because `aliases` already contains a resolved RSDW.
+  //  but the `conditionNames` still need to be set correctly for other packages,
+  //  so we need both.
+  const SERVER_MODULE_RULES = {
+    ssr: {
+      resolve: {
+        conditionNames: IMPORT_CONDITIONS.ssr,
+        alias: reactResolutionsServer.ssr.aliases,
+      },
+    },
+    rsc: {
+      resolve: {
+        conditionNames: IMPORT_CONDITIONS.rsc,
+        alias: reactResolutionsServer.rsc.aliases,
+      },
+    },
+  };
 
   const serverConfig: Configuration = {
     ...shared,
@@ -291,19 +327,17 @@ export const build = async ({
         {
           // assign modules to layers
           oneOf: [
-            // {
-            //   test: REACT_MODULES_REGEX,
-            //   layer: LAYERS.shared,
-            // },
             {
               test: opts.server.rscModule,
               layer: LAYERS.rsc,
+              ...SERVER_MODULE_RULES.rsc,
             },
             {
               // everything imported from the main SSR module (including RSDW/client) goes into the SSR layer,
               // so that our NormalModuleReplacement function can rewrite the imports to `.__ssr__.EXT`...
               test: opts.server.ssrModule,
               layer: LAYERS.ssr,
+              ...SERVER_MODULE_RULES.ssr,
             },
             {
               // ... and we make it transitive, so that it propagates through imports.
@@ -311,29 +345,20 @@ export const build = async ({
               // TODO: figure out if we can solve that somehow
               issuerLayer: LAYERS.ssr,
               layer: LAYERS.ssr,
+              ...SERVER_MODULE_RULES.ssr,
             },
           ],
         },
         {
           // assign import conditions per layer
           oneOf: [
-            // {
-            //   issuerLayer: LAYERS.shared,
-            //   resolve: {
-            //     conditionNames: serverImportConditions,
-            //   },
-            // },
             {
               issuerLayer: LAYERS.ssr,
-              resolve: {
-                conditionNames: serverImportConditions,
-              },
+              ...SERVER_MODULE_RULES.ssr,
             },
             {
               issuerLayer: LAYERS.rsc,
-              resolve: {
-                conditionNames: ["react-server", ...serverImportConditions],
-              },
+              ...SERVER_MODULE_RULES.rsc,
             },
           ],
         },
@@ -343,7 +368,12 @@ export const build = async ({
     plugins: [
       ...sharedPlugins(),
       ...moduleReplacements(analysisCtx),
-      createSSRDependencyPlugin(analysisCtx),
+      createSSRDependencyPlugin({
+        analysisCtx,
+        rsdwSSRClientFilePaths: RSDW_CLIENT_SPECIFIERS.map(
+          (specifier) => reactResolutionsServer.ssr.resolutions[specifier]
+        ),
+      }),
       new RSCServerPlugin({
         // ctx,
         ssrManifestFromClient: ssrManifestFromRSDW,
@@ -365,6 +395,103 @@ export const build = async ({
 
   return { server: { path: path.join(opts.server.destDir, "main.js") } };
 };
+
+//======================
+// React resolutions
+//======================
+
+type ResolveAliasConfigObject = Required<
+  Configuration["resolve"] & Record<string, any>
+>["alias"] &
+  Record<string, any>;
+
+const RSDW_CLIENT_SPECIFIERS = [
+  "react-server-dom-webpack/client",
+  "react-server-dom-webpack/client.node",
+  "react-server-dom-webpack/client.edge",
+  "react-server-dom-webpack/client.browser",
+] as const;
+
+const REACT_PACKAGES = [
+  "react",
+  "react/jsx-runtime",
+  "react/jsx-dev-runtime",
+  "react-dom",
+  "react-dom/client",
+  "react-dom/server",
+  "react-server-dom-webpack/server",
+  "react-server-dom-webpack/server.node",
+  "react-server-dom-webpack/server.edge",
+  "react-server-dom-webpack/server.browser",
+  ...RSDW_CLIENT_SPECIFIERS,
+] as const;
+
+type ReactPackagesResolutions = Record<(typeof REACT_PACKAGES)[number], string>;
+
+/** Get the config necessary to ensure that the bundle uses *our* version of react
+ * over whatever the user has.
+ *
+ * NOTE: This can't just be a `require.resolve` call,
+ * because we need to take `conditionNames` into account. */
+const getReactPackagesResolutions = async ({
+  importer,
+  conditionNames,
+}: {
+  importer: string;
+  conditionNames: string[];
+}): Promise<{
+  resolutions: ReactPackagesResolutions;
+  aliases: ResolveAliasConfigObject;
+}> => {
+  const resolver = ResolverFactory.createResolver({
+    fileSystem: new CachedInputFileSystem(fs, 4000),
+    conditionNames,
+  });
+
+  const resolve = (specifier: string): Promise<string | false | undefined> =>
+    new Promise((res, rej) => {
+      resolver.resolve(
+        {},
+        path.dirname(importer),
+        specifier,
+        {},
+        (err, filepath) => (err ? rej(err) : res(filepath))
+      );
+    });
+
+  const resolutions = Object.fromEntries(
+    await Promise.all(
+      REACT_PACKAGES.map(async (specifier) => {
+        const resolved = await resolve(specifier);
+        if (typeof resolved !== "string") {
+          throw new Error(
+            `Could not resolve '${specifier}' with conditions ${JSON.stringify(
+              conditionNames
+            )}`
+          );
+        }
+        return [specifier, resolved] as const;
+      })
+    )
+  ) as ReactPackagesResolutions;
+
+  const aliases = Object.fromEntries(
+    Object.entries(resolutions)
+      .map(([specifier, resolved]) =>
+        specifier.startsWith("react-server-dom-webpack")
+          ? undefined
+          : ([`${specifier}$`, resolved] as const)
+      )
+      .filter((e) => !!e)
+      .map((e) => e!)
+  );
+
+  return { resolutions, aliases };
+};
+
+//=========================
+// Module proxy codegen
+//=========================
 
 const getManifestId = (resource: string) => pathToFileURL(resource);
 
@@ -399,6 +526,10 @@ const createProxyModule = ({
   }
   return generatedCode.join("\n");
 };
+
+//=========================
+// Initial bundle analysis
+//=========================
 
 type SSRManifest = {
   [id: string]: {
@@ -523,15 +654,9 @@ class RSCAnalysisPlugin {
   }
 }
 
-const tapParserJS = (
-  nmf: /* Webpack.NormalModuleFactory */ any,
-  name: string,
-  onParse: (parser: Webpack.javascript.JavascriptParser) => void
-) => {
-  nmf.hooks.parser.for("javascript/auto").tap(name, onParse);
-  nmf.hooks.parser.for("javascript/dynamic").tap(name, onParse);
-  nmf.hooks.parser.for("javascript/esm").tap(name, onParse);
-};
+//=========================
+// SSR Support for RSC
+//=========================
 
 type RSCPluginOptions = {
   // ctx: Ctx;
@@ -698,7 +823,10 @@ function moduleReplacements(analysisCtx: RSCAnalysisCtx) {
     new NormalModuleReplacementPlugin(
       MODULE_EXTENSIONS_REGEX,
       (resolveData /*: ResolveData */) => {
-        const originalResource = resolveData.createData.resource;
+        const originalResource: string | undefined =
+          resolveData.createData.resource;
+
+        if (!originalResource) return;
 
         if (analysisCtx.getTypeForResource(originalResource) === "client") {
           // console.log("replacement", resolveData);
@@ -737,12 +865,19 @@ function moduleReplacements(analysisCtx: RSCAnalysisCtx) {
   ];
 }
 
-const createSSRDependencyPlugin = (analysisCtx: RSCAnalysisCtx) =>
+const createSSRDependencyPlugin = ({
+  analysisCtx,
+  rsdwSSRClientFilePaths,
+}: {
+  analysisCtx: RSCAnalysisCtx;
+  rsdwSSRClientFilePaths: string[];
+}) =>
   function AddSSRDependencyPlugin(compiler: Webpack.Compiler) {
     const pluginName = "AddSSRDependency";
     const SSR_CHUNK_NAME = "ssr[index]";
 
     let clientFileNameFound = false;
+    const rsdwSSRClientFilePathsSet = new Set(rsdwSSRClientFilePaths);
 
     class ClientReferenceDependency extends webpackDependencies.ModuleDependency {
       constructor(request: string) {
@@ -770,7 +905,7 @@ const createSSRDependencyPlugin = (analysisCtx: RSCAnalysisCtx) =>
           parser.hooks.program.tap(pluginName, () => {
             const module = parser.state.module;
 
-            if (module.resource !== rsdwSSRClientFileName) {
+            if (!rsdwSSRClientFilePathsSet.has(module.resource)) {
               return;
             }
 
@@ -811,7 +946,11 @@ const createSSRDependencyPlugin = (analysisCtx: RSCAnalysisCtx) =>
           if (clientFileNameFound === false) {
             compilation.warnings.push(
               new WebpackError(
-                `Client runtime at ${rsdwSSRClientImportName} was not found.`
+                `React client runtime was not found. Possible imports: ${JSON.stringify(
+                  rsdwSSRClientFilePaths,
+                  null,
+                  2
+                )}`
               )
             );
             return;
@@ -820,3 +959,17 @@ const createSSRDependencyPlugin = (analysisCtx: RSCAnalysisCtx) =>
       );
     });
   };
+
+//=========================
+// Misc
+//=========================
+
+const tapParserJS = (
+  nmf: /* Webpack.NormalModuleFactory */ any,
+  name: string,
+  onParse: (parser: Webpack.javascript.JavascriptParser) => void
+) => {
+  nmf.hooks.parser.for("javascript/auto").tap(name, onParse);
+  nmf.hooks.parser.for("javascript/dynamic").tap(name, onParse);
+  nmf.hooks.parser.for("javascript/esm").tap(name, onParse);
+};
