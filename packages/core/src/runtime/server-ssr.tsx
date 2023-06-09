@@ -5,7 +5,7 @@ import { ASSETS_ROUTE } from "./shared";
 import {
   createFromNodeStream,
   SSRManifest,
-} from "react-server-dom-webpack/client.node";
+} from "react-server-dom-webpack/client";
 
 import { ReactNode } from "react";
 import {

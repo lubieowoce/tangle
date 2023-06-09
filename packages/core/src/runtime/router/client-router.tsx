@@ -26,7 +26,7 @@ import {
   ROUTER_STATE_HEADER,
   RSC_CONTENT_TYPE,
 } from "../shared";
-import { createFromFetch } from "react-server-dom-webpack/client.browser";
+import { createFromFetch } from "react-server-dom-webpack/client";
 import { ParsedPath, parsePath, takeSegment } from "./paths";
 import { Use } from "../support/use";
 import { __DEV__ } from "../support/is-dev";

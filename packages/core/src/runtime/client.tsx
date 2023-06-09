@@ -1,6 +1,6 @@
 import { startTransition, type ReactNode } from "react";
 import { hydrateRoot } from "react-dom/client";
-import { createFromReadableStream } from "react-server-dom-webpack/client.browser";
+import { createFromReadableStream } from "react-server-dom-webpack/client";
 import {
   ClientRouter,
   createEmptyLayoutCache,

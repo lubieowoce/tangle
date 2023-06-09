@@ -4,8 +4,20 @@ declare module "react-server-dom-webpack" {
   export {};
 }
 
+declare module "react-server-dom-webpack/client" {
+  // FIXME: this makes no sense, it's only to please typescript
+  export * from "react-server-dom-webpack/client.node";
+  export * from "react-server-dom-webpack/client.browser";
+}
+
 declare module "react-server-dom-webpack/client.browser" {
   export * from "react-server-dom-webpack/src/ReactFlightDOMClientBrowser";
+}
+
+declare module "react-server-dom-webpack/server" {
+  // FIXME: this makes no sense, it's only to please typescript
+  export * from "react-server-dom-webpack/server.node";
+  export * from "react-server-dom-webpack/server.edge";
 }
 
 declare module "react-server-dom-webpack/server.node" {
