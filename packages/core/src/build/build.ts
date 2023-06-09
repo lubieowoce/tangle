@@ -26,13 +26,17 @@ import Webpack, {
 } from "webpack";
 
 import VirtualModulesPlugin from "webpack-virtual-modules";
-import { MODULE_EXTENSIONS_LIST, MODULE_EXTENSIONS_REGEX } from "./common";
-import { findRoutes } from "./routes/find-routes";
-import { stringLiteral } from "./codegen-helpers";
 import {
+  MODULE_EXTENSIONS_GLOB,
+  MODULE_EXTENSIONS_LIST,
+  MODULE_EXTENSIONS_REGEX,
+} from "./common";
+import {
+  findRoutes,
   generateRoutesExport,
   normalizeRoutes,
-} from "./routes/generate-routes";
+} from "@owoce/tangle-router/build";
+import { stringLiteral } from "./codegen-helpers";
 
 import { CachedInputFileSystem, ResolverFactory } from "enhanced-resolve";
 import fs from "fs";
@@ -146,8 +150,12 @@ export const build = async ({
   };
 
   const parsedRoutes = normalizeRoutes(
-    findRoutes(opts.user.routesDir, opts.user.routesDir)
+    findRoutes(opts.user.routesDir, {
+      moduleExtensionsPattern: MODULE_EXTENSIONS_GLOB,
+    })
   );
+
+  const routesObjectCode = generateRoutesExport(parsedRoutes);
 
   const sharedPlugins = (): Configuration["plugins"] & unknown[] => {
     const teeLog = <T>(x: T): T => {
@@ -157,7 +165,7 @@ export const build = async ({
     return [
       new VirtualModulesPlugin({
         [opts.server.genratedRoutesModule]: teeLog(
-          `export default ${generateRoutesExport(parsedRoutes)};`
+          `export default ${routesObjectCode};`
         ),
       }),
     ];

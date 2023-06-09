@@ -5,7 +5,7 @@ import {
   ClientRouter,
   createEmptyLayoutCache,
   getPathFromDOMState,
-} from "@owoce/tangle-router";
+} from "@owoce/tangle-router/client";
 import { Use } from "./support/use";
 import { __DEV__ } from "./support/is-dev";
 import { fetchSubtree } from "./router-integration/index.client";

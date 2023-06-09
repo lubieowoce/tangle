@@ -1,0 +1,16 @@
+{
+  "include": ["./**/*.ts", "./**/*.tsx"],
+  "compilerOptions": {
+    "strict": true,
+    "outDir": "../../dist/build",
+    "moduleResolution": "node16",
+    "declaration": true,
+    "declarationMap": true,
+    "target": "ESNext",
+    "module": "CommonJS",
+    "lib": ["es2022", "DOM"],
+    "jsxImportSource": "react",
+    "esModuleInterop": true,
+    "skipLibCheck": true
+  }
+}

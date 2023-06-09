@@ -1,8 +1,8 @@
 {
-  "include": ["src/**/*.ts", "src/**/*.tsx"],
+  "include": ["./**/*.ts", "./**/*.tsx"],
   "compilerOptions": {
     "strict": true,
-    "outDir": "dist",
+    "outDir": "../../dist/runtime",
     "moduleResolution": "bundler",
     "declaration": true,
     "declarationMap": true,

@@ -12,28 +12,35 @@
     "url": "git+https://github.com/lubieowoce/tangle.git"
   },
   "homepage": "https://github.com/lubieowoce/tangle#readme",
-  "module": "dist/index.js",
-  "types": "dist/index.d.ts",
+  "module": "dist/index.client.js",
+  "types": "dist/index.client.d.ts",
   "exports": {
     ".": {
-      "react-server": "./dist/index.server.js",
-      "node": "./dist/index.client.js",
-      "default": "./dist/index.client.js"
+      "react-server": "./dist/runtime/index.server.js",
+      "node": "./dist/runtime/index.client.js",
+      "default": "./dist/runtime/index.client.js"
     },
     "./client": {
-      "types": "./dist/index.client.d.ts",
-      "default": "./dist/index.client.js"
+      "types": "./dist/runtime/index.client.d.ts",
+      "default": "./dist/runtime/index.client.js"
     },
     "./server": {
-      "types": "./dist/index.server.d.ts",
-      "react-server": "./dist/index.server.js",
-      "default": "./dist/server-only-error.js"
+      "types": "./dist/runtime/index.server.d.ts",
+      "react-server": "./dist/runtime/index.server.js",
+      "default": "./dist/runtime/server-only-error.js"
+    },
+    "./build": {
+      "types": "./dist/build/index.d.ts",
+      "default": "./dist/build/index.js"
     }
   },
   "scripts": {
-    "build": "rm -rf dist/* && tsc",
+    "build": "rm -rf dist/* && tsc -p src/runtime && tsc -p src/build",
     "typecheck": "tsc --noEmit",
     "lint": "eslint src/**"
+  },
+  "dependencies": {
+    "micromatch": "^4.0.5"
   },
   "peerDependencies": {
     "react": "^18.2.0"
