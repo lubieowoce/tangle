@@ -1,6 +1,6 @@
 "use client";
 
-import { useNavigationContext } from "@owoce/tangle";
+import { useNavigationContext } from "@owoce/tangle/client";
 import { PropsWithChildren } from "react";
 
 export const RefreshButton = () => {

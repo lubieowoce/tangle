@@ -1,4 +1,4 @@
-import { arrayLiteral, literal, stringLiteral } from "../codegen-helpers";
+import { arrayLiteral, literal, stringLiteral } from "./codegen-helpers";
 import { FileSystemRouteInfo } from "./types";
 
 export const normalizeRoutes = (
@@ -78,16 +78,25 @@ function getParamName(segment: string) {
   return result[1];
 }
 
+type GenerateRoutesExportOpts = {
+  /** Customize how the dynamic imports of route modules are generated.
+   * This should return the equivalent of `"() => import('...')"`
+   * appropriate for your environment.
+   * @see {@link importLambdaDefault} */
+  importLambda?: (specifier: string) => string;
+};
+
 /** Generates the source for a `RouteDefinition` object (see: `router-core.tsx`) */
-export const generateRoutesExport = (route: FileSystemRouteInfo): string => {
-  // TODO: move this normalization step out of here! it's hacky
+export const generateRoutesExport = (
+  route: FileSystemRouteInfo,
+  opts: GenerateRoutesExportOpts = {}
+): string => {
+  const { importLambda = importLambdaDefault } = opts;
+
   if (route.page && route.segment !== "__PAGE__") {
     console.error(route);
     throw new Error("Pages should have been normalized via normalizeRoutes");
   }
-
-  const importLambda = (specifier: string) =>
-    `() => import(/* webpackMode: "eager" */ ${stringLiteral(specifier)})`;
 
   return `{
     segment: ${stringLiteral(route.segment)},
@@ -99,9 +108,12 @@ export const generateRoutesExport = (route: FileSystemRouteInfo): string => {
     children: ${
       route.children
         ? arrayLiteral(
-            route.children.map((child) => generateRoutesExport(child))
+            route.children.map((child) => generateRoutesExport(child, opts))
           )
         : literal(null)
     },
   }`;
 };
+
+export const importLambdaDefault = (specifier: string) =>
+  `() => import(/* webpackMode: "eager" */ ${stringLiteral(specifier)})`;

@@ -1,6 +1,6 @@
 // import type { AnyServerRootProps } from "../shared";
 
-import type { RouteDefinition } from "../router/index.server";
+import type { RouteDefinition } from "@owoce/tangle-router/server";
 
 const placeholder = (): RouteDefinition => {
   throw new Error(

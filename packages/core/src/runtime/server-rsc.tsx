@@ -5,7 +5,7 @@ import {
 
 import { ServerRouter } from "./root";
 import { createNoopStream } from "./utils";
-import { ParsedPath } from "./router/index.server";
+import type { ParsedPath } from "@owoce/tangle-router";
 
 export async function renderRSCRoot(
   path: string,

@@ -1,6 +1,7 @@
 import { PropsWithChildren } from "react";
 import { createRouteLayout } from "../support/layout-template";
-import { HTMLPage, Link } from "@owoce/tangle";
+import { HTMLPage } from "@owoce/tangle/server";
+import { Link } from "@owoce/tangle/client";
 import {
   FadeOnPendingNavigation,
   RefreshButton,

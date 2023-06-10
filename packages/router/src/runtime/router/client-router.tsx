@@ -21,17 +21,11 @@ import {
   useNavigationContext,
   GlobalRouterContextValue,
 } from "./navigation-context";
-import {
-  FLIGHT_REQUEST_HEADER,
-  ROUTER_STATE_HEADER,
-  RSC_CONTENT_TYPE,
-} from "../shared";
-import { createFromFetch } from "react-server-dom-webpack/client";
+
 import { ParsedPath, parsePath, takeSegment } from "./paths";
 import { Use } from "../support/use";
 import { __DEV__ } from "../support/is-dev";
 import { SegmentErrorBoundary } from "./error-boundary";
-import { HTMLPage } from "..";
 
 export function Link({
   href,
@@ -112,16 +106,22 @@ const useDebugCache = !__DEV__
   ? (_cache: LayoutCacheNode) => {}
   : useDebugCacheReal;
 
+export type ClientRouterProps = {
+  initialCache: LayoutCacheNode;
+  initialPath: string;
+  globalErrorFallback?: ReactNode;
+  globalErrorIncludeDocument?: boolean;
+  fetchSubtree: FetchSubtreeFn;
+};
+
 export const ClientRouter = ({
   initialCache,
   initialPath,
   globalErrorFallback,
+  globalErrorIncludeDocument,
+  fetchSubtree,
   children,
-}: PropsWithChildren<{
-  initialCache: LayoutCacheNode;
-  initialPath: string;
-  globalErrorFallback?: ReactNode;
-}>) => {
+}: PropsWithChildren<ClientRouterProps>) => {
   const [routerState, setRouterState] = useState<RouterState>(() =>
     createRouterState(initialPath, initialCache)
   );
@@ -169,14 +169,18 @@ export const ClientRouter = ({
         cacheNode,
         existingSegments,
       });
-      fetchSubtreeIntoNode(cacheNode, {
-        rawPath: newPath,
-        existingSegments,
-      });
+      fetchSubtreeIntoNode(
+        cacheNode,
+        {
+          path: newPath,
+          existingState: existingSegments,
+        },
+        fetchSubtree
+      );
 
       setRouterState(newRouterState);
     },
-    [routerState]
+    [routerState, fetchSubtree]
   );
 
   const changeRouterStateForRefetch = useCallback(() => {
@@ -203,13 +207,17 @@ export const ClientRouter = ({
     console.log("refetch :: newRouterState", newRouterState);
 
     const cacheNode = getRootNode(newRouterState.cache);
-    fetchSubtreeIntoNode(cacheNode, {
-      rawPath: newRouterState.rawPath,
-      existingSegments: [],
-    });
+    fetchSubtreeIntoNode(
+      cacheNode,
+      {
+        path: newRouterState.rawPath,
+        existingState: [],
+      },
+      fetchSubtree
+    );
 
     setRouterState(newRouterState);
-  }, [routerState]);
+  }, [routerState, fetchSubtree]);
 
   const onPopState = useCallback(
     (restoredPath: string, event: PopStateEvent) => {
@@ -282,7 +290,10 @@ export const ClientRouter = ({
           remainingPath: routerState.state,
         }}
       >
-        <GlobalErrorBoundary errorFallback={globalErrorFallback}>
+        <GlobalErrorBoundary
+          includeDocument={globalErrorIncludeDocument}
+          errorFallback={globalErrorFallback}
+        >
           {children}
         </GlobalErrorBoundary>
       </SegmentContext.Provider>
@@ -292,18 +303,34 @@ export const ClientRouter = ({
 
 function GlobalErrorBoundary({
   errorFallback,
+  includeDocument = true,
   children,
-}: PropsWithChildren<{ errorFallback?: ReactNode }>) {
+}: PropsWithChildren<{
+  errorFallback?: ReactNode;
+  includeDocument?: boolean;
+}>) {
+  const el = (
+    <SegmentErrorBoundary fallback={errorFallback ?? <RootErrorFallback />}>
+      {children}
+    </SegmentErrorBoundary>
+  );
+
+  if (!includeDocument) {
+    return el;
+  }
+
   // NOTE: this sits above the root layout, so we need the HTML boilerplate
   // -- otherwise we get issues about missing <body> etc.
   // This isn't great, because we're basically blowing away the whole document,
   // but works well enough for now.
   return (
-    <HTMLPage>
-      <SegmentErrorBoundary fallback={errorFallback ?? <RootErrorFallback />}>
-        {children}
-      </SegmentErrorBoundary>
-    </HTMLPage>
+    <html>
+      <head>
+        <meta charSet="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+      </head>
+      <body>{el}</body>
+    </html>
   );
 }
 
@@ -502,17 +529,19 @@ export const RouterSegment = ({
   );
 };
 
-type RSCFetchArgs = {
-  rawPath: string;
-  existingSegments: ParsedPath;
+export type FetchSubtreeFn = (args: FetchSubtreeArgs) => Thenable<ReactNode>;
+
+export type FetchSubtreeArgs = {
+  path: string;
+  existingState: ParsedPath;
 };
 
 function fetchSubtreeIntoNode(
   cacheNode: LayoutCacheNode,
-  toFetch: RSCFetchArgs
+  toFetch: FetchSubtreeArgs,
+  fetchSubtree: FetchSubtreeFn
 ) {
-  const request = fetchSubtree(toFetch);
-  const fetchedTreeThenable = createFromFetch<ReactNode>(request, {});
+  const fetchedTreeThenable = fetchSubtree(toFetch);
 
   cacheNode.pending = fetchedTreeThenable;
   return fetchedTreeThenable.then(
@@ -525,7 +554,7 @@ function fetchSubtreeIntoNode(
       // throw to the nearest error boundary.
       // TODO: figure out how to not cache these
       cacheNode.subTree = (
-        <ThrowFetchError rawPath={toFetch.rawPath} error={error} />
+        <ThrowFetchError rawPath={toFetch.path} error={error} />
       );
     }
   );
@@ -539,22 +568,4 @@ function ThrowFetchError({
   error: unknown;
 }): ReactElement {
   throw new Error(`Error fetching path "${rawPath}"`, { cause: error });
-}
-
-// mark the whole thing as an async function
-// that way, if fetch() throws (e.g. NetworkError),
-// we get a rejected promise instead of an exception.
-async function fetchSubtree({ rawPath, existingSegments }: RSCFetchArgs) {
-  return fetch(rawPath, {
-    headers: {
-      [FLIGHT_REQUEST_HEADER]: "1",
-      // This tells our server-side router to skip rendering layouts we already have in the cache.
-      // This is not an optional optimization, it's required for correctness.
-      // We put the response in some nested place in the cache,
-      // and it'll be rendered *within* those cached layouts,
-      // so this response can't contain the layouts above its level -- we'd render them twice!
-      [ROUTER_STATE_HEADER]: JSON.stringify(existingSegments),
-      accept: RSC_CONTENT_TYPE,
-    },
-  });
 }

@@ -1,6 +1,6 @@
 "use client";
 import { FormEvent, useState } from "react";
-import { useNavigationContext } from "@owoce/tangle";
+import { useNavigationContext } from "@owoce/tangle/client";
 import { Card } from "./common";
 import { colorSets } from "./theme";
 

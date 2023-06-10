@@ -1,4 +1,4 @@
-import { Link } from "@owoce/tangle";
+import { Link } from "@owoce/tangle/client";
 
 export default function Error() {
   return (

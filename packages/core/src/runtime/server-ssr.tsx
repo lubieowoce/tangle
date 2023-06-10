@@ -14,7 +14,7 @@ import {
   SegmentContext,
   createEmptyLayoutCache,
   parsePath,
-} from "./router/index.client";
+} from "@owoce/tangle-router/client";
 import { Use } from "./support/use";
 
 export type ScriptsManifest = {

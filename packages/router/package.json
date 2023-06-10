@@ -1,0 +1,61 @@
+{
+  "name": "@owoce/tangle-router",
+  "version": "0.0.4",
+  "description": "An RSC-based nested router",
+  "author": "https://github.com/lubieowoce",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/lubieowoce/tangle/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/lubieowoce/tangle.git"
+  },
+  "homepage": "https://github.com/lubieowoce/tangle#readme",
+  "module": "dist/index.client.js",
+  "types": "dist/index.client.d.ts",
+  "exports": {
+    ".": {
+      "react-server": "./dist/runtime/index.server.js",
+      "node": "./dist/runtime/index.client.js",
+      "default": "./dist/runtime/index.client.js"
+    },
+    "./client": {
+      "types": "./dist/runtime/index.client.d.ts",
+      "default": "./dist/runtime/index.client.js"
+    },
+    "./server": {
+      "types": "./dist/runtime/index.server.d.ts",
+      "react-server": "./dist/runtime/index.server.js",
+      "default": "./dist/runtime/server-only-error.js"
+    },
+    "./server__no-conditions": {
+      "types": "./dist/runtime/index.server.d.ts",
+      "default": "./dist/runtime/index.server.js"
+    },
+    "./build": {
+      "types": "./dist/build/index.d.ts",
+      "default": "./dist/build/index.js"
+    }
+  },
+  "scripts": {
+    "build": "npm run clean && run-p build:*",
+    "build:runtime": "tsc -p src/runtime",
+    "build:build": "tsc -p src/build",
+    "watch": "run-p 'watch:*'",
+    "watch:runtime": "tsc -p src/runtime --watch",
+    "watch:build": "tsc -p src/build --watch",
+    "clean": "rm -rf dist/*",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint src/**"
+  },
+  "dependencies": {
+    "micromatch": "^4.0.5"
+  },
+  "peerDependencies": {
+    "react": "^18.2.0 || ^18.3.0 || 18.3.0-canary-018c58c9c-20230601 || 18.3.0-canary-910045696-20230607"
+  },
+  "devDependencies": {
+    "@types/react": "18.2.5"
+  }
+}
