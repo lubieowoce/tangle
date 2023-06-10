@@ -1,4 +1,6 @@
-// import "server-only"; // this should work, but crashes the build...
+// this should work, but crashes the build...
+// TODO: change this when https://github.com/dai-shi/waku/pull/71 is released
+// import "server-only";
 
 import { Link } from "@owoce/tangle-router/client";
 import { PropsWithChildren } from "react";
