@@ -1,7 +1,7 @@
 "use client";
 /// <reference types="react/next" />
 
-// export * from "./router/index.client";
+// Client APIs
 
 export {
   ClientRouter,
@@ -11,14 +11,30 @@ export {
   type FetchSubtreeArgs,
   Link,
   getPathFromDOMState,
-  notFound,
+  // internal
+  SegmentContext,
+} from "./router/client-router";
+
+export {
   useNavigationContext,
   type NavigateOptions,
   type NavigationContextValue,
   // internal
-  type ParsedPath,
   createStaticRouter,
   GlobalRouterContext,
-  SegmentContext,
+} from "./router/navigation-context";
+
+export {
+  // internal
+  SegmentNotFoundBoundary,
+} from "./router/not-found/not-found-boundary";
+
+// Shared APIs, reexported here
+
+export {
+  notFound,
+  isNotFound,
+  // internal
+  type ParsedPath,
   parsePath,
-} from "./router/index.client";
+} from "./index.shared";

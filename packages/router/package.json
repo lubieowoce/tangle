@@ -29,6 +29,10 @@
       "react-server": "./dist/runtime/index.server.js",
       "default": "./dist/runtime/server-only-error.js"
     },
+    "./shared": {
+      "types": "./dist/runtime/index.shared.d.ts",
+      "default": "./dist/runtime/index.shared.js"
+    },
     "./server__no-conditions": {
       "types": "./dist/runtime/index.server.d.ts",
       "default": "./dist/runtime/index.server.js"
@@ -46,7 +50,9 @@
     "watch:runtime": "tsc -p src/runtime --watch",
     "watch:build": "tsc -p src/build --watch",
     "clean": "rm -rf dist/*",
-    "typecheck": "tsc --noEmit",
+    "typecheck": "run-p 'typecheck:*'",
+    "typecheck:runtime": "tsc -p src/runtime --noEmit",
+    "typecheck:build": "tsc -p src/build --noEmit",
     "lint": "eslint src/**"
   },
   "dependencies": {
