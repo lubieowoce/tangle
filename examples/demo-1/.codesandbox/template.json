@@ -1,0 +1,6 @@
+{
+  "title": "Tangle Demo 1",
+  "description": "A demo app using the `@owoce/tangle` RSC framework.",
+  "tags": ["react", "rsc", "typescript"],
+  "published": true
+}

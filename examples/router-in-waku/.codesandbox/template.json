@@ -1,0 +1,6 @@
+{
+  "title": "Tangle Router + Waku",
+  "description": "An example setup showing how you could integrate `@owoce/tangle-router` into a `waku` app.",
+  "tags": ["react", "rsc", "typescript"],
+  "published": true
+}
