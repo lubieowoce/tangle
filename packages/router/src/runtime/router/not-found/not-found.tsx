@@ -3,7 +3,6 @@ const NOT_FOUND_DIGEST = "__TANGLE_NOT_FOUND__";
 type NotFoundError = Error & { digest?: typeof NOT_FOUND_DIGEST };
 
 export function isNotFound(val: unknown): val is NotFoundError {
-  console.log("isNotFound", val);
   if (!(val && typeof val === "object")) {
     return false;
   }

@@ -1,5 +1,11 @@
 import streams from "node:stream";
 import type Express from "express";
+import type { PipeableStream as PipeableStream1 } from "react-server-dom-webpack/server";
+import type { PipeableStream as PipeableStream2 } from "react-dom/server";
+
+export const readablefromPipeable = (
+  stream: PipeableStream1 | PipeableStream2
+) => (stream as any).pipe(createNoopStream());
 
 export const createNoopStream = () =>
   new streams.Transform({
@@ -21,6 +27,7 @@ export const catchAsync =
     try {
       await handler(req, res, next);
     } catch (err) {
+      console.error("catchAsync", err);
       next(err);
     }
   };

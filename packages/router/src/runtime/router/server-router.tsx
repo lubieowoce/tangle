@@ -10,6 +10,7 @@ import {
 import { SegmentErrorBoundary } from "./error-boundary";
 import { preloadComponent } from "./preload-component";
 import { SegmentNotFoundBoundary } from "./not-found/not-found-boundary";
+import { notFound } from "./not-found/not-found";
 
 export type ServerRouterOptions = {
   /** Try to preload all async segments in parallel.
@@ -40,12 +41,9 @@ export function createServerRouter(routes: RouteDefinition) {
     } = await getSegmentsToRender(path, isNestedFetch, existingState, [routes]);
 
     if (isNotFound) {
-      // this would probably need __DEFAULT__ routes or something
-      console.error("Oops", path, existingState, [
-        firstSegment,
-        ...moreSegments,
-      ]);
-      throw new Error("NOT IMPLEMENTED: default not-found boundary");
+      // TODO: try rendering something user-provided if this happens.
+      // this would probably need __DEFAULT__ routes or something...
+      notFound();
     }
 
     return segmentMatchToJSX(firstSegment, moreSegments, options);

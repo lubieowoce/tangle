@@ -1,6 +1,9 @@
 import path from "node:path";
 import util from "node:util";
 import fs from "node:fs";
+import { Readable } from "node:stream";
+import type { ReadableStream } from "node:stream/web";
+
 import Express, { static as expressStatic } from "express";
 
 import {
@@ -12,11 +15,13 @@ import {
 
 import { renderRSCRoot } from "./server-rsc";
 import { getSSRDomStream, ScriptsManifest } from "./server-ssr";
-import { catchAsync, createNoopStream } from "./utils";
+import { catchAsync, readablefromPipeable } from "./utils";
 
 import type { ClientManifest } from "react-server-dom-webpack/server";
 import type { SSRManifest } from "react-server-dom-webpack/client";
-import type { Transform } from "node:stream";
+import { isNotFound } from "@owoce/tangle-router/shared";
+import { createInitialRscResponseTransformStream } from "./initial-rsc-stream";
+import { sanitize } from "htmlescape";
 
 const CLIENT_ASSETS_DIR = path.resolve(__dirname, "../client");
 
@@ -67,12 +72,14 @@ const varyHeader = [FLIGHT_REQUEST_HEADER, ROUTER_STATE_HEADER].join(", ");
 app.get(
   "*",
   catchAsync(async (req, res) => {
-    // const url = new URL(req.url, `http://${req.headers.host}`);
-    // const props: AnyServerRootProps = pathToParams(url);
     const path = req.path;
     res.header("vary", varyHeader);
 
     if (req.header(FLIGHT_REQUEST_HEADER)) {
+      //=======================
+      // RSC-only render
+      //=======================
+
       const existingStateRaw = req.header(ROUTER_STATE_HEADER);
       if (typeof existingStateRaw !== "string") {
         throw new Error(
@@ -92,65 +99,167 @@ app.get(
       res.header("content-type", RSC_CONTENT_TYPE);
       rscStream.pipe(res);
     } else {
+      //=======================
+      // SSR Render
+      //=======================
+
       console.log("=====================");
       console.log("rendering RSC for SSR");
 
-      const finalOutputStream = createNoopStream();
+      const rscStream = Readable.toWeb(
+        await renderRSCRoot(path, undefined, webpackMapForClient)
+      ) as ReadableStream<Uint8Array>;
 
-      const rscStream = await renderRSCRoot(
+      const [rscStream1, rscStream2] = rscStream.tee();
+
+      let shellFlushed = false;
+      let hasStatus = false;
+
+      const setStatus = (status: number) => {
+        if (hasStatus) return;
+        hasStatus = true;
+        res.statusCode = status;
+      };
+
+      const domStream = getSSRDomStream({
         path,
-        undefined,
-        webpackMapForClient
-      );
-
-      injectRSCPayloadIntoOutput(rscStream, finalOutputStream);
-
-      const domStream = getSSRDomStream(
-        path,
-        rscStream,
+        rscStream: Readable.fromWeb(rscStream1 as any),
         scriptsManifest,
-        webpackMapForSSR
-      );
+        webpackMapForSSR,
+        bootstrapScriptContent: getInitialRSCChunkContent(),
+        onError(err) {
+          if (!shellFlushed) {
+            if (isNotFound(err)) {
+              setStatus(404);
+            } else {
+              console.error("onError", err);
+            }
+          }
+        },
+        onShellError(err) {
+          shellFlushed = true;
+          finalStream.destroy();
+          handleUnrecoverableError(err, setStatus, res);
+        },
+        onShellReady() {
+          shellFlushed = true;
+          setStatus(200);
+          res.header("content-type", "text/html; charset=utf-8");
+          finalStream.pipe(res);
+        },
+      });
 
-      // FIXME: this causes the inline scripts to go in front of <html>, that's bad.
-      // figure out how combine the streams properly
-      res.header("content-type", "text/html; charset=utf-8");
-      domStream.pipe(finalOutputStream);
-      finalOutputStream.pipe(res);
+      // TODO: converting back and forth between web and node streams isn't ideal...
+      const finalStream = Readable.fromWeb(
+        Readable.toWeb(readablefromPipeable(domStream)).pipeThrough<Uint8Array>(
+          createInitialRscResponseTransformStream(rscStream2, {
+            transformRSCChunk,
+            getFinalRSCChunk,
+          })
+        )
+      );
     }
   })
 );
 
-function injectRSCPayloadIntoOutput(
-  rscStream: Transform,
-  finalOutputStream: Transform
-) {
-  rscStream.on("data", (chunk: Buffer) => {
-    console.log("RSC chunk", chunk.toString("utf-8"));
-    finalOutputStream.write(
-      [
-        `<script>`,
-        `(() => {`,
-        `  var chunks = window.__RSC_CHUNKS__ || (window.__RSC_CHUNKS__ = []);`,
-        `  chunks.push(${JSON.stringify(chunk.toString("utf8"))});`,
-        `})();`,
-        `</script>`,
-      ].join("\n")
-    );
-  });
+//=======================
+// RSC Encoding
+//=======================
 
-  rscStream.on("close", () => {
-    finalOutputStream.write(
-      [
-        `<script>`,
-        `(() => {`,
-        `  var chunks = window.__RSC_CHUNKS__ || (window.__RSC_CHUNKS__ = []);`,
-        `  chunks.isComplete = true;`,
-        `})();`,
-        `</script>`,
-      ].join("\n")
-    );
-  });
+function getInitialRSCChunkContent() {
+  return `;(() => { window.__RSC_CHUNKS__ || (window.__RSC_CHUNKS__ = []); })();`;
 }
+
+function transformRSCChunk(chunk: string) {
+  return [
+    `<script>`,
+    `(() => {`,
+    `  var chunks = window.__RSC_CHUNKS__ || (window.__RSC_CHUNKS__ = []);`,
+    `  chunks.push(${sanitize(JSON.stringify(chunk))});`,
+    `})();`,
+    `</script>`,
+  ].join("\n");
+}
+
+function getFinalRSCChunk() {
+  return [
+    `<script>`,
+    `(() => {`,
+    `  var chunks = window.__RSC_CHUNKS__ || (window.__RSC_CHUNKS__ = []);`,
+    `  chunks.isComplete = true;`,
+    `})();`,
+    `</script>`,
+  ].join("\n");
+}
+
+//=======================
+// Unrecoverable errors
+//=======================
+
+function handleUnrecoverableError(
+  err: unknown,
+  setStatus: (status: number) => void,
+  res: Express.Response
+) {
+  if (isNotFound(err)) {
+    setStatus(404);
+    res.header("content-type", "text/html; charset=utf-8");
+    res.send(
+      defaultFallback({
+        lang: "en",
+        headTitle: "Page not found",
+        title: "Error 404",
+        message: "Page not found.",
+      })
+    );
+  } else {
+    console.error("onShellError", err);
+    setStatus(500);
+    res.header("content-type", "text/html; charset=utf-8");
+    res.send(
+      defaultFallback({
+        lang: "en",
+        headTitle: "Internal server error",
+        title: "Internal server error",
+        message: "An error occurred while processing this request.",
+      })
+    );
+  }
+}
+
+function defaultFallback(opts: {
+  lang: string;
+  headTitle: string;
+  title: string;
+  message: string;
+}) {
+  return `
+  <!DOCTYPE html>
+  <html lang="${opts.lang}">
+    <head>
+      <title>${opts.headTitle}</title>
+      <meta http-equiv="cache-control" content="no-store">
+      <meta charset="UTF-8" />
+      <meta name="robots" content="noindex">
+      <style>
+        html, body { margin: unset; height: 100% }
+        :root { font-family: system-ui, sans-serif }
+      </style>
+    </head>
+    <body>
+      <div style="width: 100%; height: 100%; display: flex; justify-content: center; align-items: center">
+        <div style="text-align: center">
+          <h1>${opts.title}</h1>
+          <p>${opts.message}</p>
+        </div>
+      </div>
+    </body>
+  </html>
+  `;
+}
+
+//=======================
+// Startup
+//=======================
 
 app.listen(8080);

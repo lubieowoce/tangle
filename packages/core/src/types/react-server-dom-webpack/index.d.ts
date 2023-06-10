@@ -157,7 +157,7 @@ declare module "react-server-dom-webpack/src/ReactFlightDOMServerNode" {
     identifierPrefix?: string;
   };
 
-  type PipeableStream = {
+  export type PipeableStream = {
     abort(reason: unknown): void;
     pipe<T extends Writable>(destination: T): T;
   };
