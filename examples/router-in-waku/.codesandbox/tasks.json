@@ -10,24 +10,31 @@
 
   // These tasks can be run from CodeSandbox. Running one will open a log in the app.
   "tasks": {
+    "dev": {
+      "name": "dev",
+      "command": "npm run dev",
+      "runAtStart": true,
+      "preview": {
+        "port": 3000
+      }
+    },
     "build": {
       "name": "build",
       "command": "npm run build",
-      "restartOn": {
-        "files": ["package-lock.json", "**/package.json", "src/**/*"]
-      },
-      "runAtStart": true
+      "runAtStart": false
     },
     "start": {
       "name": "start",
       "command": "npm run start",
-      "runAtStart": true,
+      "runAtStart": false
+    },
+    "generate": {
+      "name": "Generate routes",
+      "command": "npm run generate",
       "restartOn": {
-        "files": ["dist/**/*"]
+        "files": ["src/routes/**/*"]
       },
-      "preview": {
-        "port": 8080
-      }
+      "runAtStart": false
     }
   }
 }
