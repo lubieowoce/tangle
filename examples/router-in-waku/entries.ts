@@ -1,6 +1,6 @@
 import { defineEntries } from "waku/server";
 
-import generatedRoutes from "./src/generated/routes.js";
+import generatedRoutes from "./src/.generated/routes.js";
 import type { RouteDefinition } from "@owoce/tangle-router/server";
 
 // We'll probably export some method to do this from tangle-router,
@@ -13,7 +13,7 @@ function getStaticPathsFromRoutes(route: RouteDefinition): string[] {
   }
   // dynamic segment: no way to generate it currently,
   // so just skip this whole "branch" by returning `[]`
-  if (here.match(/\[\w+\]/)) {
+  if (here.match(/^\[\w+\]$/)) {
     return [];
   }
   if (!route.children) {

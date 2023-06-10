@@ -9,10 +9,13 @@ import {
   // @ts-expect-error  not sure why this import is yelling in my editor, but it works at runtime
 } from "@owoce/tangle-router/build";
 
+// It'd be nice to generate the routes from within Vite somehow,
+// but i don't wanna investigate that now, this script works well enough
+
 const main = () => {
   const __dir = path.dirname(fileURLToPath(import.meta.url));
   const routesDirPath = path.resolve(__dir, "./src/routes");
-  const routesFilePath = path.resolve(__dir, "./src/generated/routes.ts");
+  const routesFilePath = path.resolve(__dir, "./src/.generated/routes.ts");
   const fromRoutesFile = path.dirname(routesFilePath);
 
   const toExport = generateRoutesExport(

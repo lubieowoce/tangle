@@ -7,7 +7,7 @@
     "dev": "npm run generate && waku dev",
     "build": "npm run generate && waku build",
     "start": "waku start --config vite.prd.config.ts",
-    "generate": "node build-routes.mjs && npx prettier -w src/generated/routes.ts"
+    "generate": "node generate-routes.mjs && npx prettier -w src/.generated/routes.ts"
   },
   "dependencies": {
     "@owoce/tangle-router": "^0.0.1",
