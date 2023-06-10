@@ -1,5 +1,0 @@
-{
-  "port": 3000,
-  "startScript": "dev",
-  "node": "18"
-}
