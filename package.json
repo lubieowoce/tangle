@@ -14,7 +14,8 @@
     "install-links": "npm ci",
     "changeset": "changeset add",
     "version": "changeset version",
-    "publish": "changeset publish"
+    "publish": "changeset publish",
+    "release-all": "npm run version && git add . && git commit -m 'chore: release' && git push && npm run publish"
   },
   "license": "MIT",
   "devDependencies": {
