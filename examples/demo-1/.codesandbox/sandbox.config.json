@@ -1,5 +1,7 @@
 {
-  "port": 8080,
-  "startScript": "dev",
-  "node": "18"
+  "container": {
+    "port": 8080,
+    "startScript": "dev",
+    "node": "18"
+  }
 }
