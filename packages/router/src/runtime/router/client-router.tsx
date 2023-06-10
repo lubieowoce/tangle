@@ -172,8 +172,8 @@ export const ClientRouter = ({
       fetchSubtreeIntoNode(
         cacheNode,
         {
-          rawPath: newPath,
-          existingSegments,
+          path: newPath,
+          existingState: existingSegments,
         },
         fetchSubtree
       );
@@ -210,8 +210,8 @@ export const ClientRouter = ({
     fetchSubtreeIntoNode(
       cacheNode,
       {
-        rawPath: newRouterState.rawPath,
-        existingSegments: [],
+        path: newRouterState.rawPath,
+        existingState: [],
       },
       fetchSubtree
     );
@@ -532,8 +532,8 @@ export const RouterSegment = ({
 export type FetchSubtreeFn = (args: FetchSubtreeArgs) => Thenable<ReactNode>;
 
 export type FetchSubtreeArgs = {
-  rawPath: string;
-  existingSegments: ParsedPath;
+  path: string;
+  existingState: ParsedPath;
 };
 
 function fetchSubtreeIntoNode(
@@ -554,7 +554,7 @@ function fetchSubtreeIntoNode(
       // throw to the nearest error boundary.
       // TODO: figure out how to not cache these
       cacheNode.subTree = (
-        <ThrowFetchError rawPath={toFetch.rawPath} error={error} />
+        <ThrowFetchError rawPath={toFetch.path} error={error} />
       );
     }
   );

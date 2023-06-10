@@ -7,18 +7,18 @@ import {
   getPathFromDOMState,
 } from "@owoce/tangle-router/client";
 import { serve } from "waku/client";
+import type { ServerRouterProps } from "./server-router.js";
 
 const root = createRoot(document.getElementById("root")!);
 
 const initialCache = createEmptyLayoutCache();
 const initialPath = getPathFromDOMState();
 
-type ServerRouterProps = { path: string; existingState?: string[] };
 const ServerRouter = serve<ServerRouterProps>("ServerRouter");
 
-const fetchSubtree: FetchSubtreeFn = ({ rawPath, existingSegments }) => {
+const fetchSubtree: FetchSubtreeFn = ({ path, existingState }) => {
   return Promise.resolve(
-    <ServerRouter path={rawPath} existingState={existingSegments} />
+    <ServerRouter path={path} existingState={existingState} />
   );
 };
 

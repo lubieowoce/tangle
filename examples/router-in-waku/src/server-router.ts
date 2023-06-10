@@ -6,5 +6,7 @@ import { createServerRouter } from "@owoce/tangle-router/server__no-conditions";
 
 import routes from "./.generated/routes.js";
 
+export type ServerRouterProps = Parameters<typeof ServerRouter>[0];
 const ServerRouter = createServerRouter(routes);
+
 export default ServerRouter;
