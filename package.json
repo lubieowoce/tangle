@@ -11,7 +11,10 @@
     "build": "turbo run build --filter './packages/core' --filter './packages/router'",
     "watch": "turbo run watch --filter './packages/core' --filter './packages/router'",
     "clean": "find . -name dist -type d -not -path './node_modules/*' -exec rm -rf {} +",
-    "install-links": "npm ci"
+    "install-links": "npm ci",
+    "changeset": "changeset add",
+    "version": "changeset version",
+    "publish": "changeset publish"
   },
   "license": "MIT",
   "devDependencies": {
