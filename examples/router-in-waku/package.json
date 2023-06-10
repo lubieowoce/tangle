@@ -4,10 +4,10 @@
   "type": "module",
   "private": true,
   "scripts": {
-    "dev": "waku dev",
-    "build": "waku build",
+    "dev": "npm run generate && waku dev",
+    "build": "npm run generate && waku build",
     "start": "waku start --config vite.prd.config.ts",
-    "generate": "node build-routes.mjs"
+    "generate": "node build-routes.mjs && npx prettier -w src/generated/routes.ts"
   },
   "dependencies": {
     "@owoce/tangle-router": "^0.0.1",
@@ -21,6 +21,7 @@
   "devDependencies": {
     "@types/react": "^18.2.8",
     "@types/react-dom": "^18.2.4",
+    "prettier": "^2.8.8",
     "typescript": "^5.1.3"
   }
 }

@@ -7,9 +7,11 @@ export const SmallCounter = () => {
   return (
     <span
       style={{
-        border: "1px blue dashed",
+        outline: "2px blue dashed",
         display: "flex",
         alignItems: "center",
+        padding: "0.5em",
+        gap: "1ch",
       }}
     >
       <span>Count: {count}</span>

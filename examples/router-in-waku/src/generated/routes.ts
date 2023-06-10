@@ -1,7 +1,9 @@
 // this is a generated file.
 // run 'npm run generate' after adding any new routes to rebuild it.
 
-export default {
+import type { RouteDefinition } from "@owoce/tangle-router/server";
+
+const routes: RouteDefinition = {
   segment: "",
   page: null,
   layout: () => import("../routes/layout.js"),
@@ -60,7 +62,7 @@ export default {
       segment: "foo",
       page: null,
       layout: null,
-      loading: null,
+      loading: () => import("../routes/foo/loading.js"),
       notFound: null,
       error: null,
       children: [
@@ -68,7 +70,7 @@ export default {
           segment: "__PAGE__",
           page: () => import("../routes/foo/page.js"),
           layout: null,
-          loading: null,
+          loading: () => import("../routes/foo/loading.js"),
           notFound: null,
           error: null,
           children: null,
@@ -77,3 +79,5 @@ export default {
     },
   ],
 };
+
+export default routes;

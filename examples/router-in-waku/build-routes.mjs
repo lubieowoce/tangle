@@ -32,7 +32,11 @@ const main = () => {
     `// this is a generated file.`,
     `// run 'npm run generate' after adding any new routes to rebuild it.`,
     ``,
-    `export default ${toExport};`,
+    `import type { RouteDefinition } from "@owoce/tangle-router/server";`,
+    ``,
+    `const routes: RouteDefinition = ${toExport}`,
+    ``,
+    `export default routes;`,
     ``,
   ].join("\n");
   writeFileSync(routesFilePath, code);

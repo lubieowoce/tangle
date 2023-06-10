@@ -3,7 +3,7 @@
 import { useState } from "react";
 
 export const ExampleInput = ({
-  initialState,
+  initialState = "",
   placeholder,
 }: {
   initialState?: string;

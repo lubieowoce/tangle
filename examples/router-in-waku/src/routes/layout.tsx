@@ -34,7 +34,7 @@ export default function RootLayout({ children }: PropsWithChildren) {
           <SmallCounter />
         </div>
       </nav>
-      {children}
+      <div style={{ maxWidth: "800px", margin: "0 auto" }}>{children}</div>
     </div>
   );
 }

@@ -8,6 +8,7 @@ export default function BarLayout({ children }: PropsWithChildren) {
         border: "2px dashed lightgrey",
         borderRadius: "8px",
         padding: "1em",
+        marginTop: "1em",
       }}
     >
       This is a nested layout for bar.
