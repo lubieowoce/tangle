@@ -8,9 +8,14 @@
   "module": "dist/runtime/index.js",
   "types": "dist/runtime/index.d.ts",
   "scripts": {
-    "build": "rm -rf dist && npm run build:bin && npm run build:compiled",
+    "build": "npm run clean && run-p build:*",
     "build:bin": "tsup --config tsup.config.bin.js",
-    "build:compiled": "tsc -p src/runtime/ && echo '{ \"type\": \"module\" }' > dist/runtime/package.json && cp -r src/types dist/",
+    "build:runtime": "tsc -p src/runtime/ && npm run postbuild:runtime",
+    "postbuild:runtime": "echo '{ \"type\": \"module\" }' > dist/runtime/package.json && cp -r src/types dist/",
+    "watch": "npm run clean && run-p watch:*",
+    "watch:runtime": "mkdir -p dist/runtime && npm run postbuild:runtime && tsc -p src/runtime/ --watch",
+    "watch:bin": "npm run build:bin -- --watch",
+    "clean": "rm -rf dist/*",
     "typecheck": "tsc -p src/runtime/ --noEmit",
     "lint": "eslint src/**"
   },

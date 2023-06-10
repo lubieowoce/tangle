@@ -39,7 +39,13 @@
     }
   },
   "scripts": {
-    "build": "rm -rf dist/* && tsc -p src/runtime && tsc -p src/build",
+    "build": "npm run clean && run-p build:*",
+    "build:runtime": "tsc -p src/runtime",
+    "build:build": "tsc -p src/build",
+    "watch": "run-p 'watch:*'",
+    "watch:runtime": "tsc -p src/runtime --watch",
+    "watch:build": "tsc -p src/build --watch",
+    "clean": "rm -rf dist/*",
     "typecheck": "tsc --noEmit",
     "lint": "eslint src/**"
   },
