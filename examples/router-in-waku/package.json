@@ -10,7 +10,7 @@
     "generate": "node generate-routes.mjs && npx prettier -w src/.generated/routes.ts"
   },
   "dependencies": {
-    "@owoce/tangle-router": "^0.0.1",
+    "@owoce/tangle-router": "0.0.1",
     "express": "^4.18.2",
     "react": "18.3.0-canary-018c58c9c-20230601",
     "react-dom": "18.3.0-canary-018c58c9c-20230601",
