@@ -1,4 +1,4 @@
-import { FC, PropsWithChildren } from "react";
+import { PropsWithChildren, ReactNode } from "react";
 
 export function getMatchForSegment({
   segmentPath,
@@ -33,16 +33,22 @@ export type SegmentParams = Record<string, string>;
 
 type ImportDefault<T> = () => Promise<{ default: T }>;
 
+export type MaybeAsyncComponent<TProps> = (
+  props: TProps
+) => ReactNode | Promise<ReactNode>;
+
 export type RouteDefinition = {
   segment: string;
   layout: ImportDefault<
-    FC<PropsWithChildren<{ params: SegmentParams }>>
+    MaybeAsyncComponent<PropsWithChildren<{ params: SegmentParams }>>
   > | null;
-  page: ImportDefault<FC<{ params: SegmentParams }>> | null;
+  page: ImportDefault<MaybeAsyncComponent<{ params: SegmentParams }>> | null;
   loading: ImportDefault<
-    FC<PropsWithChildren<{ params: SegmentParams }>>
+    MaybeAsyncComponent<PropsWithChildren<{ params: SegmentParams }>>
   > | null;
-  notFound: ImportDefault<FC<{ params: SegmentParams }>> | null;
-  error: ImportDefault<FC<{}>> | null;
+  notFound: ImportDefault<
+    MaybeAsyncComponent<{ params: SegmentParams }>
+  > | null;
+  error: ImportDefault<MaybeAsyncComponent<{}>> | null;
   children: RouteDefinition[] | null;
 };

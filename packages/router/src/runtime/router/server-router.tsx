@@ -2,6 +2,7 @@ import { PropsWithChildren, ReactNode, Suspense } from "react";
 import { RouterSegment } from "./client-router";
 import { ParsedPath, parsePath, takeSegmentMaybe } from "./paths";
 import {
+  MaybeAsyncComponent,
   RouteDefinition,
   SegmentParams,
   getMatchForSegment,
@@ -62,19 +63,19 @@ type SegmentMatchInfo = ReturnType<typeof getMatchForSegment> & {
   isFetchRoot: boolean;
   key: string;
   component: SegmentMatchComponent;
-  LoadingComponent: React.FC<WithParams> | null;
-  NotFoundComponent: React.FC<WithParams> | null;
-  ErrorComponent: React.FC<{}> | null;
+  LoadingComponent: MaybeAsyncComponent<WithParams> | null;
+  NotFoundComponent: MaybeAsyncComponent<WithParams> | null;
+  ErrorComponent: MaybeAsyncComponent<{}> | null;
 };
 
 type SegmentMatchComponent =
   | {
       type: "layout";
-      Component: React.FC<React.PropsWithChildren<WithParams>>;
+      Component: MaybeAsyncComponent<React.PropsWithChildren<WithParams>>;
     }
   | {
       type: "page";
-      Component: React.FC<WithParams>;
+      Component: MaybeAsyncComponent<WithParams>;
     };
 
 async function getSegmentsToRender(
@@ -248,6 +249,7 @@ function segmentMatchToJSX(
     return (
       <SegmentErrorBoundary
         key={extraKey ? cacheKey + "-" + extraKey : cacheKey}
+        // @ts-expect-error  async component
         fallback={<ErrorComponent />}
       >
         {children}
@@ -260,6 +262,7 @@ function segmentMatchToJSX(
     return (
       <Suspense
         key={extraKey ? cacheKey + "-" + extraKey : cacheKey}
+        // @ts-expect-error  async component
         fallback={<LoadingComponent params={params} />}
       >
         {children}
@@ -272,6 +275,7 @@ function segmentMatchToJSX(
     return (
       <SegmentNotFoundBoundary
         key={extraKey ? cacheKey + "-" + extraKey : cacheKey}
+        // @ts-expect-error  async component
         fallback={<NotFoundComponent params={params} />}
       >
         {children}
@@ -300,6 +304,7 @@ function segmentMatchToJSX(
     : RawComponent;
 
   let tree: JSX.Element | null = (
+    // @ts-expect-error  async component
     <Component key={cacheKey} {...componentProps} />
   );
 
