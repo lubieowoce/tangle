@@ -8,7 +8,7 @@ Though it does manage to do SSR in the same process as the main server, which is
 ### Features
 
 - [x] `use client`
-- [x] SSR (...with a quirks mode warning)
+- [x] SSR
 - [x] routing (kinda)
 - [ ] actions
 - [ ] a half-decent build process
@@ -126,3 +126,7 @@ npm run example
 This should bring up an app on port 8080. You can edit the code in `examples/demo-1` and if you're lucky it might even """hot reload""" by rerunning the whole build when something changed.
 
 Have fun!
+
+# Acknowledgements
+
+A big thank you to [Hendrik Liebau (@unstubbable)](https://github.com/unstubbable/) for the RSC transform stream implementation that allowed us to finally get rid of that Quirks Mode warning! Check out his RSC project [`mfng`](https://github.com/unstubbable/mfng), where I borrowed it from.
