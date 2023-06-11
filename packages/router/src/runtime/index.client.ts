@@ -11,23 +11,23 @@ export {
   type FetchSubtreeArgs,
   Link,
   getPathFromDOMState,
-  // internal
-  SegmentContext,
 } from "./router/client-router";
 
 export {
   useNavigationContext,
   type NavigateOptions,
   type NavigationContextValue,
-  // internal
-  createStaticRouter,
-  GlobalRouterContext,
 } from "./router/navigation-context";
 
-export {
-  // internal
-  SegmentNotFoundBoundary,
-} from "./router/not-found/not-found-boundary";
+// FIXME: for some reason, removing this export breaks the build...
+// without this, `SegmentNotFoundBoundary` somehow ends up in rsc-layer.
+// maybe something to do with the order in which webpack visits the modules,
+// and that having it up here causes it to be visited early...?
+export { SegmentNotFoundBoundary as __internal_SegmentNotFoundBoundary } from "./router/not-found/not-found-boundary";
+
+// SSR-specific APIs
+
+export { StaticRouter } from "./router/static-router";
 
 // Shared APIs, reexported here
 

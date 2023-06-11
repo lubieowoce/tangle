@@ -10,14 +10,8 @@ import {
   SSRManifest,
 } from "react-server-dom-webpack/client";
 
-import { PropsWithChildren, ReactNode } from "react";
-import {
-  createStaticRouter,
-  GlobalRouterContext,
-  SegmentContext,
-  createEmptyLayoutCache,
-  parsePath,
-} from "@owoce/tangle-router/client";
+import { ReactNode } from "react";
+import { StaticRouter } from "@owoce/tangle-router/client";
 import { Use } from "./support/use";
 
 export type ScriptsManifest = {
@@ -49,28 +43,13 @@ export function getSSRDomStream({
   console.log("SSRing response");
 
   const domStream = renderToPipeableStream(
-    <SSRRouter path={path}>
+    <StaticRouter path={path}>
       <Use thenable={clientTreeThenable} />
-    </SSRRouter>,
+    </StaticRouter>,
     {
       bootstrapScripts: [`${ASSETS_ROUTE}/${scriptsManifest.main}`],
       ...rest,
     }
   );
   return domStream;
-}
-
-function SSRRouter({ path, children }: PropsWithChildren<{ path: string }>) {
-  return (
-    <GlobalRouterContext.Provider value={createStaticRouter(path)}>
-      <SegmentContext.Provider
-        value={{
-          cacheNode: createEmptyLayoutCache(),
-          remainingPath: parsePath(path),
-        }}
-      >
-        {children}
-      </SegmentContext.Provider>
-    </GlobalRouterContext.Provider>
-  );
 }
