@@ -23,6 +23,7 @@ import Webpack, {
   Compilation,
   WebpackError,
   dependencies as webpackDependencies,
+  RuleSetRule,
 } from "webpack";
 
 import VirtualModulesPlugin from "webpack-virtual-modules";
@@ -61,7 +62,7 @@ const LOG_OPTIONS = {
   generatedCode: false,
   manifestRewrites: false,
   ssrManifest: false,
-  reactResolutions: false,
+  reactResolutions: true,
 };
 
 const IMPORT_CONDITIONS_CLIENT = ["browser", "import", "require", "webpack"];
@@ -121,7 +122,7 @@ export const build = async ({
     minimize: false, // terser is breaking with `__name is not defined` for some reason...
   };
 
-  const shared: Configuration = {
+  const shared = {
     mode: BUILD_MODE,
     // devtool: false,
     devtool: "source-map",
@@ -147,7 +148,7 @@ export const build = async ({
         { test: /\.json$/, type: "json" },
       ],
     },
-  };
+  } satisfies Configuration;
 
   const parsedRoutes = normalizeRoutes(
     findRoutes(opts.user.routesDir, {
@@ -157,7 +158,7 @@ export const build = async ({
 
   const routesObjectCode = generateRoutesExport(parsedRoutes);
 
-  const sharedPlugins = (): Configuration["plugins"] & unknown[] => {
+  const sharedPlugins = () => {
     const teeLog = <T>(x: T): T => {
       LOG_OPTIONS.generatedCode && console.log(x);
       return x;
@@ -168,7 +169,94 @@ export const build = async ({
           `export default ${routesObjectCode};`
         ),
       }),
-    ];
+    ] satisfies Configuration["plugins"];
+  };
+
+  const reactResolutions = {
+    client: await getReactPackagesResolutions({
+      importer: opts.client.entry,
+      conditionNames: IMPORT_CONDITIONS.client,
+    }),
+    ssr: await getReactPackagesResolutions({
+      importer: opts.server.ssrModule,
+      conditionNames: IMPORT_CONDITIONS.ssr,
+    }),
+    rsc: await getReactPackagesResolutions({
+      importer: opts.server.rscModule,
+      conditionNames: IMPORT_CONDITIONS.rsc,
+    }),
+  };
+
+  if (LOG_OPTIONS.reactResolutions) {
+    console.log("react resolutions and aliases", reactResolutions);
+  }
+
+  const RESOLVE_RULES = {
+    ssr: {
+      resolve: {
+        conditionNames: IMPORT_CONDITIONS.ssr,
+        alias: reactResolutions.ssr.aliases,
+      } satisfies RuleSetRule["resolve"],
+    },
+    rsc: {
+      resolve: {
+        conditionNames: IMPORT_CONDITIONS.rsc,
+        alias: reactResolutions.rsc.aliases,
+      } satisfies RuleSetRule["resolve"],
+    },
+  };
+
+  const getServerConfigModuleRules = () => {
+    // module.rules for server stuff.
+    // For some reason, we need to add this onto absolutely every `rules` entry,
+    // otherwise the `conditionNames` don't come through
+    // and `react-server-dom-webpack/server` is resolved incorrectly.
+    // NOTE:
+    //  technically we've got some redundancy here, because `aliases` already contains a resolved RSDW.
+    //  but the `conditionNames` still need to be set correctly for other packages,
+    //  so we need both.
+
+    return [
+      {
+        // assign modules to layers
+        oneOf: [
+          {
+            test: opts.server.rscModule,
+            layer: LAYERS.rsc,
+            ...RESOLVE_RULES.rsc,
+          },
+          {
+            // everything imported from the main SSR module (including RSDW/client) goes into the SSR layer,
+            // so that our NormalModuleReplacement function can rewrite the imports to `.__ssr__.EXT`...
+            test: opts.server.ssrModule,
+            layer: LAYERS.ssr,
+            ...RESOLVE_RULES.ssr,
+          },
+          {
+            // ... and we make it transitive, so that it propagates through imports.
+            // note that this may result in duplicating some shared modules.
+            // TODO: figure out if we can solve that somehow
+            issuerLayer: LAYERS.ssr,
+            layer: LAYERS.ssr,
+            ...RESOLVE_RULES.ssr,
+          },
+        ],
+      },
+      {
+        // assign import conditions per layer
+        oneOf: [
+          {
+            issuerLayer: LAYERS.ssr,
+            ...RESOLVE_RULES.ssr,
+          },
+          {
+            issuerLayer: LAYERS.rsc,
+            ...RESOLVE_RULES.rsc,
+          },
+        ],
+      },
+      ...(shared.module?.rules ?? []),
+    ] satisfies NonNullable<Configuration["module"]>["rules"];
   };
 
   // =================
@@ -185,24 +273,26 @@ export const build = async ({
     entry: { main: opts.server.entry },
     resolve: {
       ...shared.resolve,
-      // TODO: do we need react aliases here?
-      // could we be missing some import conditions or something?
     },
     module: {
       ...shared.module,
-      // rules: [
-      //   {
-      //     test: MODULE_EXTENSIONS_REGEX,
-      //     exclude: /node_modules/,
-      //     use: [TS_LOADER],
-      //   },
-      // ],
+      rules: [
+        // use the same funky layer rules that server build uses.
+        ...getServerConfigModuleRules(),
+        ...shared.module.rules,
+      ],
     },
-    plugins: [...sharedPlugins(), new RSCAnalysisPlugin({ analysisCtx })],
+    plugins: [
+      ...sharedPlugins(),
+      new RSCAnalysisPlugin({
+        analysisCtx,
+        resolveRulesByLayer: RESOLVE_RULES,
+      }),
+    ],
     target: "node16", // TODO does this matter?
     experiments: { layers: true },
     output: {
-      path: path.join(opts.server.destDir, "__analysis__"),
+      path: path.join(opts.server.destDir, "../__analysis__"),
       clean: true,
     },
     optimization: {
@@ -222,17 +312,13 @@ export const build = async ({
     [...analysisCtx.modules.client.keys()];
 
   const INTERMEDIATE_SSR_MANIFEST = "ssr-manifest-intermediate.json";
-  const reactResolutionsClient = await getReactPackagesResolutions({
-    importer: opts.client.entry,
-    conditionNames: IMPORT_CONDITIONS.client,
-  });
 
   const clientConfig: Configuration = {
     ...shared,
     entry: opts.client.entry,
     resolve: {
       ...shared.resolve,
-      alias: reactResolutionsClient.aliases,
+      alias: reactResolutions.client.aliases,
     },
     module: {
       ...shared.module,
@@ -282,96 +368,15 @@ export const build = async ({
 
   console.log("building server...");
 
-  const reactResolutionsServer = {
-    ssr: await getReactPackagesResolutions({
-      importer: opts.server.ssrModule,
-      conditionNames: IMPORT_CONDITIONS.ssr,
-    }),
-    rsc: await getReactPackagesResolutions({
-      importer: opts.server.rscModule,
-      conditionNames: IMPORT_CONDITIONS.rsc,
-    }),
-  };
-
-  if (LOG_OPTIONS.reactResolutions) {
-    console.log("react resolutions and aliases", {
-      client: reactResolutionsClient,
-      ...reactResolutionsServer,
-    });
-  }
-
-  // module.rules for server stuff.
-  // For some reason, we need to add this onto absolutely every `rules` entry,
-  // otherwise the `conditionNames` don't come through
-  // and `react-server-dom-webpack/server` is resolved incorrectly.
-  // NOTE:
-  //  technically we've got some redundancy here, because `aliases` already contains a resolved RSDW.
-  //  but the `conditionNames` still need to be set correctly for other packages,
-  //  so we need both.
-  const SERVER_MODULE_RULES = {
-    ssr: {
-      resolve: {
-        conditionNames: IMPORT_CONDITIONS.ssr,
-        alias: reactResolutionsServer.ssr.aliases,
-      },
-    },
-    rsc: {
-      resolve: {
-        conditionNames: IMPORT_CONDITIONS.rsc,
-        alias: reactResolutionsServer.rsc.aliases,
-      },
-    },
-  };
-
   const serverConfig: Configuration = {
     ...shared,
-    entry: { main: opts.server.entry /* ssr: virtualPath("ssr-entry.js") */ },
+    entry: { main: opts.server.entry },
     resolve: {
       ...shared.resolve,
     },
     module: {
       ...shared.module,
-      rules: [
-        {
-          // assign modules to layers
-          oneOf: [
-            {
-              test: opts.server.rscModule,
-              layer: LAYERS.rsc,
-              ...SERVER_MODULE_RULES.rsc,
-            },
-            {
-              // everything imported from the main SSR module (including RSDW/client) goes into the SSR layer,
-              // so that our NormalModuleReplacement function can rewrite the imports to `.__ssr__.EXT`...
-              test: opts.server.ssrModule,
-              layer: LAYERS.ssr,
-              ...SERVER_MODULE_RULES.ssr,
-            },
-            {
-              // ... and we make it transitive, so that it propagates through imports.
-              // note that this may result in duplicating some shared modules.
-              // TODO: figure out if we can solve that somehow
-              issuerLayer: LAYERS.ssr,
-              layer: LAYERS.ssr,
-              ...SERVER_MODULE_RULES.ssr,
-            },
-          ],
-        },
-        {
-          // assign import conditions per layer
-          oneOf: [
-            {
-              issuerLayer: LAYERS.ssr,
-              ...SERVER_MODULE_RULES.ssr,
-            },
-            {
-              issuerLayer: LAYERS.rsc,
-              ...SERVER_MODULE_RULES.rsc,
-            },
-          ],
-        },
-        ...(shared.module?.rules ?? []),
-      ],
+      rules: [...getServerConfigModuleRules(), ...(shared.module.rules ?? [])],
     },
     plugins: [
       ...sharedPlugins(),
@@ -379,7 +384,7 @@ export const build = async ({
       createSSRDependencyPlugin({
         analysisCtx,
         rsdwSSRClientFilePaths: RSDW_CLIENT_SPECIFIERS.map(
-          (specifier) => reactResolutionsServer.ssr.resolutions[specifier]
+          (specifier) => reactResolutions.ssr.resolutions[specifier]
         ),
       }),
       new RSCServerPlugin({
@@ -581,6 +586,7 @@ type RSCAnalysisCtx = ReturnType<typeof createAnalysisContext>;
 
 type RSCAnalysisPluginOptions = {
   analysisCtx: RSCAnalysisCtx;
+  resolveRulesByLayer: Record<"ssr" | "rsc", any>;
 };
 
 class RSCAnalysisPlugin {
@@ -617,20 +623,128 @@ class RSCAnalysisPlugin {
               );
             }
 
+            {
+              const pick = (mod: NormalModule) => ({
+                request: mod.request,
+                userRequest: mod.userRequest,
+                rawRequest: mod.rawRequest,
+                layer: mod.layer,
+                resourceResolveData: mod.resourceResolveData,
+                resolveOptions: mod.resolveOptions,
+              });
+
+              const mod = parser.state.module;
+
+              // TODO: WHY the hell does this happen. why are we getting a react.shared-subset that's requested
+              // from an RSC module but gets assigned to the ssr layer. what is going onnnnnn
+              if (
+                mod.resource.includes("react.shared-subset") &&
+                (mod.resourceResolveData?.context.issuerLayer === LAYERS.ssr ||
+                  mod.layer === LAYERS.ssr)
+              ) {
+                console.log(
+                  "FOUND BAD REACT",
+                  mod.layer,
+                  mod.request,
+                  "\n",
+                  pick(mod),
+                  "\n\n"
+                );
+              }
+
+              if (mod.request.includes("server-router")) {
+                console.log(
+                  "found server-router",
+                  mod.layer,
+                  mod.request,
+                  "\n",
+                  pick(mod),
+                  "\n\n"
+                );
+              }
+
+              if (mod.request.includes("runtime/root")) {
+                console.log(
+                  "found runtime/root",
+                  mod.layer,
+                  mod.request,
+                  "\n",
+                  pick(mod),
+                  "\n\n"
+                );
+              }
+
+              if (
+                this.options.analysisCtx.modules.client.has(
+                  mod.resourceResolveData?.context?.issuer
+                )
+              ) {
+                console.log(
+                  "this mod is requested by something clienty",
+                  mod.resource,
+                  "\n",
+                  pick(mod),
+                  "\n\n"
+                );
+              }
+
+              if (
+                mod.layer === LAYERS.rsc &&
+                mod.resourceResolveData?.context.issuerLayer === LAYERS.ssr
+              ) {
+                console.log(
+                  "whaaaaaaaaat",
+                  mod.layer,
+                  mod.request,
+                  "\n",
+                  mod,
+                  "\n\n"
+                );
+              }
+            }
+
             if (!isServerModule && !isClientModule) {
               return;
             }
+
+            // NOTE: this can cause us to include the same module in the graph multiple times --
+            // normally we'd "cut off" RSC at the first "use client", but here we're just moving it over into
+            // the ssr layer, which'll cause it to get visited again.
+            // this doesn't seem to be a problem for the purpose of analyzing the graph
+            const assignLayer = (mod: NormalModule, layerId: "ssr" | "rsc") => {
+              const layer = LAYERS[layerId];
+              if (mod.layer !== layer) {
+                console.log(
+                  "analysis pass :: assigning layer",
+                  mod.rawRequest,
+                  layer
+                );
+                mod.layer = layer;
+                Object.assign(
+                  mod.resolveOptions,
+                  this.options.resolveRulesByLayer[layerId].resolve
+                );
+                console.log(
+                  "analysis pass :: modified resolveOptions",
+                  mod.resolveOptions
+                );
+                console.log("\n\n");
+              }
+            };
 
             if (isClientModule) {
               this.options.analysisCtx.modules.client.set(
                 parser.state.module.resource,
                 parser.state.module
               );
+
+              assignLayer(parser.state.module, "ssr");
             } else {
               this.options.analysisCtx.modules.server.set(
                 parser.state.module.resource,
                 parser.state.module
               );
+              assignLayer(parser.state.module, "rsc");
             }
           });
         };
@@ -644,8 +758,38 @@ class RSCAnalysisPlugin {
         compilation.hooks.afterOptimizeModules.tap(
           RSCAnalysisPlugin.pluginName,
           (modules) => {
+            const graph = new Graph({ directed: true });
+
             for (const module of modules) {
               if (module instanceof NormalModule) {
+                // graphing
+                {
+                  const add = (mod: Module) => {
+                    const id = mod.identifier();
+                    if (graph.hasNode(id)) {
+                      // console.error("duplicate id in graph", id);
+                      return id;
+                    }
+                    const label =
+                      mod instanceof NormalModule
+                        ? path.relative(process.cwd(), mod.resource)
+                        : undefined;
+                    console.log("label", id, label);
+                    graph.setNode(id, label);
+                    return id;
+                  };
+
+                  const id = add(module);
+                  // graph.setNode(id, module.userRequest);
+
+                  for (const conn of compilation.moduleGraph.getOutgoingConnections(
+                    module
+                  )) {
+                    const targetId = add(conn.module);
+                    graph.setEdge(id, targetId, conn.explanation);
+                  }
+                }
+
                 const type = this.options.analysisCtx.getTypeForModule(module);
                 if (!type) continue;
                 const exports = compilation.moduleGraph.getExportsInfo(module);
@@ -655,12 +799,25 @@ class RSCAnalysisPlugin {
                 );
               }
             }
+
+            // graphing
+            {
+              const asDot = write(graph);
+              console.log("graph", asDot);
+              graphviz.dot(asDot).then((svg) => {
+                fs.writeFileSync("graph.svg", svg);
+              });
+            }
           }
         );
       }
     );
   }
 }
+
+import { Graph } from "@dagrejs/graphlib";
+import { write } from "graphlib-dot";
+import { graphviz } from "node-graphviz";
 
 //=========================
 // SSR Support for RSC
