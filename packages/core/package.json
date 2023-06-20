@@ -1,6 +1,6 @@
 {
   "name": "@owoce/tangle",
-  "version": "0.0.6",
+  "version": "0.0.7",
   "description": "",
   "repository": {
     "url": "https://github.com/lubieowoce/tangle"
@@ -49,7 +49,7 @@
   "author": "",
   "license": "MIT",
   "dependencies": {
-    "@owoce/tangle-router": "0.0.6",
+    "@owoce/tangle-router": "0.0.7",
     "chokidar": "^3.5.3",
     "enhanced-resolve": "^5.14.1",
     "express": "^4.18.2",
