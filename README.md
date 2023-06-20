@@ -8,7 +8,7 @@ Though it does manage to do SSR in the same process as the main server, which is
 ### Features
 
 - [x] `use client`
-- [x] SSR (...with a quirks mode warning)
+- [x] SSR
 - [x] routing (kinda)
 - [ ] actions
 - [ ] a half-decent build process
@@ -27,6 +27,8 @@ Define something like this in the `scripts` field of your `package.json`:
 
 Tangle has a basic filesystem router with an API intended to match NextJS's App Router .
 The build expects the routes to live at `src/routes`.
+
+Note: The router is also available as a standalone package, `@owoce/tangle-router`.
 
 Example file layout:
 
@@ -70,7 +72,7 @@ Layouts preserve state when navigating between their child segments.
 You must define a root layout (`routes/layout.tsx`) with `<html>` in it.
 You can use `HTMLPage` if you don't feel like typing all of that out.
 
-#### `page`
+#### `page.ts`
 
 A `page` file should export a server component.
 
@@ -80,7 +82,7 @@ export default function MyPage(props: { params: Record<string, string> });
 
 Same as layout, it'll receive all the params from the layouts above.
 
-#### `loading`
+#### `loading.ts`
 
 ```tsx
 export default function MyLoading(props: { params: Record<string, string> });
@@ -88,13 +90,22 @@ export default function MyLoading(props: { params: Record<string, string> });
 
 `loading` will be rendered as a loading state when navigating between pages in its segment (or below). If multiple `loading` files are defined, the innermost one will be used.
 
-#### `error`
+#### `error.ts`
 
 ```tsx
 export default function MyError();
 ```
 
-The tree returned from `error` will be displayed if something in its segment or below threw an error. If multiple `error` files are defined, the innermost one will be used.
+#### `not-found.ts`
+
+```tsx
+export default function MyNotFound();
+```
+
+Similar to `error`, but triggered when the special `notFound()` function is called.
+The status code be set to 404 (unless it's called after the headers are flushed, i.e. below a `loading` boundary).
+
+_Note: if a request doesn't match any any routes, a built-in global `not-found` will be shown. This is currently not customizeable._
 
 ### Demo
 
@@ -115,3 +126,7 @@ npm run example
 This should bring up an app on port 8080. You can edit the code in `examples/demo-1` and if you're lucky it might even """hot reload""" by rerunning the whole build when something changed.
 
 Have fun!
+
+# Acknowledgements
+
+A big thank you to [Hendrik Liebau (@unstubbable)](https://github.com/unstubbable/) for the RSC transform stream implementation that allowed us to finally get rid of that Quirks Mode warning! Check out his RSC project [`mfng`](https://github.com/unstubbable/mfng), where I borrowed it from.
