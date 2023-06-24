@@ -132,12 +132,7 @@ export const build = async ({
       return config;
     }
 
-    const mergedConfig = mergeWebpackConfigs(config, userWebpackConfig());
-    // console.log(
-    //   "merged config:",
-    //   require("util").inspect(mergedConfig, { depth: undefined })
-    // );
-    return mergedConfig;
+    return mergeWebpackConfigs(config, userWebpackConfig());
   };
 
   const BUILD_MODE =
