@@ -10,6 +10,8 @@ import { Use } from "./support/use";
 import { __DEV__ } from "./support/is-dev";
 import { fetchSubtree } from "./router-integration/index.client";
 
+import "./generated/global-css";
+
 type InitialChunks = string[] & { isComplete?: boolean };
 
 // eslint-disable-next-line no-var

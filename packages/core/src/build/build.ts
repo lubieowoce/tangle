@@ -1,6 +1,6 @@
 /// <reference types="../types/react-server-dom-webpack" />
 
-import { LAYERS } from "./shared";
+import { LAYERS, TangleConfig } from "./shared";
 
 import { readFileSync } from "node:fs";
 import { pathToFileURL } from "node:url";
@@ -24,6 +24,7 @@ import Webpack, {
   WebpackError,
   dependencies as webpackDependencies,
 } from "webpack";
+import { merge as mergeWebpackConfigs } from "webpack-merge";
 
 import VirtualModulesPlugin from "webpack-virtual-modules";
 import {
@@ -40,6 +41,7 @@ import { stringLiteral } from "./codegen-helpers";
 
 import { CachedInputFileSystem, ResolverFactory } from "enhanced-resolve";
 import fs from "fs";
+import MiniCssExtractPlugin from "mini-css-extract-plugin";
 
 const rel = (p: string) => path.resolve(__dirname, p);
 
@@ -74,10 +76,19 @@ const IMPORT_CONDITIONS = {
   rsc: IMPORT_CONDITIONS_RSC,
 };
 
+const nullIfNotExists = (p: string) => {
+  if (!fs.existsSync(p)) {
+    return null;
+  }
+  return p;
+};
+
 export const build = async ({
   appPath,
+  configPath,
 }: {
   appPath: string;
+  configPath: string | null;
 }): Promise<BuildReturn> => {
   const DIST_PATH = path.join(appPath, "dist");
   const INTERNAL_CODE = rel("../runtime");
@@ -86,10 +97,15 @@ export const build = async ({
     user: {
       routesDir: path.resolve(appPath, "src/routes"),
       tsConfig: path.resolve(appPath, "tsconfig.json"),
+      globalCssFile: nullIfNotExists(path.resolve(appPath, "src/global.css")),
     },
     client: {
       entry: path.join(INTERNAL_CODE, "client.js"),
       destDir: path.join(DIST_PATH, "client"),
+      generatedGlobalCssModule: path.join(
+        INTERNAL_CODE,
+        "generated/global-css.js"
+      ),
     },
     server: {
       entry: path.join(INTERNAL_CODE, "server.js"),
@@ -101,7 +117,28 @@ export const build = async ({
     moduleDir: INTERNAL_CODE,
   };
 
-  console.log(opts);
+  if (configPath) {
+    console.log("importing user config", configPath);
+  }
+  const userConfig: TangleConfig =
+    configPath !== null
+      ? ((await import(configPath)).default as TangleConfig)
+      : {};
+
+  const withUserWebpackConfig = (config: Configuration) => {
+    const userWebpackConfig = userConfig.webpackConfig;
+
+    if (!userWebpackConfig) {
+      return config;
+    }
+
+    const mergedConfig = mergeWebpackConfigs(config, userWebpackConfig());
+    // console.log(
+    //   "merged config:",
+    //   require("util").inspect(mergedConfig, { depth: undefined })
+    // );
+    return mergedConfig;
+  };
 
   const BUILD_MODE =
     process.env.NODE_ENV === "production" ? "production" : "development";
@@ -167,6 +204,11 @@ export const build = async ({
         [opts.server.genratedRoutesModule]: teeLog(
           `export default ${routesObjectCode};`
         ),
+        [opts.client.generatedGlobalCssModule]: teeLog(
+          opts.user.globalCssFile
+            ? `import ${stringLiteral(opts.user.globalCssFile)};`
+            : "export {}"
+        ),
       }),
     ];
   };
@@ -178,37 +220,28 @@ export const build = async ({
   const analysisCtx = createAnalysisContext();
 
   console.log("performing analysis...");
-  const analysisConfig: Configuration = {
-    ...shared,
-    mode: BUILD_MODE,
-    devtool: false,
-    entry: { main: opts.server.entry },
-    resolve: {
-      ...shared.resolve,
-      // TODO: do we need react aliases here?
-      // could we be missing some import conditions or something?
-    },
-    module: {
-      ...shared.module,
-      // rules: [
-      //   {
-      //     test: MODULE_EXTENSIONS_REGEX,
-      //     exclude: /node_modules/,
-      //     use: [TS_LOADER],
-      //   },
-      // ],
-    },
-    plugins: [...sharedPlugins(), new RSCAnalysisPlugin({ analysisCtx })],
-    target: "node16", // TODO does this matter?
-    experiments: { layers: true },
-    output: {
-      path: path.join(opts.server.destDir, "__analysis__"),
-      clean: true,
-    },
-    optimization: {
-      ...NO_TERSER,
-    },
-  };
+  const analysisConfig: Configuration = withUserWebpackConfig(
+    mergeWebpackConfigs(shared, {
+      mode: BUILD_MODE,
+      devtool: false,
+      entry: { main: opts.server.entry },
+      // resolve: {
+      //   ...shared.resolve,
+      //   // TODO: do we need react aliases here?
+      //   // could we be missing some import conditions or something?
+      // },
+      plugins: [...sharedPlugins(), new RSCAnalysisPlugin({ analysisCtx })],
+      target: "node16", // TODO does this matter?
+      experiments: { layers: true },
+      output: {
+        path: path.join(opts.server.destDir, "__analysis__"),
+        clean: true,
+      },
+      optimization: {
+        ...NO_TERSER,
+      },
+    })
+  );
   await runWebpack(analysisConfig);
 
   console.log("analysis context");
@@ -227,42 +260,56 @@ export const build = async ({
     conditionNames: IMPORT_CONDITIONS.client,
   });
 
-  const clientConfig: Configuration = {
-    ...shared,
-    entry: opts.client.entry,
-    resolve: {
-      ...shared.resolve,
-      alias: reactResolutionsClient.aliases,
-    },
-    module: {
-      ...shared.module,
-    },
+  const CSS_RULES = {
     plugins: [
-      ...sharedPlugins(),
-      new ReactFlightWebpackPlugin({
-        isServer: false,
-        clientManifestFilename: "client-manifest.json",
-        ssrManifestFilename: INTERMEDIATE_SSR_MANIFEST,
-        clientReferences,
+      new MiniCssExtractPlugin({
+        filename: "[name].[contenthash].css",
+        chunkFilename: "[id].[contenthash].css",
       }),
     ],
-    target: ["web", "es2020"],
-    output: {
-      clean: true,
-      path: opts.client.destDir,
-      publicPath: "auto", // we don't know the public path statically
-      filename: "[name].[contenthash].js",
-      chunkFilename: "[id].[chunkhash].js",
+    module: {
+      rules: [
+        {
+          test: /\.css$/,
+          use: [MiniCssExtractPlugin.loader, "css-loader", "postcss-loader"],
+        },
+      ],
     },
-    optimization: {
-      moduleIds: "deterministic",
-      // ...NO_TERSER,
-      // splitChunks: {
-      //   chunks: "all",
-      // },
-    },
-    cache: false, // FIXME
   };
+
+  const clientConfig: Configuration = withUserWebpackConfig(
+    mergeWebpackConfigs(shared, CSS_RULES, {
+      entry: opts.client.entry,
+      resolve: {
+        alias: reactResolutionsClient.aliases,
+      },
+      plugins: [
+        ...sharedPlugins(),
+        new ReactFlightWebpackPlugin({
+          isServer: false,
+          clientManifestFilename: "client-manifest.json",
+          ssrManifestFilename: INTERMEDIATE_SSR_MANIFEST,
+          clientReferences,
+        }),
+      ],
+      target: ["web", "es2020"],
+      output: {
+        clean: true,
+        path: opts.client.destDir,
+        publicPath: "auto", // we don't know the public path statically
+        filename: "[name].[contenthash].js",
+        chunkFilename: "[id].[chunkhash].js",
+      },
+      optimization: {
+        moduleIds: "deterministic",
+        // ...NO_TERSER,
+        // splitChunks: {
+        //   chunks: "all",
+        // },
+      },
+      cache: false, // FIXME
+    })
+  );
   console.log("building client...");
 
   await runWebpack(clientConfig);
@@ -323,82 +370,79 @@ export const build = async ({
     },
   };
 
-  const serverConfig: Configuration = {
-    ...shared,
-    entry: { main: opts.server.entry /* ssr: virtualPath("ssr-entry.js") */ },
-    resolve: {
-      ...shared.resolve,
-    },
-    module: {
-      ...shared.module,
-      rules: [
-        {
-          // assign modules to layers
-          oneOf: [
-            {
-              test: opts.server.rscModule,
-              layer: LAYERS.rsc,
-              ...SERVER_MODULE_RULES.rsc,
-            },
-            {
-              // everything imported from the main SSR module (including RSDW/client) goes into the SSR layer,
-              // so that our NormalModuleReplacement function can rewrite the imports to `.__ssr__.EXT`...
-              test: opts.server.ssrModule,
-              layer: LAYERS.ssr,
-              ...SERVER_MODULE_RULES.ssr,
-            },
-            {
-              // ... and we make it transitive, so that it propagates through imports.
-              // note that this may result in duplicating some shared modules.
-              // TODO: figure out if we can solve that somehow
-              issuerLayer: LAYERS.ssr,
-              layer: LAYERS.ssr,
-              ...SERVER_MODULE_RULES.ssr,
-            },
-          ],
-        },
-        {
-          // assign import conditions per layer
-          oneOf: [
-            {
-              issuerLayer: LAYERS.ssr,
-              ...SERVER_MODULE_RULES.ssr,
-            },
-            {
-              issuerLayer: LAYERS.rsc,
-              ...SERVER_MODULE_RULES.rsc,
-            },
-          ],
-        },
-        ...(shared.module?.rules ?? []),
+  const serverConfig: Configuration = withUserWebpackConfig(
+    mergeWebpackConfigs(shared, {
+      entry: { main: opts.server.entry },
+      module: {
+        rules: [
+          {
+            // assign modules to layers
+            oneOf: [
+              {
+                test: opts.server.rscModule,
+                layer: LAYERS.rsc,
+                ...SERVER_MODULE_RULES.rsc,
+              },
+              {
+                // everything imported from the main SSR module (including RSDW/client) goes into the SSR layer,
+                // so that our NormalModuleReplacement function can rewrite the imports to `.__ssr__.EXT`...
+                test: opts.server.ssrModule,
+                layer: LAYERS.ssr,
+                ...SERVER_MODULE_RULES.ssr,
+              },
+              {
+                // ... and we make it transitive, so that it propagates through imports.
+                // note that this may result in duplicating some shared modules.
+                // TODO: figure out if we can solve that somehow
+                issuerLayer: LAYERS.ssr,
+                layer: LAYERS.ssr,
+                ...SERVER_MODULE_RULES.ssr,
+              },
+            ],
+          },
+          {
+            // assign import conditions per layer
+            oneOf: [
+              {
+                issuerLayer: LAYERS.ssr,
+                ...SERVER_MODULE_RULES.ssr,
+              },
+              {
+                issuerLayer: LAYERS.rsc,
+                ...SERVER_MODULE_RULES.rsc,
+              },
+            ],
+          },
+          ...(shared.module?.rules ?? []),
+        ],
+      },
+      plugins: [
+        ...sharedPlugins(),
+        ...moduleReplacements(analysisCtx),
+        createSSRDependencyPlugin({
+          analysisCtx,
+          rsdwSSRClientFilePaths: RSDW_CLIENT_SPECIFIERS.map(
+            (specifier) => reactResolutionsServer.ssr.resolutions[specifier]
+          ),
+        }),
+        new RSCServerPlugin({
+          // ctx,
+          ssrManifestFromClient: ssrManifestFromRSDW,
+          ssrManifestFilename: "ssr-manifest.json",
+        }),
       ],
-    },
-    plugins: [
-      ...sharedPlugins(),
-      ...moduleReplacements(analysisCtx),
-      createSSRDependencyPlugin({
-        analysisCtx,
-        rsdwSSRClientFilePaths: RSDW_CLIENT_SPECIFIERS.map(
-          (specifier) => reactResolutionsServer.ssr.resolutions[specifier]
-        ),
-      }),
-      new RSCServerPlugin({
-        // ctx,
-        ssrManifestFromClient: ssrManifestFromRSDW,
-        ssrManifestFilename: "ssr-manifest.json",
-      }),
-    ],
-    target: "node16",
-    experiments: { layers: true },
-    output: {
-      path: opts.server.destDir,
-      clean: true,
-    },
-    optimization: {
-      ...NO_TERSER,
-    },
-    cache: false,
-  };
+      target: "node16",
+      experiments: { layers: true },
+      output: {
+        path: opts.server.destDir,
+        clean: true,
+      },
+      optimization: {
+        ...NO_TERSER,
+      },
+      cache: false,
+    })
+  );
   await runWebpack(serverConfig);
 
   return { server: { path: path.join(opts.server.destDir, "main.js") } };

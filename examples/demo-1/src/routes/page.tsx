@@ -6,7 +6,7 @@ export default function Root() {
     <>
       {meta}
       <div>
-        <h1>Index</h1>
+        <h1 className="text-lg">Index!</h1>
         <Link href="/profiles">View all profiles</Link>
       </div>
     </>
