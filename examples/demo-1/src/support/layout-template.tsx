@@ -14,14 +14,8 @@ export const createRouteLayout = (
       await slowdown(500);
     }
     return (
-      <div
-        style={{
-          border: "2px solid lightgrey",
-          borderRadius: "8px",
-          padding: "8px",
-        }}
-      >
-        <div style={{ marginBottom: "8px" }}>
+      <div className="border-solid border-2 border-gray-300 rounded-lg p-2">
+        <div className="mb-1">
           layout: {JSON.stringify(name)} {JSON.stringify(params)} <Timestamp />
         </div>
         {children}
@@ -31,5 +25,5 @@ export const createRouteLayout = (
 
 export const createRouteLoading = (name: string) =>
   function DummyLoading() {
-    return <div style={{ color: "lightgrey" }}>Loading segment {name}...</div>;
+    return <div className="text-gray-300">Loading segment {name}...</div>;
   };

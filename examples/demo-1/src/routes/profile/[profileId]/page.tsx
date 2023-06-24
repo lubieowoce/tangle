@@ -2,6 +2,7 @@ import { Link } from "@owoce/tangle/client";
 import { notFound } from "@owoce/tangle/server";
 import { getDbClient, getProfileFromDb } from "../../../server/db";
 import { Timestamp } from "../../../components/timestamp";
+import { linkStyles } from "../../../components/styles";
 
 type Params = { profileId: string };
 
@@ -21,31 +22,33 @@ export default async function ProfileView({ params }: { params: Params }) {
   return (
     <>
       {meta}
-      <div
-        style={{
-          border: "2px solid green",
-          borderRadius: "8px",
-          padding: "8px",
-        }}
-      >
+      <div className="border-solid border-2 border-green-600 p-2 rounded-lg">
         <strong>{profile.name}</strong>
         <div>
           Profile id: {profileId} <Timestamp />
         </div>
         <p>{profile.description}</p>
-        <Link href={`/profile/${profileId}/foo/bar`}>Foo</Link>
-        <hr />
-        <div style={{ display: "flex", gap: "16px", alignItems: "baseline" }}>
+        <Link href={`/profile/${profileId}/foo/bar`} className={linkStyles}>
+          Foo
+        </Link>
+        <hr className="my-1" />
+        <div className="flex gap-4 items-baseline">
           {prevProfileId !== null ? (
-            <Link href={`/profile/${prevProfileId}`}>← Prev</Link>
+            <Link href={`/profile/${prevProfileId}`} className={linkStyles}>
+              ← Prev
+            </Link>
           ) : (
-            <span style={{ color: "lightgrey" }}>← Prev</span>
+            <span className="text-gray-400">← Prev</span>
           )}
-          <Link href="/profiles">All</Link>
+          <Link href="/profiles" className={linkStyles}>
+            All
+          </Link>
           {nextProfileId !== null ? (
-            <Link href={`/profile/${nextProfileId}`}>Next →</Link>
+            <Link href={`/profile/${nextProfileId}`} className={linkStyles}>
+              Next →
+            </Link>
           ) : (
-            <span style={{ color: "lightgrey" }}>Next →</span>
+            <span className="text-gray-400">Next →</span>
           )}
         </div>
       </div>
