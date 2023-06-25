@@ -240,6 +240,8 @@ declare module "react-server-dom-webpack/src/ReactFlightDOMClientBrowser" {
   export function encodeReply(
     value: ReactServerValue
   ): Promise<string | URLSearchParams | FormData>;
+
+  export { createServerReference } from "react-client/src/ReactFlightReplyClient";
 }
 
 declare module "react-server-dom-webpack/src/ReactFlightDOMClientNode" {
@@ -253,6 +255,8 @@ declare module "react-server-dom-webpack/src/ReactFlightDOMClientNode" {
     stream: Readable,
     moduleMap: NonNullable<SSRManifest>
   ): Thenable<T>;
+
+  export { createServerReference } from "react-client/src/ReactFlightReplyClient";
 }
 
 declare module "react-server-dom-webpack/src/ReactFlightDOMClientEdge" {
@@ -275,6 +279,8 @@ declare module "react-server-dom-webpack/src/ReactFlightDOMClientEdge" {
     promiseForResponse: Promise<Response>,
     options?: Options
   ): Thenable<T>;
+
+  export { createServerReference } from "react-client/src/ReactFlightReplyClient";
 }
 
 //================
@@ -369,6 +375,19 @@ declare module "react-client/src/ReactFlightReplyClient" {
     | ReactServerValue[]
     | { [key: string]: ReactServerValue }
     | Promise<ReactServerValue>; // Thenable<ReactServerValue>
+
+  export { createServerReference } from "react-client/src/ReactFlightServerReferenceRegistry";
+}
+
+declare module "react-client/src/ReactFlightServerReferenceRegistry" {
+  import type { ServerReferenceId } from "react-client/src/ReactFlightClientHostConfig";
+
+  export type CallServerCallback = <A, T>(id: any, args: A) => Promise<T>;
+
+  export function createServerReference<A extends any[], T>(
+    id: ServerReferenceId,
+    callServer: CallServerCallback
+  ): (...args: A) => Promise<T>;
 }
 
 //================

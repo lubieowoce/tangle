@@ -3,8 +3,7 @@ import { getAllProfilesFromFb, getDbClient } from "../../server/db";
 import { buttonStyles } from "../../components/styles";
 import { addNewProfile, addNewProfileFromObject } from "./actions";
 import { Button } from "./button";
-
-console.log("AllProfilesView buttonStyles", buttonStyles);
+import { ClientProfileForm } from "./profile-form";
 
 export default async function AllProfilesView(_props: { params: {} }) {
   const dbClient = await getDbClient();
@@ -42,6 +41,9 @@ export default async function AllProfilesView(_props: { params: {} }) {
             Create new profile (via bind)
           </button>
         </form>
+      </div>
+      <div className="mt-2">
+        <ClientProfileForm />
       </div>
     </>
   );

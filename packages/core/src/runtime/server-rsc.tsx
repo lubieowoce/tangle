@@ -58,24 +58,78 @@ export function createServerActionHandler(
       throw new Error("Unrecognized action id: " + JSON.stringify(id));
     }
 
+    const manifest = createEmptyServerManifest();
+
     // adapted from
     // https://github.com/facebook/react/blob/8ec962d825fc948ffda5ab863e639cd4158935ba/fixtures/flight/server/region.js#L124
 
     type Args = any[];
     let args: Args;
-    if (req.is("multipart/form-data")) {
+
+    if (req.is("json")) {
+      args = JSON.parse(await getRawBodyAsString(req));
+    } else if (req.is("multipart/form-data")) {
       // Use busboy to streamingly parse the reply from form-data.
       const bb = busboy({ headers: req.headers });
-      const reply = decodeReplyFromBusboy<Args>(bb, {});
+      const reply = decodeReplyFromBusboy<Args>(bb, manifest);
       req.pipe(bb);
       args = await reply;
+    } else if (req.is("application/x-www-form-urlencoded")) {
+      const body = formDataFromSearchQueryString(new URL(req.url).search);
+      args = await decodeReply<Args>(body, manifest);
     } else {
-      args = await decodeReply<Args>(req.body, {});
+      args = await decodeReply<Args>(req.body, manifest);
     }
+
+    console.log("handleAction :: args", args);
 
     return renderToPipeableStream(
       handler(...args),
       options.webpackMapForClient
     );
   };
+}
+
+function getRawBodyAsString(req: Request) {
+  return new Promise<string>((resolve, reject) => {
+    let rawBody = "";
+    req.on("data", function (chunk) {
+      rawBody += chunk;
+    });
+    req.on("end", () => resolve(rawBody));
+    req.on("error", (err) => reject(err));
+  });
+}
+
+function createEmptyServerManifest() {
+  // i'm not sure what this is even for, so pretend to be an empty object, but warn if accessed
+
+  const logAccess = (key: string | symbol) => {
+    console.error(
+      "decodeReply tried to get key from serverManifest:" + JSON.stringify(key)
+    );
+  };
+
+  return new Proxy(
+    {},
+    {
+      has(_target, key) {
+        logAccess(key);
+        return false;
+      },
+      get(_target, key, _receiver) {
+        logAccess(key);
+        return undefined;
+      },
+    }
+  );
+}
+
+function formDataFromSearchQueryString(query: string) {
+  const searchParams = new URLSearchParams(query);
+  const formData = new FormData();
+  for (const [key, value] of searchParams) {
+    formData.append(key, value);
+  }
+  return formData;
 }

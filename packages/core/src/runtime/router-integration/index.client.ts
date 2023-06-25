@@ -13,23 +13,41 @@ export type CreateFromFetchOptions = NonNullable<
   Parameters<typeof createFromFetch>[1]
 >;
 
-function getOptionsForCreate(): CreateFromFetchOptions {
-  return {
-    async callServer(id, args) {
-      console.log("callServer", id, args);
-      const url = ACTIONS_ROUTE_PREFIX + encodeURIComponent(id);
-      const responsePromise = fetch(url, {
-        method: "POST",
-        headers: { accept: RSC_CONTENT_TYPE },
-        body: await encodeReply(args),
-      });
-      // TODO: response value
-      return createFromFetch(responsePromise);
-    },
-  };
-}
+export type CallServerCallback = NonNullable<
+  CreateFromFetchOptions["callServer"]
+>;
 
-export const OPTIONS_FOR_CREATE = getOptionsForCreate();
+export const callServer = (async (id, args) => {
+  console.log("callServer", id, args);
+  const url = ACTIONS_ROUTE_PREFIX + encodeURIComponent(id);
+
+  let requestOpts: Pick<RequestInit, "headers" | "body">;
+  if (!Array.isArray(args) || args.some((a) => a instanceof FormData)) {
+    requestOpts = {
+      headers: { accept: RSC_CONTENT_TYPE },
+      body: await encodeReply(args),
+    };
+  } else {
+    requestOpts = {
+      headers: {
+        accept: RSC_CONTENT_TYPE,
+        "content-type": "application/json",
+      },
+      body: JSON.stringify(args),
+    };
+  }
+
+  const responsePromise = fetch(url, {
+    method: "POST",
+    ...requestOpts,
+  });
+  // TODO: response value
+  return createFromFetch(responsePromise);
+}) satisfies CallServerCallback;
+
+export const OPTIONS_FOR_CREATE = {
+  callServer,
+} satisfies CreateFromFetchOptions;
 
 // mark the whole thing as an async function
 // that way, if fetch() throws (e.g. NetworkError),

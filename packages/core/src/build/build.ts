@@ -5,6 +5,7 @@ import { LAYERS, TangleConfig } from "./shared";
 import { readFileSync } from "node:fs";
 import { pathToFileURL } from "node:url";
 import path from "node:path";
+import crypto from "node:crypto";
 
 import ReactFlightWebpackPlugin, {
   Options as ReactFlightWebpackPluginOptions,
@@ -50,11 +51,11 @@ const getVirtualPathSSR = (p: string) =>
 
 const isVirtualPathSSR = (p: string) => p.match(/\.__ssr__\.(.+)$/) !== null; // FIXME: use real module extensions
 
-const getVirtualPathProxy = (p: string) =>
-  p.replace(MODULE_EXTENSIONS_REGEX, ".__proxy__.$1"); // FIXME: kinda hacky... idk
+const getVirtualPathRSC = (p: string) =>
+  p.replace(MODULE_EXTENSIONS_REGEX, ".__rsc__.$1"); // FIXME: kinda hacky... idk
 
 const getOriginalPathFromVirtual = (p: string) =>
-  p.replace(/\.(__ssr__|__proxy__)\./, ".");
+  p.replace(/\.(__ssr__|__rsc__)\./, ".");
 
 export type BuildReturn = { server: { path: string } };
 
@@ -418,8 +419,7 @@ export const build = async ({
       },
       plugins: [
         ...sharedPlugins(),
-        ...getReplaceMentsOfClientModules(analysisCtx),
-        ...getReplaceMentsOfServerModules({ analysisCtx, isServer: true }),
+        ...getModuleReplacementsForServer(analysisCtx),
         ...getActionHandlersModule(
           analysisCtx,
           opts.server.generatedActionHandlersModule
@@ -431,7 +431,7 @@ export const build = async ({
           ),
         }),
         new RSCServerPlugin({
-          // ctx,
+          analysisCtx,
           ssrManifestFromClient: ssrManifestFromRSDW,
           ssrManifestFilename: "ssr-manifest.json",
         }),
@@ -554,7 +554,7 @@ const getManifestId = (resource: string) => pathToFileURL(resource);
 
 const createProxyOfClientModule = ({
   resource,
-  exports,
+  exports: modExports,
 }: {
   resource: string;
   exports: string[];
@@ -573,7 +573,7 @@ const createProxyOfClientModule = ({
   const proxyExpr = (exportName: string) =>
     `(/*@__PURE__*/ proxy[${stringLiteral(exportName)}])`;
 
-  for (const exportName of exports) {
+  for (const exportName of modExports) {
     const expr = proxyExpr(exportName);
     if (exportName === "default") {
       generatedCode.push(`export default ${expr}`);
@@ -588,8 +588,12 @@ const createProxyOfClientModule = ({
 // Server reference codegen
 //=================================
 
+const getHash = (s: string) =>
+  crypto.createHash("sha1").update(s).digest().toString("hex");
+
+// TODO: this is vulnerable to version drift (filename might stay the same, but hash would change)
 const getServerActionId = (resource: string, name: string) =>
-  "action__" + pathToFileURL(resource).href.replaceAll("/", "__") + "#" + name;
+  name + "-" + getHash(pathToFileURL(resource).href);
 
 const createProxyOfServerModule = ({
   resource,
@@ -638,21 +642,24 @@ const enhanceUseServerModuleForServer = ({
   exports: string[];
 }) => {
   if (exports.includes("default")) {
+    // if the export is a default export, we can't just use its name
+    // in the addServerActionMetadata call.
+    // we'd need to do some kind of babel transform to support that
     throw new Error(
       `Found default export in \n  ${originalSource}\n` +
         "Default exports from server actions are not supported yet. Please use a named export."
     );
   }
-  const CREATE_PROXY_MOD_PATH = path.resolve(
+  const METADATA_MOD_PATH = path.resolve(
     __dirname,
-    "../runtime/support/server-action-proxy-for-client"
+    "../runtime/support/add-server-action-metadata"
   );
 
   const getActionId = (name: string) => getServerActionId(resource, name);
 
   const prefix = [
     `import { addServerActionMetadata } from ${stringLiteral(
-      CREATE_PROXY_MOD_PATH
+      METADATA_MOD_PATH
     )};`,
     ``,
   ];
@@ -740,17 +747,14 @@ function getReplaceMentsOfServerModules({
       ? enhanceUseServerModuleForServer({
           resource,
           exports: modExports,
-          originalSource: mod.originalSource()!.buffer().toString("utf-8"),
+          originalSource: getOriginalSource(mod),
         })
       : createProxyOfServerModule({
           resource,
           exports: modExports,
         });
     if (LOG_OPTIONS.generatedCode) {
-      console.log(
-        "VirtualModule (server proxy): " + resource,
-        "\n" + source + "\n"
-      );
+      console.log("VirtualModule (rsc): " + resource, "\n" + source + "\n");
     }
     virtualModules[resource] = source;
   }
@@ -890,7 +894,7 @@ class RSCAnalysisPlugin {
 //=========================
 
 type RSCPluginOptions = {
-  // ctx: Ctx;
+  analysisCtx: RSCAnalysisCtx;
   ssrManifestFromClient: SSRManifest;
   ssrManifestFilename: string;
 };
@@ -919,9 +923,20 @@ class RSCServerPlugin {
           };
           const ssrManifestSpecifierRewrite: Rewrites = {};
 
-          const isGeneratedModule = (mod: Module) =>
-            mod instanceof NormalModule && isVirtualPathSSR(mod.resource);
-          // && m.layer === LAYERS.ssr; // TODO: should we do something like this??
+          const isGeneratedClientModule = (mod: Module): boolean => {
+            if (!(mod instanceof NormalModule)) {
+              return false;
+            }
+            if (isVirtualPathSSR(mod.resource)) {
+              const { analysisCtx } = this.options;
+              // we don't need to rewrite server modules, because they're not in the client manifest.
+              const originalResource = getOriginalPathFromVirtual(mod.resource);
+              const type = analysisCtx.getTypeForResource(originalResource);
+              return type === "client";
+              // && m.layer === LAYERS.ssr; // TODO: should we do something like this??
+            }
+            return false;
+          };
 
           compilation.chunkGroups.forEach((chunkGroup) => {
             const chunkIds = chunkGroup.chunks
@@ -943,7 +958,7 @@ class RSCServerPlugin {
                 return;
               }
 
-              if (!isGeneratedModule(mod)) return;
+              if (!isGeneratedClientModule(mod)) return;
               const moduleId =
                 parentModuleId ?? compilation.chunkGraph.getModuleId(mod);
               if (!(mod instanceof NormalModule)) {
@@ -1020,28 +1035,41 @@ class RSCServerPlugin {
   }
 }
 
-function getReplaceMentsOfClientModules(analysisCtx: RSCAnalysisCtx) {
+function getModuleReplacementsForServer(analysisCtx: RSCAnalysisCtx) {
   // TODO: use .apply() instead of just putting these in the plugin array
 
   const virtualModules: Record<string, string> = {};
+
+  const getExportsFromCtx = (resource: string, type: "client" | "server") => {
+    const res = analysisCtx.exports[type].get(resource);
+    if (!res) {
+      throw new Error(
+        "Internal Error: No exports info gathered for " +
+          JSON.stringify(resource)
+      );
+    }
+    return res;
+  };
+
+  // for client modules, SSR gets the original source, and RSC gets a proxy
   for (const [resource, mod] of analysisCtx.modules.client.entries()) {
     {
       const virtualPath = getVirtualPathSSR(resource);
-      const source = mod.originalSource()!.buffer().toString("utf-8");
+      const source = getOriginalSource(mod);
       if (LOG_OPTIONS.generatedCode) {
         console.log("VirtualModule (ssr):" + virtualPath, "\n" + source + "\n");
       }
       virtualModules[virtualPath] = source;
     }
     {
-      const virtualPath = getVirtualPathProxy(resource);
+      const virtualPath = getVirtualPathRSC(resource);
       const source = createProxyOfClientModule({
         resource,
-        exports: analysisCtx.exports.client.get(resource)!,
+        exports: getExportsFromCtx(resource, "client"),
       });
       if (LOG_OPTIONS.generatedCode) {
         console.log(
-          "VirtualModule (client proxy): " + virtualPath,
+          "VirtualModule (rsc): " + virtualPath,
           "\n" + source + "\n"
         );
       }
@@ -1049,52 +1077,114 @@ function getReplaceMentsOfClientModules(analysisCtx: RSCAnalysisCtx) {
     }
   }
 
+  // for server modules, it's the opposite -- SSR gets a proxy, and RSC gets the original source (but enhanced)
+  for (const [resource, mod] of analysisCtx.modules.server.entries()) {
+    {
+      const virtualPath = getVirtualPathSSR(resource);
+      const source = createProxyOfServerModule({
+        resource,
+        exports: getExportsFromCtx(resource, "server"),
+      });
+      if (LOG_OPTIONS.generatedCode) {
+        console.log(
+          "VirtualModule (ssr): " + virtualPath,
+          "\n" + source + "\n"
+        );
+      }
+      virtualModules[virtualPath] = source;
+    }
+    {
+      const virtualPath = getVirtualPathRSC(resource);
+      const source = enhanceUseServerModuleForServer({
+        resource,
+        exports: getExportsFromCtx(resource, "server"),
+        originalSource: getOriginalSource(mod),
+      });
+      if (LOG_OPTIONS.generatedCode) {
+        console.log("VirtualModule (rsc):" + virtualPath, "\n" + source + "\n");
+      }
+      virtualModules[virtualPath] = source;
+    }
+  }
+
   return [
     new VirtualModulesPlugin(virtualModules),
-    new NormalModuleReplacementPlugin(
-      MODULE_EXTENSIONS_REGEX,
-      (resolveData /*: ResolveData */) => {
-        const originalResource: string | undefined =
-          resolveData.createData.resource;
-
-        if (!originalResource) return;
-
-        if (analysisCtx.getTypeForResource(originalResource) === "client") {
-          // console.log("replacement", resolveData);
-          const isSSR = resolveData.contextInfo.issuerLayer === LAYERS.ssr;
-          const newResource = isSSR
-            ? getVirtualPathSSR(originalResource)
-            : getVirtualPathProxy(originalResource);
-
-          const label = `(${isSSR ? "ssr" : "proxy"})`;
-
-          if (LOG_OPTIONS.importRewrites) {
-            console.log(
-              `${label} preparing replacement: `,
-              resolveData.createData.resource
-            );
-            console.log(
-              `${label} issued from: ${resolveData.contextInfo.issuer} (${resolveData.contextInfo.issuerLayer})`
-            );
-            console.log(`${label} rewriting request to`, newResource);
-            // console.log(resolveData);
-            console.log();
-          }
-
-          resolveData.request = newResource;
-          resolveData.createData.request =
-            resolveData.createData.request.replace(
-              originalResource,
-              newResource
-            );
-          resolveData.createData.resource = newResource;
-          resolveData.createData.userRequest = newResource;
-          // console.log(resolveData);
+    createImportRewritePlugin(
+      (
+        originalResource: string,
+        resolveData: PartialResolveData
+      ): string | null => {
+        const type = analysisCtx.getTypeForResource(originalResource);
+        if (type !== "client" && type !== "server") {
+          return null;
         }
+
+        const isSSR = resolveData.contextInfo.issuerLayer === LAYERS.ssr;
+
+        const newResource = isSSR
+          ? getVirtualPathSSR(originalResource)
+          : getVirtualPathRSC(originalResource);
+        const label = `(${isSSR ? "ssr" : "proxy"})`;
+
+        if (LOG_OPTIONS.importRewrites) {
+          console.log(
+            `${label} preparing replacement: `,
+            resolveData.createData.resource
+          );
+          console.log(
+            `${label} issued from: ${resolveData.contextInfo.issuer} (${resolveData.contextInfo.issuerLayer})`
+          );
+          console.log(`${label} rewriting request to`, newResource);
+          console.log();
+        }
+        return newResource;
       }
     ),
   ];
 }
+
+type PartialResolveData = {
+  request: string | undefined;
+  contextInfo: {
+    laer?: string;
+    issuerLayer?: string;
+    issuer: string;
+  };
+  createData: {
+    request: string;
+    resource: string;
+    userRequest: string;
+  };
+};
+
+const createImportRewritePlugin = (
+  assignModule: (
+    originalResource: string,
+    resolveData: PartialResolveData
+  ) => string | null
+) => {
+  return new NormalModuleReplacementPlugin(
+    MODULE_EXTENSIONS_REGEX,
+    (resolveData: PartialResolveData) => {
+      const originalResource: string | undefined =
+        resolveData.createData.resource;
+
+      if (!originalResource) return;
+
+      const newResource = assignModule(originalResource, resolveData);
+
+      if (newResource !== null) {
+        resolveData.request = newResource;
+        resolveData.createData.request = resolveData.createData.request.replace(
+          originalResource,
+          newResource
+        );
+        resolveData.createData.resource = newResource;
+        resolveData.createData.userRequest = newResource;
+      }
+    }
+  );
+};
 
 const createSSRDependencyPlugin = ({
   analysisCtx,
@@ -1203,4 +1293,14 @@ const tapParserJS = (
   nmf.hooks.parser.for("javascript/auto").tap(name, onParse);
   nmf.hooks.parser.for("javascript/dynamic").tap(name, onParse);
   nmf.hooks.parser.for("javascript/esm").tap(name, onParse);
+};
+
+const getOriginalSource = (mod: NormalModule): string => {
+  const source = mod.originalSource()!;
+  if (!source) {
+    throw new Error(
+      "Cannot get original source for module: " + JSON.stringify(mod.resource)
+    );
+  }
+  return source.buffer().toString("utf-8");
 };
