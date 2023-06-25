@@ -42,7 +42,7 @@ export default async function AllProfilesView(_props: { params: {} }) {
         <ClientProfileForm />
       </div>
       <hr className="my-8" />
-      <div className="flex-col items-stretch gap-2">
+      <div className="flex flex-col items-stretch gap-2">
         <Button
           props={getExample("(form action)")}
           className={buttonStyles}
