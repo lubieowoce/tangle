@@ -4,7 +4,7 @@ import { slowdown } from "./slowdown";
 
 export const createRouteLayout = (
   name: string,
-  opts: { delay?: boolean } = {}
+  opts: { delay?: boolean; className?: string } = {}
 ) =>
   async function DummyLayout({
     params,
@@ -14,7 +14,12 @@ export const createRouteLayout = (
       await slowdown(500);
     }
     return (
-      <div className="border-solid border-2 border-gray-300 rounded-lg p-2">
+      <div
+        className={
+          opts.className ??
+          "border-solid border-2 border-gray-300 rounded-lg p-4"
+        }
+      >
         <div className="mb-1">
           layout: {JSON.stringify(name)} {JSON.stringify(params)} <Timestamp />
         </div>
@@ -23,7 +28,14 @@ export const createRouteLayout = (
     );
   };
 
-export const createRouteLoading = (name: string) =>
+export const createRouteLoading = (
+  name: string,
+  opts: { className?: string } = {}
+) =>
   function DummyLoading() {
-    return <div className="text-gray-300">Loading segment {name}...</div>;
+    return (
+      <div className={`text-gray-300 ${opts.className}`}>
+        Loading segment {name}...
+      </div>
+    );
   };
