@@ -5,7 +5,9 @@ import * as path from "node:path";
 import { slowdown } from "../support/slowdown";
 import { cache } from "react";
 
-type DBContents = {
+export type ProfileData = { name: string; description: string };
+
+export type DBContents = {
   profiles: Record<string, ProfileData>;
 };
 
@@ -84,5 +86,3 @@ export async function getAllProfilesFromFb(dbClient: DBClient) {
     name: profile.name,
   }));
 }
-
-type ProfileData = { name: string; description: string };

@@ -7,13 +7,14 @@ import type { ReadableStream } from "node:stream/web";
 import Express, { static as expressStatic } from "express";
 
 import {
+  ACTIONS_ROUTE_PREFIX,
   ASSETS_ROUTE,
   FLIGHT_REQUEST_HEADER,
   ROUTER_STATE_HEADER,
   RSC_CONTENT_TYPE,
 } from "./shared";
 
-import { renderRSCRoot } from "./server-rsc";
+import { createServerActionHandler, renderRSCRoot } from "./server-rsc";
 import { getSSRDomStream, AssetsManifest } from "./server-ssr";
 import { catchAsync, readablefromPipeable } from "./utils";
 
@@ -59,17 +60,6 @@ const getAssetsManifest = (): AssetsManifest => {
 
 const assetsManifest = getAssetsManifest();
 
-// console.log("scriptsManifest", scriptsManifest);
-
-// console.log(
-//   "client map (src only)",
-//   util.inspect(filterMapSrcOnly(webpackMapForClient), { depth: undefined })
-// );
-// console.log(
-//   "patched ssr map (src only)",
-//   util.inspect(filterMapSrcOnly(webpackMapForSSR), { depth: undefined })
-// );
-
 app.use(ASSETS_ROUTE, expressStatic(CLIENT_ASSETS_DIR));
 
 // TODO: distinguish which paths should hit the router somehow
@@ -77,6 +67,24 @@ app.get("/favicon.ico", (_, res) => res.status(404).send());
 
 // these headers influence the returned content
 const varyHeader = [FLIGHT_REQUEST_HEADER, ROUTER_STATE_HEADER].join(", ");
+
+const handleServerAction = createServerActionHandler({ webpackMapForClient });
+
+app.post(
+  ACTIONS_ROUTE_PREFIX + ":actionId",
+  catchAsync(async (req, res) => {
+    const actionId = req.params["actionId"];
+    if (typeof actionId !== "string") {
+      res.status(400).send("Missing action id");
+      return;
+    }
+    console.log("Executing server action", actionId);
+    const result = await handleServerAction(actionId, req, res);
+    res.status(200);
+    res.header("content-type", RSC_CONTENT_TYPE);
+    result.pipe(res);
+  })
+);
 
 app.get(
   "*",

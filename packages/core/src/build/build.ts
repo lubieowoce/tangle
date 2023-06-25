@@ -111,7 +111,11 @@ export const build = async ({
       entry: path.join(INTERNAL_CODE, "server.js"),
       ssrModule: path.join(INTERNAL_CODE, "server-ssr.js"),
       rscModule: path.join(INTERNAL_CODE, "server-rsc.js"),
-      genratedRoutesModule: path.join(INTERNAL_CODE, "generated/routes.js"),
+      generatedRoutesModule: path.join(INTERNAL_CODE, "generated/routes.js"),
+      generatedActionHandlersModule: path.join(
+        INTERNAL_CODE,
+        "generated/action-handlers.js"
+      ),
       destDir: path.join(DIST_PATH, "server"),
     },
     moduleDir: INTERNAL_CODE,
@@ -196,7 +200,7 @@ export const build = async ({
     };
     return [
       new VirtualModulesPlugin({
-        [opts.server.genratedRoutesModule]: teeLog(
+        [opts.server.generatedRoutesModule]: teeLog(
           `export default ${routesObjectCode};`
         ),
         [opts.client.generatedGlobalCssModule]: teeLog(
@@ -280,6 +284,7 @@ export const build = async ({
       },
       plugins: [
         ...sharedPlugins(),
+        ...getReplaceMentsOfServerModules({ analysisCtx, isServer: false }),
         new ReactFlightWebpackPlugin({
           isServer: false,
           clientManifestFilename: "client-manifest.json",
@@ -413,7 +418,12 @@ export const build = async ({
       },
       plugins: [
         ...sharedPlugins(),
-        ...moduleReplacements(analysisCtx),
+        ...getReplaceMentsOfClientModules(analysisCtx),
+        ...getReplaceMentsOfServerModules({ analysisCtx, isServer: true }),
+        ...getActionHandlersModule(
+          analysisCtx,
+          opts.server.generatedActionHandlersModule
+        ),
         createSSRDependencyPlugin({
           analysisCtx,
           rsdwSSRClientFilePaths: RSDW_CLIENT_SPECIFIERS.map(
@@ -536,13 +546,13 @@ const getReactPackagesResolutions = async ({
   return { resolutions, aliases };
 };
 
-//=========================
-// Module proxy codegen
-//=========================
+//=============================
+// Client module proxy codegen
+//=============================
 
 const getManifestId = (resource: string) => pathToFileURL(resource);
 
-const createProxyModule = ({
+const createProxyOfClientModule = ({
   resource,
   exports,
 }: {
@@ -573,6 +583,180 @@ const createProxyModule = ({
   }
   return generatedCode.join("\n");
 };
+
+//=================================
+// Server reference codegen
+//=================================
+
+const getServerActionId = (resource: string, name: string) =>
+  "action__" + pathToFileURL(resource).href.replaceAll("/", "__") + "#" + name;
+
+const createProxyOfServerModule = ({
+  resource,
+  exports,
+}: {
+  resource: string;
+  exports: string[];
+}) => {
+  const CREATE_PROXY_MOD_PATH = path.resolve(
+    __dirname,
+    "../runtime/support/server-action-proxy-for-client"
+  );
+
+  const getActionId = (name: string) => getServerActionId(resource, name);
+
+  const generatedCode = [
+    `import { createServerActionProxy } from ${stringLiteral(
+      CREATE_PROXY_MOD_PATH
+    )};`,
+    ``,
+  ];
+
+  const proxyExpr = (exportName: string) =>
+    `(/*@__PURE__*/ createServerActionProxy(${stringLiteral(
+      getActionId(exportName)
+    )}))`;
+
+  for (const exportName of exports) {
+    const expr = proxyExpr(exportName);
+    if (exportName === "default") {
+      generatedCode.push(`export default ${expr}`);
+    } else {
+      generatedCode.push(`export const ${exportName} = ${expr}`);
+    }
+  }
+  return generatedCode.join("\n");
+};
+
+const enhanceUseServerModuleForServer = ({
+  resource,
+  originalSource,
+  exports,
+}: {
+  resource: string;
+  originalSource: string;
+  exports: string[];
+}) => {
+  if (exports.includes("default")) {
+    throw new Error(
+      `Found default export in \n  ${originalSource}\n` +
+        "Default exports from server actions are not supported yet. Please use a named export."
+    );
+  }
+  const CREATE_PROXY_MOD_PATH = path.resolve(
+    __dirname,
+    "../runtime/support/server-action-proxy-for-client"
+  );
+
+  const getActionId = (name: string) => getServerActionId(resource, name);
+
+  const prefix = [
+    `import { addServerActionMetadata } from ${stringLiteral(
+      CREATE_PROXY_MOD_PATH
+    )};`,
+    ``,
+  ];
+
+  const generatedCode: string[] = [];
+
+  const metaStmt = (exportName: string) =>
+    [
+      `addServerActionMetadata(`,
+      `  ${stringLiteral(getActionId(exportName))},`,
+      `  (${exportName})`,
+      `);`,
+    ].join("\n");
+
+  for (const exportName of exports) {
+    const stmt = metaStmt(exportName);
+    generatedCode.push(stmt);
+  }
+
+  return [...prefix, originalSource, ...generatedCode].join("\n");
+};
+
+function getActionHandlersModule(
+  analysisCtx: RSCAnalysisCtx,
+  targetFilePath: string
+) {
+  const code = getActionHandlersModuleSource(analysisCtx);
+
+  if (LOG_OPTIONS.generatedCode) {
+    console.log("VirtualModule (action-handlers)", "\n" + code + "\n");
+  }
+
+  return [
+    new VirtualModulesPlugin({
+      [targetFilePath]: code,
+    }),
+  ];
+}
+
+function getActionHandlersModuleSource(analysisCtx: {
+  modules: {
+    client: Map<string, Webpack.NormalModule>;
+    server: Map<string, Webpack.NormalModule>;
+  };
+  exports: { client: Map<string, string[]>; server: Map<string, string[]> };
+  getTypeForModule(mod: Module): "client" | "server" | null;
+  getTypeForResource(resource: string): "client" | "server" | null;
+}) {
+  let id = 0;
+  const code: string[] = [];
+  const handlersById: Record<string, string> = {};
+
+  for (const [resource] of analysisCtx.modules.server.entries()) {
+    const modExports = analysisCtx.exports.server.get(resource)!;
+    const modImportedName = `mod${id++}`;
+    code.push(
+      `import * as ${modImportedName} from ${stringLiteral(resource)};`
+    );
+    for (const exportName of modExports) {
+      handlersById[
+        getServerActionId(resource, exportName)
+      ] = `${modImportedName}.${exportName}`;
+    }
+  }
+
+  code.push("export const actionHandlers = {");
+  for (const [serverActionId, handlerExpr] of Object.entries(handlersById)) {
+    code.push(` ${stringLiteral(serverActionId)}: ${handlerExpr},`);
+  }
+  code.push("};");
+  return code.join("\n");
+}
+
+function getReplaceMentsOfServerModules({
+  analysisCtx,
+  isServer,
+}: {
+  analysisCtx: RSCAnalysisCtx;
+  isServer: boolean;
+}) {
+  const virtualModules: Record<string, string> = {};
+  for (const [resource, mod] of analysisCtx.modules.server.entries()) {
+    const modExports = analysisCtx.exports.server.get(resource)!;
+    const source = isServer
+      ? enhanceUseServerModuleForServer({
+          resource,
+          exports: modExports,
+          originalSource: mod.originalSource()!.buffer().toString("utf-8"),
+        })
+      : createProxyOfServerModule({
+          resource,
+          exports: modExports,
+        });
+    if (LOG_OPTIONS.generatedCode) {
+      console.log(
+        "VirtualModule (server proxy): " + resource,
+        "\n" + source + "\n"
+      );
+    }
+    virtualModules[resource] = source;
+  }
+
+  return [new VirtualModulesPlugin(virtualModules)];
+}
 
 //=========================
 // Initial bundle analysis
@@ -836,7 +1020,7 @@ class RSCServerPlugin {
   }
 }
 
-function moduleReplacements(analysisCtx: RSCAnalysisCtx) {
+function getReplaceMentsOfClientModules(analysisCtx: RSCAnalysisCtx) {
   // TODO: use .apply() instead of just putting these in the plugin array
 
   const virtualModules: Record<string, string> = {};
@@ -851,13 +1035,13 @@ function moduleReplacements(analysisCtx: RSCAnalysisCtx) {
     }
     {
       const virtualPath = getVirtualPathProxy(resource);
-      const source = createProxyModule({
+      const source = createProxyOfClientModule({
         resource,
         exports: analysisCtx.exports.client.get(resource)!,
       });
       if (LOG_OPTIONS.generatedCode) {
         console.log(
-          "VirtualModule (proxy): " + virtualPath,
+          "VirtualModule (client proxy): " + virtualPath,
           "\n" + source + "\n"
         );
       }

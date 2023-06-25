@@ -16,9 +16,13 @@
   "license": "MIT",
   "dependencies": {
     "client-only": "^0.0.1",
+    "clsx": "^1.2.1",
     "react": "18.3.0-canary-910045696-20230607",
     "react-dom": "18.3.0-canary-910045696-20230607",
-    "server-only": "^0.0.1"
+    "server-only": "^0.0.1",
+    "tailwind-merge": "^1.13.2",
+    "zod": "^3.21.4",
+    "zod-form-data": "^2.0.1"
   },
   "devDependencies": {
     "@owoce/tangle": "0.0.7",

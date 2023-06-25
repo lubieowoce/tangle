@@ -1,12 +1,35 @@
-import { createFromFetch } from "react-server-dom-webpack/client";
+import { createFromFetch, encodeReply } from "react-server-dom-webpack/client";
 
 import {
+  ACTIONS_ROUTE_PREFIX,
   FLIGHT_REQUEST_HEADER,
   ROUTER_STATE_HEADER,
   RSC_CONTENT_TYPE,
 } from "../shared";
 import type { ReactNode } from "react";
 import type { FetchSubtreeArgs } from "@owoce/tangle-router";
+
+export type CreateFromFetchOptions = NonNullable<
+  Parameters<typeof createFromFetch>[1]
+>;
+
+function getOptionsForCreate(): CreateFromFetchOptions {
+  return {
+    async callServer(id, args) {
+      console.log("callServer", id, args);
+      const url = ACTIONS_ROUTE_PREFIX + encodeURIComponent(id);
+      const responsePromise = fetch(url, {
+        method: "POST",
+        headers: { accept: RSC_CONTENT_TYPE },
+        body: await encodeReply(args),
+      });
+      // TODO: response value
+      return createFromFetch(responsePromise);
+    },
+  };
+}
+
+export const OPTIONS_FOR_CREATE = getOptionsForCreate();
 
 // mark the whole thing as an async function
 // that way, if fetch() throws (e.g. NetworkError),
@@ -25,5 +48,5 @@ export async function fetchSubtree({ path, existingState }: FetchSubtreeArgs) {
     },
   });
 
-  return createFromFetch<ReactNode>(request, {});
+  return createFromFetch<ReactNode>(request, OPTIONS_FOR_CREATE);
 }

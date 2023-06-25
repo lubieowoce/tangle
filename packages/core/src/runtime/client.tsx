@@ -8,7 +8,10 @@ import {
 } from "@owoce/tangle-router/client";
 import { Use } from "./support/use";
 import { __DEV__ } from "./support/is-dev";
-import { fetchSubtree } from "./router-integration/index.client";
+import {
+  OPTIONS_FOR_CREATE,
+  fetchSubtree,
+} from "./router-integration/index.client";
 
 import "./generated/global-css";
 
@@ -104,11 +107,12 @@ const onDocumentLoad = (fn: () => void) => {
 const init = async () => {
   console.log("client-side init!");
   const initialStream = getStreamFromInitialChunks(__RSC_CHUNKS__);
-  const initialServerTreeThenable =
-    createFromReadableStream<ReactNode>(initialStream);
+  const initialServerTreeThenable = createFromReadableStream<ReactNode>(
+    initialStream,
+    OPTIONS_FOR_CREATE
+  );
   const layoutCache = createEmptyLayoutCache();
   const initialPath = getPathFromDOMState();
-  // cache.set(initialKey, initialServerTreeThenable);
 
   onDocumentLoad(() => {
     startTransition(() => {
