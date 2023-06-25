@@ -94,7 +94,6 @@ const handleServerAction = createServerActionHandler({
 
 const logRequest = (req: Express.Request) => {
   console.log(`[${req.method}] ${req.url}`);
-  console.log(req.headers);
 };
 
 app.post(
@@ -116,12 +115,16 @@ app.post(
 
 app.all(
   "*",
-  catchAsync(async (req, res) => {
+  catchAsync(async (req, res, next) => {
     logRequest(req);
 
     if (req.method === "POST") {
       console.log("Executing server action (no JS)");
       return handleServerAction(null, req, res);
+    }
+
+    if (req.method !== "GET") {
+      return next();
     }
 
     const path = req.path;
