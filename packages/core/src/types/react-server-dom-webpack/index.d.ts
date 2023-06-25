@@ -147,10 +147,14 @@ declare module "react-server-dom-webpack/src/ReactFlightDOMServerNode" {
   import type { ReactClientValue } from "react-server/src/ReactFlightServer";
   import type { ServerContextJSONValue } from "react";
   import type { ClientManifest } from "react-server-dom-webpack/src/ReactFlightServerWebpackBundlerConfig";
-  import type { ServerManifest } from "react-client/src/ReactFlightClientHostConfig";
+  import type {
+    ServerManifest,
+    ClientReferenceMetadata,
+  } from "react-client/src/ReactFlightClientHostConfig";
   import type { Busboy } from "busboy";
 
-  export { ClientManifest }; // reexport for convenience
+  // reexport for convenience
+  export type { ClientManifest, ServerManifest, ClientReferenceMetadata };
 
   // https://github.com/facebook/react/blob/main/packages/react-server-dom-webpack/src/ReactFlightDOMServerNode.js
 
@@ -186,9 +190,13 @@ declare module "react-server-dom-webpack/src/ReactFlightDOMServerEdge" {
   import type { ReadableStream } from "node:stream/web";
   import type { ServerContextJSONValue } from "react";
   import type { ClientManifest } from "react-server-dom-webpack/src/ReactFlightServerWebpackBundlerConfig";
-  import type { ServerManifest } from "react-client/src/ReactFlightClientHostConfig";
+  import type {
+    ServerManifest,
+    ClientReferenceMetadata,
+  } from "react-client/src/ReactFlightClientHostConfig";
 
-  export { ClientManifest }; // reexport for convenience
+  // reexport for convenience
+  export type { ClientManifest, ServerManifest, ClientReferenceMetadata };
 
   export type Options = {
     identifierPrefix?: string;
@@ -247,9 +255,13 @@ declare module "react-server-dom-webpack/src/ReactFlightDOMClientBrowser" {
 declare module "react-server-dom-webpack/src/ReactFlightDOMClientNode" {
   import type { Thenable } from "react";
   import type { Readable } from "node:stream";
-  import type { SSRManifest } from "react-client/src/ReactFlightClientHostConfig";
+  import type {
+    SSRManifest,
+    ClientReferenceMetadata,
+  } from "react-client/src/ReactFlightClientHostConfig";
 
-  export { SSRManifest }; // reexport for convenience
+  // reexport for convenience
+  export type { SSRManifest, ClientReferenceMetadata };
 
   export function createFromNodeStream<T>(
     stream: Readable,

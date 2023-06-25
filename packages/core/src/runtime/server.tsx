@@ -70,25 +70,40 @@ const varyHeader = [FLIGHT_REQUEST_HEADER, ROUTER_STATE_HEADER].join(", ");
 
 const handleServerAction = createServerActionHandler({ webpackMapForClient });
 
+// server action (from callServer)
+
+const logRequest = (req: Express.Request) => {
+  console.log(`[${req.method}] ${req.url}`);
+  console.log(req.headers);
+};
+
 app.post(
   ACTIONS_ROUTE_PREFIX + ":actionId",
   catchAsync(async (req, res) => {
+    logRequest(req);
+
     const actionId = req.params["actionId"];
     if (typeof actionId !== "string") {
       res.status(400).send("Missing action id");
       return;
     }
     console.log("Executing server action", actionId);
-    const result = await handleServerAction(actionId, req, res);
-    res.status(200);
-    res.header("content-type", RSC_CONTENT_TYPE);
-    result.pipe(res);
+    return handleServerAction(actionId, req, res);
   })
 );
 
-app.get(
+// regular requests or no-JS actions
+
+app.all(
   "*",
   catchAsync(async (req, res) => {
+    logRequest(req);
+
+    if (req.method === "POST") {
+      console.log("Executing server action (no JS)");
+      return handleServerAction(null, req, res);
+    }
+
     const path = req.path;
     res.header("vary", varyHeader);
 

@@ -11,7 +11,10 @@ import ReactFlightWebpackPlugin, {
   Options as ReactFlightWebpackPluginOptions,
 } from "react-server-dom-webpack/plugin";
 
-import type { ClientReferenceMetadata } from "react-server-dom-webpack/src/ReactFlightClientWebpackBundlerConfig";
+import type {
+  ServerManifest,
+  ClientReferenceMetadata,
+} from "react-server-dom-webpack/server";
 
 import { runWebpack } from "./run-webpack";
 import Webpack, {
@@ -593,7 +596,7 @@ const getHash = (s: string) =>
 
 // TODO: this is vulnerable to version drift (filename might stay the same, but hash would change)
 const getServerActionId = (resource: string, name: string) =>
-  name + "-" + getHash(pathToFileURL(resource).href);
+  name + "_" + getHash(pathToFileURL(resource).href);
 
 const createProxyOfServerModule = ({
   resource,
@@ -718,19 +721,58 @@ function getActionHandlersModuleSource(analysisCtx: {
     code.push(
       `import * as ${modImportedName} from ${stringLiteral(resource)};`
     );
+
     for (const exportName of modExports) {
-      handlersById[
-        getServerActionId(resource, exportName)
-      ] = `${modImportedName}.${exportName}`;
+      const id = getServerActionId(resource, exportName);
+      const expr = `${modImportedName}.${exportName}`;
+      handlersById[id] = expr;
     }
   }
 
-  code.push("export const actionHandlers = {");
+  code.push("export const serverActionHandlers = {");
   for (const [serverActionId, handlerExpr] of Object.entries(handlersById)) {
     code.push(` ${stringLiteral(serverActionId)}: ${handlerExpr},`);
   }
   code.push("};");
+
+  const manifestString = createSelfResolvingServerManifestString(analysisCtx);
+  code.push("");
+
+  code.push(`export const serverActionsManifest = ${manifestString};`);
   return code.join("\n");
+}
+
+function createSelfResolvingServerManifestString(analysisCtx: RSCAnalysisCtx) {
+  const manifest: ServerManifest = {};
+
+  const unquote = (expr: string) => "<<<" + expr + ">>>";
+
+  const finalize = (obj: Record<string, any>) => {
+    const pattern = /"<<<([^>]+)>>>"/;
+    const pattergnGlobal = new RegExp(pattern.source, "g");
+    const asJson = JSON.stringify(obj, null, 2);
+    return asJson.replace(pattergnGlobal, (toUnquote) => {
+      const matched = toUnquote.match(pattern)!;
+      const [, withinDelims] = matched;
+      return JSON.parse('"' + withinDelims + '"');
+    });
+  };
+
+  for (const [resource] of analysisCtx.modules.server.entries()) {
+    const modExports = analysisCtx.exports.server.get(resource)!;
+
+    for (const exportName of modExports) {
+      const id = getServerActionId(resource, exportName);
+      manifest[id] = {
+        async: false,
+        chunks: ["main"],
+        id: unquote(`require.resolve(${stringLiteral(resource)})`),
+        name: exportName,
+      };
+    }
+  }
+  const manifestString = finalize(manifest);
+  return manifestString;
 }
 
 function getReplaceMentsOfServerModules({

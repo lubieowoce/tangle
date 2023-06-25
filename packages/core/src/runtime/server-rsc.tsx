@@ -3,6 +3,8 @@ import {
   ClientManifest,
   decodeReply,
   decodeReplyFromBusboy,
+  PipeableStream,
+  decodeAction,
 } from "react-server-dom-webpack/server";
 
 import { ServerRouter } from "./root";
@@ -10,9 +12,13 @@ import { readablefromPipeable } from "./utils";
 import type { ParsedPath } from "@owoce/tangle-router";
 import { AssetsManifest } from "./server-ssr";
 import busboy from "busboy";
-import { actionHandlers } from "./generated/action-handlers";
+import {
+  serverActionHandlers,
+  serverActionsManifest,
+} from "./generated/action-handlers";
 
 import type { Request, Response } from "express";
+import { RSC_CONTENT_TYPE } from "./shared";
 
 export type Options = {
   path: string;
@@ -52,19 +58,55 @@ export async function renderRSCRoot({
 export function createServerActionHandler(
   options: Pick<Options, "webpackMapForClient">
 ) {
-  return async function handleAction(id: string, req: Request, _res: Response) {
-    const handler = actionHandlers[id];
-    if (!handler) {
-      throw new Error("Unrecognized action id: " + JSON.stringify(id));
+  return async function handleAction(
+    id: string | null,
+    req: Request,
+    res: Response
+  ) {
+    type Handler = (typeof serverActionHandlers)[string];
+
+    const getHandler = (id: string): Handler => {
+      const handler = serverActionHandlers[id];
+      if (!handler) {
+        throw new Error("Unrecognized action id: " + JSON.stringify(id));
+      }
+      return handler;
+    };
+
+    const handleFlightResult = (result: PipeableStream) => {
+      res.status(200);
+      res.header("content-type", RSC_CONTENT_TYPE);
+      result.pipe(res);
+    };
+
+    const handleNoJsResult = () => {
+      res.status(303); // "See Other"
+      res.header("location", req.originalUrl);
+      res.send("Redirecting...");
+    };
+
+    const manifest = serverActionsManifest;
+
+    // TODO: decodeReply* seems to add a FormData as the last argument even if we didn't pass it,
+    // not sure if we need to do anything about that
+
+    if (id === null) {
+      const formData = await getFormDataFromRequest(req);
+      const decoded = await decodeAction(formData, manifest);
+      if (!decoded) {
+        throw new Error("Could not decode form action");
+      }
+      await decoded();
+      return handleNoJsResult();
     }
-
-    const manifest = createEmptyServerManifest();
-
-    // adapted from
-    // https://github.com/facebook/react/blob/8ec962d825fc948ffda5ab863e639cd4158935ba/fixtures/flight/server/region.js#L124
 
     type Args = any[];
     let args: Args;
+
+    const handler = getHandler(id);
+
+    // adapted from
+    // https://github.com/facebook/react/blob/8ec962d825fc948ffda5ab863e639cd4158935ba/fixtures/flight/server/region.js#L124
 
     if (req.is("json")) {
       args = JSON.parse(await getRawBodyAsString(req));
@@ -83,10 +125,13 @@ export function createServerActionHandler(
 
     console.log("handleAction :: args", args);
 
-    return renderToPipeableStream(
-      handler(...args),
+    const handlerResultPromise = handler(...args);
+
+    const result = renderToPipeableStream(
+      handlerResultPromise,
       options.webpackMapForClient
     );
+    return handleFlightResult(result);
   };
 }
 
@@ -101,28 +146,26 @@ function getRawBodyAsString(req: Request) {
   });
 }
 
-function createEmptyServerManifest() {
-  // i'm not sure what this is even for, so pretend to be an empty object, but warn if accessed
+function getFormDataFromRequest(req: Request) {
+  const formData = new FormData();
 
-  const logAccess = (key: string | symbol) => {
-    console.error(
-      "decodeReply tried to get key from serverManifest:" + JSON.stringify(key)
-    );
-  };
+  const bb = busboy({ headers: req.headers });
+  req.pipe(bb);
 
-  return new Proxy(
-    {},
-    {
-      has(_target, key) {
-        logAccess(key);
-        return false;
-      },
-      get(_target, key, _receiver) {
-        logAccess(key);
-        return undefined;
-      },
-    }
-  );
+  return new Promise<FormData>((resolve, reject) => {
+    bb.on("field", (name, val) => {
+      formData.append(name, val);
+    });
+    bb.on("file", (_name, _stream) => {
+      const err = new Error("TODO: do something sensible for files");
+      bb.destroy(err);
+      reject(err);
+    });
+    bb.on("close", () => {
+      resolve(formData);
+    });
+    bb.on("error", (err) => reject(err));
+  });
 }
 
 function formDataFromSearchQueryString(query: string) {
