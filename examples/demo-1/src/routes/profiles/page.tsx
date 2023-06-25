@@ -1,7 +1,15 @@
 import { Link } from "@owoce/tangle/client";
-import { getAllProfilesFromFb, getDbClient } from "../../server/db";
+import {
+  ProfileData,
+  getAllProfilesFromFb,
+  getDbClient,
+} from "../../server/db";
 import { buttonStyles } from "../../components/styles";
-import { addNewProfile, addNewProfileFromObject } from "./actions";
+import {
+  addNewProfile,
+  addNewProfileFromArgs,
+  addNewProfileFromObject,
+} from "./actions";
 import { Button } from "./button";
 import { ClientProfileForm } from "./profile-form";
 
@@ -9,6 +17,14 @@ export default async function AllProfilesView(_props: { params: {} }) {
   const dbClient = await getDbClient();
   const profiles = await getAllProfilesFromFb(dbClient);
   const meta = <title>{`All profiles`}</title>;
+
+  const getExample = (nameSuffix = ""): ProfileData => {
+    nameSuffix = nameSuffix ? " " + nameSuffix : "";
+    return {
+      name: "Example name" + nameSuffix,
+      description: "Example description" + nameSuffix,
+    };
+  };
   return (
     <>
       {meta}
@@ -21,29 +37,41 @@ export default async function AllProfilesView(_props: { params: {} }) {
           </Link>
         ))}
       </div>
-      <div className="flex mt-2">
+      <div className="mt-8" />
+      <div>
+        <ClientProfileForm />
+      </div>
+      <hr className="my-8" />
+      <div className="flex-col items-stretch gap-2">
         <Button
-          props={{ name: "Test name (from form)", description: "Lorem ipsum" }}
+          props={getExample("(form action)")}
           className={buttonStyles}
           action={addNewProfile}
         >
-          Create new profile (via form)
+          Create new profile (via form action)
         </Button>
-        <form>
-          <button
-            className={buttonStyles}
-            // @ts-expect-error  missing 'formAction' prop
-            formAction={addNewProfileFromObject.bind(null, {
-              name: "Test name (from bind)",
-              description: "Lorem ipsum",
-            })}
-          >
-            Create new profile (via bind)
-          </button>
-        </form>
-      </div>
-      <div className="mt-2">
-        <ClientProfileForm />
+        <Button
+          className={buttonStyles}
+          action={addNewProfileFromObject.bind(
+            null,
+            getExample("(bind object)")
+          )}
+        >
+          Create new profile (via form action + bind)
+        </Button>
+        {(() => {
+          const data = getExample("(bind individual args)");
+          return (
+            <Button
+              className={buttonStyles}
+              action={addNewProfileFromArgs
+                .bind(null, data.name)
+                .bind(null, data.description)}
+            >
+              Create new profile (via form action + bind x2)
+            </Button>
+          );
+        })()}
       </div>
     </>
   );

@@ -14,6 +14,15 @@ export async function addNewProfile(form: FormData) {
   return addNewProfileFromObject(data);
 }
 
+export async function addNewProfileFromArgs(
+  // name: ProfileData["name"],
+  // description: ProfileData["description"]
+  ...args: [name: ProfileData["name"], description: ProfileData["description"]]
+) {
+  const [name, description] = args;
+  return addNewProfileFromObject({ name, description });
+}
+
 export async function addNewProfileFromObject(data: ProfileData) {
   const dbClient = await getDbClient();
   const contents = await dbClient.read();

@@ -2,6 +2,7 @@
 
 import type { ComponentProps } from "react";
 import { experimental_useFormStatus as useFormStatus } from "react-dom";
+import { twMerge } from "tailwind-merge";
 
 // FIXME: we need to update '@types/react-dom'
 
@@ -54,6 +55,7 @@ export function Button({
   action,
   props,
   children,
+  className,
   ...rest
 }: ButtonProps & { props?: Record<string, string> }) {
   return (
@@ -62,7 +64,11 @@ export function Button({
         Object.entries(props).map(([name, value]) => (
           <input key={name} type="hidden" name={name} value={value} />
         ))}
-      <ButtonDisabledWhilePending action={action} {...rest}>
+      <ButtonDisabledWhilePending
+        className={twMerge("w-full", className)}
+        action={action}
+        {...rest}
+      >
         {children}
       </ButtonDisabledWhilePending>
     </form>
