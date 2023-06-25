@@ -34,7 +34,6 @@ const addBind = (actionFn: ActionFn): void => {
       $$bound: mergeBoundArgs(targetFn.$$bound, argsToBind),
     });
     boundFn.bind = bind;
-    console.log("bound args after bind", (boundFn as ActionFn).$$bound);
     return boundFn;
   }
 
