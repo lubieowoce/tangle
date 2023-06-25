@@ -18,7 +18,10 @@ import { createServerActionHandler, renderRSCRoot } from "./server-rsc";
 import { getSSRDomStream, AssetsManifest } from "./server-ssr";
 import { catchAsync, readablefromPipeable } from "./utils";
 
-import type { ClientManifest } from "react-server-dom-webpack/server";
+import type {
+  ClientManifest,
+  ServerManifest,
+} from "react-server-dom-webpack/server";
 import type { SSRManifest } from "react-server-dom-webpack/client";
 import { isNotFound } from "@owoce/tangle-router/shared";
 import { createInitialRscResponseTransformStream } from "./initial-rsc-stream";
@@ -26,23 +29,30 @@ import { sanitize } from "htmlescape";
 
 const CLIENT_ASSETS_DIR = path.resolve(__dirname, "../client");
 
-const app = Express();
+const getManifests = () => {
+  const readJSONFile = (p: string) => JSON.parse(fs.readFileSync(p, "utf-8"));
 
-// const filterMapSrcOnly = (map: Record<string, any>): Record<string, any> => {
-//   return Object.fromEntries(
-//     Object.entries(map).filter(([id]) => !id.includes("node_modules"))
-//   );
-// };
+  const webpackMapForClient = readJSONFile(
+    path.join(CLIENT_ASSETS_DIR, "client-manifest.json")
+  ) as ClientManifest;
 
-const readJSONFile = (p: string) => JSON.parse(fs.readFileSync(p, "utf-8"));
+  const webpackMapForSSR = readJSONFile(
+    path.resolve(__dirname, "ssr-manifest.json")
+  ) as NonNullable<SSRManifest>;
 
-const webpackMapForClient = readJSONFile(
-  path.join(CLIENT_ASSETS_DIR, "client-manifest.json")
-) as ClientManifest;
+  const serverActionsManifest = readJSONFile(
+    path.resolve(__dirname, "server-actions-manifest.json")
+  ) as NonNullable<ServerManifest>;
 
-const webpackMapForSSR = readJSONFile(
-  path.resolve(__dirname, "ssr-manifest.json")
-) as NonNullable<SSRManifest>;
+  const assetsManifest = getAssetsManifest();
+
+  return {
+    webpackMapForClient,
+    webpackMapForSSR,
+    serverActionsManifest,
+    assetsManifest,
+  };
+};
 
 const getAssetsManifest = (): AssetsManifest => {
   const assets = fs.readdirSync(CLIENT_ASSETS_DIR);
@@ -58,7 +68,14 @@ const getAssetsManifest = (): AssetsManifest => {
   return scriptsManifest;
 };
 
-const assetsManifest = getAssetsManifest();
+const {
+  assetsManifest,
+  webpackMapForClient,
+  webpackMapForSSR,
+  serverActionsManifest,
+} = getManifests();
+
+const app = Express();
 
 app.use(ASSETS_ROUTE, expressStatic(CLIENT_ASSETS_DIR));
 
@@ -68,7 +85,10 @@ app.get("/favicon.ico", (_, res) => res.status(404).send());
 // these headers influence the returned content
 const varyHeader = [FLIGHT_REQUEST_HEADER, ROUTER_STATE_HEADER].join(", ");
 
-const handleServerAction = createServerActionHandler({ webpackMapForClient });
+const handleServerAction = createServerActionHandler({
+  webpackMapForClient,
+  serverActionsManifest,
+});
 
 // server action (from callServer)
 

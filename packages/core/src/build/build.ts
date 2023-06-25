@@ -52,10 +52,14 @@ const rel = (p: string) => path.resolve(__dirname, p);
 const getVirtualPathSSR = (p: string) =>
   p.replace(MODULE_EXTENSIONS_REGEX, ".__ssr__.$1"); // FIXME: kinda hacky... idk
 
-const isVirtualPathSSR = (p: string) => p.match(/\.__ssr__\.(.+)$/) !== null; // FIXME: use real module extensions
-
 const getVirtualPathRSC = (p: string) =>
   p.replace(MODULE_EXTENSIONS_REGEX, ".__rsc__.$1"); // FIXME: kinda hacky... idk
+
+const isVirtualPath = (p: string) =>
+  p.match(/\.(__ssr__|__rsc__)\.(.+)$/) !== null;
+
+const isVirtualPathSSR = (p: string) => p.match(/\.__ssr__\.(.+)$/) !== null;
+const isVirtualPathRSC = (p: string) => p.match(/\.__rsc__\.(.+)$/) !== null;
 
 const getOriginalPathFromVirtual = (p: string) =>
   p.replace(/\.(__ssr__|__rsc__)\./, ".");
@@ -427,16 +431,29 @@ export const build = async ({
           analysisCtx,
           opts.server.generatedActionHandlersModule
         ),
-        createSSRDependencyPlugin({
+        createReferenceDependencyPlugin({
           analysisCtx,
-          rsdwSSRClientFilePaths: RSDW_CLIENT_SPECIFIERS.map(
+          type: "client",
+          chunkName: "ssr[index]",
+          getVirtualPath: getVirtualPathSSR,
+          rsdwFilePaths: RSDW_SPECIFIERS.client.map(
             (specifier) => reactResolutionsServer.ssr.resolutions[specifier]
+          ),
+        }),
+        createReferenceDependencyPlugin({
+          analysisCtx,
+          type: "server",
+          chunkName: "server-actions",
+          getVirtualPath: getVirtualPathRSC,
+          rsdwFilePaths: RSDW_SPECIFIERS.server.map(
+            (specifier) => reactResolutionsServer.rsc.resolutions[specifier]
           ),
         }),
         new RSCServerPlugin({
           analysisCtx,
           ssrManifestFromClient: ssrManifestFromRSDW,
           ssrManifestFilename: "ssr-manifest.json",
+          serverActionsManifestFilename: "server-actions-manifest.json",
         }),
       ],
       target: "node16",
@@ -465,12 +482,20 @@ type ResolveAliasConfigObject = Required<
 >["alias"] &
   Record<string, any>;
 
-const RSDW_CLIENT_SPECIFIERS = [
-  "react-server-dom-webpack/client",
-  "react-server-dom-webpack/client.node",
-  "react-server-dom-webpack/client.edge",
-  "react-server-dom-webpack/client.browser",
-] as const;
+const RSDW_SPECIFIERS = {
+  client: [
+    "react-server-dom-webpack/client",
+    "react-server-dom-webpack/client.node",
+    "react-server-dom-webpack/client.edge",
+    "react-server-dom-webpack/client.browser",
+  ] as const,
+  server: [
+    "react-server-dom-webpack/server",
+    "react-server-dom-webpack/server.node",
+    "react-server-dom-webpack/server.edge",
+    "react-server-dom-webpack/server.browser",
+  ] as const,
+};
 
 const REACT_PACKAGES = [
   "react",
@@ -479,11 +504,8 @@ const REACT_PACKAGES = [
   "react-dom",
   "react-dom/client",
   "react-dom/server",
-  "react-server-dom-webpack/server",
-  "react-server-dom-webpack/server.node",
-  "react-server-dom-webpack/server.edge",
-  "react-server-dom-webpack/server.browser",
-  ...RSDW_CLIENT_SPECIFIERS,
+  ...RSDW_SPECIFIERS.client,
+  ...RSDW_SPECIFIERS.server,
 ] as const;
 
 type ReactPackagesResolutions = Record<(typeof REACT_PACKAGES)[number], string>;
@@ -596,7 +618,7 @@ const getHash = (s: string) =>
 
 // TODO: this is vulnerable to version drift (filename might stay the same, but hash would change)
 const getServerActionId = (resource: string, name: string) =>
-  name + "_" + getHash(pathToFileURL(resource).href);
+  name + "-" + getHash(pathToFileURL(resource).href);
 
 const createProxyOfServerModule = ({
   resource,
@@ -735,44 +757,7 @@ function getActionHandlersModuleSource(analysisCtx: {
   }
   code.push("};");
 
-  const manifestString = createSelfResolvingServerManifestString(analysisCtx);
-  code.push("");
-
-  code.push(`export const serverActionsManifest = ${manifestString};`);
   return code.join("\n");
-}
-
-function createSelfResolvingServerManifestString(analysisCtx: RSCAnalysisCtx) {
-  const manifest: ServerManifest = {};
-
-  const unquote = (expr: string) => "<<<" + expr + ">>>";
-
-  const finalize = (obj: Record<string, any>) => {
-    const pattern = /"<<<([^>]+)>>>"/;
-    const pattergnGlobal = new RegExp(pattern.source, "g");
-    const asJson = JSON.stringify(obj, null, 2);
-    return asJson.replace(pattergnGlobal, (toUnquote) => {
-      const matched = toUnquote.match(pattern)!;
-      const [, withinDelims] = matched;
-      return JSON.parse('"' + withinDelims + '"');
-    });
-  };
-
-  for (const [resource] of analysisCtx.modules.server.entries()) {
-    const modExports = analysisCtx.exports.server.get(resource)!;
-
-    for (const exportName of modExports) {
-      const id = getServerActionId(resource, exportName);
-      manifest[id] = {
-        async: false,
-        chunks: ["main"],
-        id: unquote(`require.resolve(${stringLiteral(resource)})`),
-        name: exportName,
-      };
-    }
-  }
-  const manifestString = finalize(manifest);
-  return manifestString;
 }
 
 function getReplaceMentsOfServerModules({
@@ -939,6 +924,7 @@ type RSCPluginOptions = {
   analysisCtx: RSCAnalysisCtx;
   ssrManifestFromClient: SSRManifest;
   ssrManifestFilename: string;
+  serverActionsManifestFilename: string;
 };
 
 class RSCServerPlugin {
@@ -965,19 +951,31 @@ class RSCServerPlugin {
           };
           const ssrManifestSpecifierRewrite: Rewrites = {};
 
-          const isGeneratedClientModule = (mod: Module): boolean => {
+          const serverActionsManifest: ServerManifest = {};
+
+          const getGeneratedModuleInfo = (mod: Module) => {
             if (!(mod instanceof NormalModule)) {
-              return false;
+              return undefined;
             }
-            if (isVirtualPathSSR(mod.resource)) {
+            if (isVirtualPath(mod.resource)) {
               const { analysisCtx } = this.options;
-              // we don't need to rewrite server modules, because they're not in the client manifest.
               const originalResource = getOriginalPathFromVirtual(mod.resource);
               const type = analysisCtx.getTypeForResource(originalResource);
-              return type === "client";
+              if (type === null) {
+                throw new Error(
+                  `Internal error: Virtual module ${JSON.stringify(
+                    mod.resource
+                  )} has no type`
+                );
+              }
+              return {
+                type,
+                originalResource,
+                exports: getExportsFromCtx(analysisCtx, originalResource, type),
+              };
               // && m.layer === LAYERS.ssr; // TODO: should we do something like this??
             }
-            return false;
+            return undefined;
           };
 
           compilation.chunkGroups.forEach((chunkGroup) => {
@@ -994,28 +992,56 @@ class RSCServerPlugin {
               if (mod.modules) {
                 const moduleId =
                   parentModuleId ?? compilation.chunkGraph.getModuleId(mod);
+
                 mod.modules.forEach((concatenatedMod) => {
                   visitModule(concatenatedMod, moduleId);
                 });
                 return;
               }
 
-              if (!isGeneratedClientModule(mod)) return;
-              const moduleId =
-                parentModuleId ?? compilation.chunkGraph.getModuleId(mod);
+              const moduleInfo = getGeneratedModuleInfo(mod);
+              if (!moduleInfo) return;
+
+              const moduleId = ensureString(
+                parentModuleId ?? compilation.chunkGraph.getModuleId(mod)
+              );
+
               if (!(mod instanceof NormalModule)) {
                 throw new Error(
                   `Expected generated module ${moduleId} to be a NormalModule`
                 );
               }
-              // Assumption: RSDW uses file:// ids to identify SSR modules
-              const currentIdInSSRManifest = getManifestId(
-                getOriginalPathFromVirtual(mod.resource)
-              ).href;
-              ssrManifestSpecifierRewrite[currentIdInSSRManifest] = {
-                moduleId: ensureString(moduleId),
-                chunkIds,
-              };
+
+              if (moduleInfo.type === "client") {
+                if (!isVirtualPathSSR(mod.resource)) {
+                  return;
+                }
+                // Assumption: RSDW uses file:// ids to identify SSR modules
+                const currentIdInSSRManifest = getManifestId(
+                  moduleInfo.originalResource
+                ).href;
+
+                ssrManifestSpecifierRewrite[currentIdInSSRManifest] = {
+                  moduleId,
+                  chunkIds,
+                };
+              } else {
+                if (!isVirtualPathRSC(mod.resource)) {
+                  return;
+                }
+                for (const exportName of moduleInfo.exports) {
+                  const actionId = getServerActionId(
+                    moduleInfo.originalResource,
+                    exportName
+                  );
+                  serverActionsManifest[actionId] = {
+                    id: moduleId,
+                    async: false,
+                    chunks: chunkIds,
+                    name: exportName,
+                  };
+                }
+              }
             };
 
             chunkGroup.chunks.forEach(function (chunk) {
@@ -1066,10 +1092,21 @@ class RSCServerPlugin {
             );
           }
 
-          const ssrOutput = JSON.stringify(finalSSRManifest, null, 2);
-          compilation.emitAsset(
-            this.options.ssrManifestFilename,
-            new Webpack.sources.RawSource(ssrOutput, false)
+          const emitJson = (
+            filename: string,
+            toStringify: Record<string, any>
+          ) => {
+            const output = JSON.stringify(toStringify, null, 2);
+            compilation.emitAsset(
+              filename,
+              new Webpack.sources.RawSource(output, false)
+            );
+          };
+
+          emitJson(this.options.ssrManifestFilename, finalSSRManifest);
+          emitJson(
+            this.options.serverActionsManifestFilename,
+            serverActionsManifest
           );
         }
       );
@@ -1081,17 +1118,6 @@ function getModuleReplacementsForServer(analysisCtx: RSCAnalysisCtx) {
   // TODO: use .apply() instead of just putting these in the plugin array
 
   const virtualModules: Record<string, string> = {};
-
-  const getExportsFromCtx = (resource: string, type: "client" | "server") => {
-    const res = analysisCtx.exports[type].get(resource);
-    if (!res) {
-      throw new Error(
-        "Internal Error: No exports info gathered for " +
-          JSON.stringify(resource)
-      );
-    }
-    return res;
-  };
 
   // for client modules, SSR gets the original source, and RSC gets a proxy
   for (const [resource, mod] of analysisCtx.modules.client.entries()) {
@@ -1107,7 +1133,7 @@ function getModuleReplacementsForServer(analysisCtx: RSCAnalysisCtx) {
       const virtualPath = getVirtualPathRSC(resource);
       const source = createProxyOfClientModule({
         resource,
-        exports: getExportsFromCtx(resource, "client"),
+        exports: getExportsFromCtx(analysisCtx, resource, "client"),
       });
       if (LOG_OPTIONS.generatedCode) {
         console.log(
@@ -1125,7 +1151,7 @@ function getModuleReplacementsForServer(analysisCtx: RSCAnalysisCtx) {
       const virtualPath = getVirtualPathSSR(resource);
       const source = createProxyOfServerModule({
         resource,
-        exports: getExportsFromCtx(resource, "server"),
+        exports: getExportsFromCtx(analysisCtx, resource, "server"),
       });
       if (LOG_OPTIONS.generatedCode) {
         console.log(
@@ -1139,7 +1165,7 @@ function getModuleReplacementsForServer(analysisCtx: RSCAnalysisCtx) {
       const virtualPath = getVirtualPathRSC(resource);
       const source = enhanceUseServerModuleForServer({
         resource,
-        exports: getExportsFromCtx(resource, "server"),
+        exports: getExportsFromCtx(analysisCtx, resource, "server"),
         originalSource: getOriginalSource(mod),
       });
       if (LOG_OPTIONS.generatedCode) {
@@ -1228,27 +1254,32 @@ const createImportRewritePlugin = (
   );
 };
 
-const createSSRDependencyPlugin = ({
+const createReferenceDependencyPlugin = ({
   analysisCtx,
-  rsdwSSRClientFilePaths,
+  rsdwFilePaths,
+  type,
+  chunkName,
+  getVirtualPath,
 }: {
   analysisCtx: RSCAnalysisCtx;
-  rsdwSSRClientFilePaths: string[];
+  type: "client" | "server";
+  rsdwFilePaths: string[];
+  chunkName: string;
+  getVirtualPath: (originalPath: string) => string;
 }) =>
-  function AddSSRDependencyPlugin(compiler: Webpack.Compiler) {
-    const pluginName = "AddSSRDependency";
-    const SSR_CHUNK_NAME = "ssr[index]";
+  function ReferenceDependencyPlugin(compiler: Webpack.Compiler) {
+    const pluginName = `AddArtificialDependency(${type})`;
 
-    let clientFileNameFound = false;
-    const rsdwSSRClientFilePathsSet = new Set(rsdwSSRClientFilePaths);
+    let rsdwFound = false;
+    const rsdwPathsSet = new Set(rsdwFilePaths);
 
-    class ClientReferenceDependency extends webpackDependencies.ModuleDependency {
+    class ManifestReferenceDependency extends webpackDependencies.ModuleDependency {
       constructor(request: string) {
         super(request);
       }
 
       get type(): string {
-        return "client-reference";
+        return `${type}-reference`;
       }
     }
 
@@ -1256,43 +1287,43 @@ const createSSRDependencyPlugin = ({
       pluginName,
       (compilation, { normalModuleFactory }) => {
         compilation.dependencyFactories.set(
-          ClientReferenceDependency,
+          ManifestReferenceDependency,
           normalModuleFactory
         );
         compilation.dependencyTemplates.set(
-          ClientReferenceDependency,
+          ManifestReferenceDependency,
           new webpackDependencies.NullDependency.Template()
         );
 
         tapParserJS(normalModuleFactory, pluginName, (parser) => {
           parser.hooks.program.tap(pluginName, () => {
-            const module = parser.state.module;
+            const mod = parser.state.module;
 
-            if (!rsdwSSRClientFilePathsSet.has(module.resource)) {
+            if (!rsdwPathsSet.has(mod.resource)) {
               return;
             }
 
-            clientFileNameFound = true;
+            rsdwFound = true;
 
-            for (const [
-              clientModuleResource,
-            ] of analysisCtx.modules.client.entries()) {
-              const dep = new ClientReferenceDependency(
+            const allModules = Array.from(analysisCtx.modules[type].keys());
+
+            for (const referencedModuleResource of allModules) {
+              const dep = new ManifestReferenceDependency(
                 // this kicks off the imports for some SSR modules, so they might not go through
                 // our SSR/proxy resolution hacks in NormalModuleReplacementPlugin
-                getVirtualPathSSR(clientModuleResource)
+                getVirtualPath(referencedModuleResource)
               );
 
               const block = new AsyncDependenciesBlock(
                 {
-                  name: SSR_CHUNK_NAME,
+                  name: chunkName,
                 },
                 undefined,
                 dep.request
               );
 
               block.addDependency(dep);
-              module.addBlock(block);
+              mod.addBlock(block);
             }
           });
         });
@@ -1306,11 +1337,11 @@ const createSSRDependencyPlugin = ({
           stage: Compilation.PROCESS_ASSETS_STAGE_REPORT,
         },
         function () {
-          if (clientFileNameFound === false) {
+          if (rsdwFound === false) {
             compilation.warnings.push(
               new WebpackError(
-                `React client runtime was not found. Possible imports: ${JSON.stringify(
-                  rsdwSSRClientFilePaths,
+                `React ${type} runtime was not found. Possible imports: ${JSON.stringify(
+                  rsdwFilePaths,
                   null,
                   2
                 )}`
@@ -1345,4 +1376,18 @@ const getOriginalSource = (mod: NormalModule): string => {
     );
   }
   return source.buffer().toString("utf-8");
+};
+
+const getExportsFromCtx = (
+  analysisCtx: RSCAnalysisCtx,
+  resource: string,
+  type: "client" | "server"
+) => {
+  const res = analysisCtx.exports[type].get(resource);
+  if (!res) {
+    throw new Error(
+      "Internal Error: No exports info gathered for " + JSON.stringify(resource)
+    );
+  }
+  return res;
 };

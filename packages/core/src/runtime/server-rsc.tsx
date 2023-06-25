@@ -5,6 +5,7 @@ import {
   decodeReplyFromBusboy,
   PipeableStream,
   decodeAction,
+  ServerManifest,
 } from "react-server-dom-webpack/server";
 
 import { ServerRouter } from "./root";
@@ -12,10 +13,7 @@ import { readablefromPipeable } from "./utils";
 import type { ParsedPath } from "@owoce/tangle-router";
 import { AssetsManifest } from "./server-ssr";
 import busboy from "busboy";
-import {
-  serverActionHandlers,
-  serverActionsManifest,
-} from "./generated/action-handlers";
+import { serverActionHandlers } from "./generated/action-handlers";
 
 import type { Request, Response } from "express";
 import { RSC_CONTENT_TYPE } from "./shared";
@@ -55,9 +53,13 @@ export async function renderRSCRoot({
   );
 }
 
-export function createServerActionHandler(
-  options: Pick<Options, "webpackMapForClient">
-) {
+type ServerActionHandlerOptions = {
+  webpackMapForClient: ClientManifest;
+  serverActionsManifest: ServerManifest;
+};
+
+export function createServerActionHandler(options: ServerActionHandlerOptions) {
+  const manifest = options.serverActionsManifest;
   return async function handleAction(
     id: string | null,
     req: Request,
@@ -85,11 +87,6 @@ export function createServerActionHandler(
       res.send("Redirecting...");
     };
 
-    const manifest = serverActionsManifest;
-
-    // TODO: decodeReply* seems to add a FormData as the last argument even if we didn't pass it,
-    // not sure if we need to do anything about that
-
     if (id === null) {
       const formData = await getFormDataFromRequest(req);
       const decoded = await decodeAction(formData, manifest);
@@ -107,6 +104,9 @@ export function createServerActionHandler(
 
     // adapted from
     // https://github.com/facebook/react/blob/8ec962d825fc948ffda5ab863e639cd4158935ba/fixtures/flight/server/region.js#L124
+
+    // TODO: decodeReply* seems to add a FormData as the last argument even if we didn't pass it,
+    // not sure if we need to do anything about that
 
     if (req.is("json")) {
       args = JSON.parse(await getRawBodyAsString(req));

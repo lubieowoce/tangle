@@ -1,6 +1,4 @@
-import type { ServerManifest } from "react-server-dom-webpack/server";
-
-type ActionHandlers = Record<string, (...args: any[]) => Promise<any>>;
+export type ActionHandlers = Record<string, (...args: any[]) => Promise<any>>;
 
 const dummy = () => {
   throw new Error(
@@ -9,4 +7,3 @@ const dummy = () => {
 };
 
 export const serverActionHandlers: ActionHandlers = dummy();
-export const serverActionsManifest: ServerManifest = dummy();
