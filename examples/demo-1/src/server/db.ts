@@ -60,7 +60,7 @@ export async function getProfileFromDb(
 ) {
   await slowdown(700);
   const data = await dbClient.read();
-  const allProfileIds = Object.keys(data.profiles).sort();
+  const allProfileIds = sortNumeric(Object.keys(data.profiles));
   const index = allProfileIds.indexOf(profileId + "");
 
   if (index === -1) {
@@ -85,4 +85,8 @@ export async function getAllProfilesFromFb(dbClient: DBClient) {
     profileId,
     name: profile.name,
   }));
+}
+
+function sortNumeric(arr: string[]) {
+  return [...arr].sort((a, b) => Number(a) - Number(b));
 }
