@@ -1,7 +1,10 @@
 {
-  "include": ["src/**/*.ts", "src/**/*.tsx"],
+  "include": ["src/**/*.ts", "src/**/*.tsx", "tangle.config.cjs"],
   "compilerOptions": {
+    "noEmit": true,
     "moduleResolution": "bundler",
+    "allowJs": true,
+    "checkJs": true,
     "strict": true,
     "target": "ESNext",
     "module": "ES2022",

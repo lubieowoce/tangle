@@ -2,11 +2,13 @@
 
 import { useNavigationContext } from "@owoce/tangle/client";
 import { PropsWithChildren } from "react";
+import { linkStyles } from "./styles";
 
 export const RefreshButton = () => {
   const { refresh, isNavigating } = useNavigationContext();
   return (
     <button
+      className={linkStyles}
       onClick={() => {
         console.log("refreshing");
         refresh();
@@ -23,6 +25,6 @@ export const FadeOnPendingNavigation = ({
 }: PropsWithChildren<{}>) => {
   const { isNavigating } = useNavigationContext();
   return (
-    <div style={isNavigating ? { opacity: "0.5" } : undefined}>{children}</div>
+    <div className={isNavigating ? "opacity-50" : undefined}>{children}</div>
   );
 };

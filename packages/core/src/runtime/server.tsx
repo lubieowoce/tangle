@@ -1,5 +1,5 @@
 import path from "node:path";
-import util from "node:util";
+// import util from "node:util";
 import fs from "node:fs";
 import { Readable } from "node:stream";
 import type { ReadableStream } from "node:stream/web";
@@ -14,7 +14,7 @@ import {
 } from "./shared";
 
 import { renderRSCRoot } from "./server-rsc";
-import { getSSRDomStream, ScriptsManifest } from "./server-ssr";
+import { getSSRDomStream, AssetsManifest } from "./server-ssr";
 import { catchAsync, readablefromPipeable } from "./utils";
 
 import type { ClientManifest } from "react-server-dom-webpack/server";
@@ -27,11 +27,11 @@ const CLIENT_ASSETS_DIR = path.resolve(__dirname, "../client");
 
 const app = Express();
 
-const filterMapSrcOnly = (map: Record<string, any>): Record<string, any> => {
-  return Object.fromEntries(
-    Object.entries(map).filter(([id]) => !id.includes("node_modules"))
-  );
-};
+// const filterMapSrcOnly = (map: Record<string, any>): Record<string, any> => {
+//   return Object.fromEntries(
+//     Object.entries(map).filter(([id]) => !id.includes("node_modules"))
+//   );
+// };
 
 const readJSONFile = (p: string) => JSON.parse(fs.readFileSync(p, "utf-8"));
 
@@ -43,23 +43,32 @@ const webpackMapForSSR = readJSONFile(
   path.resolve(__dirname, "ssr-manifest.json")
 ) as NonNullable<SSRManifest>;
 
-const scriptsManifest: ScriptsManifest = {
-  // FIXME: emit this from the build, because cmon
-  main: fs
-    .readdirSync(CLIENT_ASSETS_DIR)
-    .find((p) => /^main(\.[^.]+)?\.js$/.test(p))!,
+const getAssetsManifest = (): AssetsManifest => {
+  const assets = fs.readdirSync(CLIENT_ASSETS_DIR);
+  const addPublicPath = (p: string | undefined) =>
+    p ? `${ASSETS_ROUTE}/${p}` : undefined;
+  const scriptsManifest: AssetsManifest = {
+    // FIXME: emit this from the build, because cmon
+    main: addPublicPath(assets.find((p) => /^main(\.[^.]+)?\.js$/.test(p))!)!,
+    globalCss: addPublicPath(
+      assets.find((p) => /^main(\.[^.]+)?\.css$/.test(p))
+    ),
+  };
+  return scriptsManifest;
 };
 
-console.log("scriptsManifest", scriptsManifest);
+const assetsManifest = getAssetsManifest();
 
-console.log(
-  "client map (src only)",
-  util.inspect(filterMapSrcOnly(webpackMapForClient), { depth: undefined })
-);
-console.log(
-  "patched ssr map (src only)",
-  util.inspect(filterMapSrcOnly(webpackMapForSSR), { depth: undefined })
-);
+// console.log("scriptsManifest", scriptsManifest);
+
+// console.log(
+//   "client map (src only)",
+//   util.inspect(filterMapSrcOnly(webpackMapForClient), { depth: undefined })
+// );
+// console.log(
+//   "patched ssr map (src only)",
+//   util.inspect(filterMapSrcOnly(webpackMapForSSR), { depth: undefined })
+// );
 
 app.use(ASSETS_ROUTE, expressStatic(CLIENT_ASSETS_DIR));
 
@@ -91,11 +100,12 @@ app.get(
       console.log("=====================");
       console.log("rendering RSC");
       console.log("router state", existingState);
-      const rscStream = await renderRSCRoot(
+      const rscStream = await renderRSCRoot({
         path,
         existingState,
-        webpackMapForClient
-      );
+        webpackMapForClient,
+        assetsManifest,
+      });
       res.header("content-type", RSC_CONTENT_TYPE);
       rscStream.pipe(res);
     } else {
@@ -107,7 +117,12 @@ app.get(
       console.log("rendering RSC for SSR");
 
       const rscStream = Readable.toWeb(
-        await renderRSCRoot(path, undefined, webpackMapForClient)
+        await renderRSCRoot({
+          path,
+          existingState: undefined,
+          webpackMapForClient,
+          assetsManifest,
+        })
       ) as ReadableStream<Uint8Array>;
 
       const [rscStream1, rscStream2] = rscStream.tee();
@@ -124,7 +139,7 @@ app.get(
       const domStream = getSSRDomStream({
         path,
         rscStream: Readable.fromWeb(rscStream1 as any),
-        scriptsManifest,
+        assetsManifest,
         webpackMapForSSR,
         bootstrapScriptContent: getInitialRSCChunkContent(),
         onError(err) {

@@ -4,7 +4,6 @@ import {
   RenderToPipeableStreamOptions,
 } from "react-dom/server";
 
-import { ASSETS_ROUTE } from "./shared";
 import {
   createFromNodeStream,
   SSRManifest,
@@ -14,24 +13,22 @@ import { ReactNode } from "react";
 import { StaticRouter } from "@owoce/tangle-router/client";
 import { Use } from "./support/use";
 
-export type ScriptsManifest = {
+export type AssetsManifest = {
   main: string;
+  globalCss?: string;
 };
 
 type Options = {
   path: string;
   rscStream: Readable;
-  scriptsManifest: ScriptsManifest;
+  assetsManifest: AssetsManifest;
   webpackMapForSSR: NonNullable<SSRManifest>;
-} & Pick<
-  RenderToPipeableStreamOptions,
-  "bootstrapScriptContent" | "onError" | "onShellError" | "onShellReady"
->;
+} & Omit<RenderToPipeableStreamOptions, "bootstrapScripts">;
 
 export function getSSRDomStream({
   path,
   rscStream,
-  scriptsManifest,
+  assetsManifest,
   webpackMapForSSR,
   ...rest
 }: Options) {
@@ -47,7 +44,7 @@ export function getSSRDomStream({
       <Use thenable={clientTreeThenable} />
     </StaticRouter>,
     {
-      bootstrapScripts: [`${ASSETS_ROUTE}/${scriptsManifest.main}`],
+      bootstrapScripts: [assetsManifest.main],
       ...rest,
     }
   );

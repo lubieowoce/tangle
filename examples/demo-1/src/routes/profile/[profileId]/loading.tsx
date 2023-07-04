@@ -1,13 +1,6 @@
 export default function Loading({ params }: { params: { profileId: string } }) {
   return (
-    <div
-      style={{
-        border: "2px solid lightgrey",
-        borderRadius: "8px",
-        padding: "8px",
-        color: "lightgrey",
-      }}
-    >
+    <div className="border-solid border-2 border-gray-300 rounded-lg p-2 text-gray-300">
       Loading profile {params.profileId}...
     </div>
   );

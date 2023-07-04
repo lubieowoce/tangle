@@ -1,4 +1,5 @@
 import { Link } from "@owoce/tangle/client";
+import { linkStyles } from "../components/styles";
 
 export default function Root() {
   const meta = <title>{`Index`}</title>;
@@ -6,8 +7,12 @@ export default function Root() {
     <>
       {meta}
       <div>
-        <h1>Index</h1>
-        <Link href="/profiles">View all profiles</Link>
+        <h1 className="text-xl">Index!</h1>
+        <div className="mt-2">
+          <Link href="/profiles" className={linkStyles}>
+            View all profiles
+          </Link>
+        </div>
       </div>
     </>
   );

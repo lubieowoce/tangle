@@ -12,6 +12,7 @@ import {
   Thenable,
   ReactElement,
   useCallback,
+  ComponentProps,
 } from "react";
 
 import {
@@ -29,19 +30,24 @@ import { SegmentErrorBoundary } from "./error-boundary";
 
 export function Link({
   href,
+  type,
   children,
-  ...opts
-}: PropsWithChildren<{ href: string } & NavigateOptions>) {
+  onClick,
+  ...rest
+}: PropsWithChildren<{ href: string } & NavigateOptions> &
+  Omit<ComponentProps<"a">, "href">) {
   const { navigate } = useNavigationContext();
+  const handleClick = useCallback(
+    (e: React.MouseEvent<HTMLAnchorElement>) => {
+      e.preventDefault();
+      e.stopPropagation();
+      onClick?.(e);
+      navigate(href, { type });
+    },
+    [navigate, onClick, href, type]
+  );
   return (
-    <a
-      href={href}
-      onClick={(e) => {
-        e.preventDefault();
-        e.stopPropagation();
-        navigate(href, opts);
-      }}
-    >
+    <a href={href} onClick={handleClick} {...rest}>
       {children}
     </a>
   );

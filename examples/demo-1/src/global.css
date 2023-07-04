@@ -1,0 +1,5 @@
+/* this file is automatically included in all pages. */
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;

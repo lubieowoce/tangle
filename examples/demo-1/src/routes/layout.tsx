@@ -6,6 +6,7 @@ import {
   FadeOnPendingNavigation,
   RefreshButton,
 } from "../components/navigation";
+import { linkStyles } from "../components/styles";
 
 const DummyLayout = createRouteLayout("RootLayout (/)");
 
@@ -15,8 +16,10 @@ export default function Root({ children }: PropsWithChildren<{}>) {
       <main>
         {/* @ts-expect-error  async component */}
         <DummyLayout params={{}}>
-          <div style={{ display: "flex", gap: "16px" }}>
-            <Link href="/">Home</Link>
+          <div className="flex gap-4">
+            <Link href="/" className={linkStyles}>
+              Home
+            </Link>
             <RefreshButton />
           </div>
           <FadeOnPendingNavigation>{children}</FadeOnPendingNavigation>

@@ -1,6 +1,9 @@
 {
   "include": ["**/*.ts", "**/*.tsx"],
   "compilerOptions": {
+    "outDir": "../../dist/build",
+    "declaration": true,
+    "declarationMap": true,
     "strict": true,
     "target": "ESNext",
     "module": "ESNext",

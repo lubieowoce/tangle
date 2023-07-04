@@ -5,6 +5,20 @@ import path from "node:path";
 import fs from "node:fs";
 
 import { build } from "../build/build";
+import micromatch from "micromatch";
+
+const findConfig = (appPath: string) => {
+  const IS_CONFIG = "tangle.config.{js,cjs}";
+  const dir = fs.readdirSync(appPath);
+  const matched = micromatch(dir, IS_CONFIG).map((p) => path.join(appPath, p));
+  if (matched.length > 1) {
+    throw new Error(
+      "Multiple config files found:\n" +
+        matched.map((p) => `  - ${p}`).join("\n")
+    );
+  }
+  return matched[0] ?? null;
+};
 
 const main = async () => {
   const args = process.argv.slice(2);
@@ -13,11 +27,12 @@ const main = async () => {
     throw new Error("No command given");
   }
   const appPath = process.cwd();
+  const configPath = findConfig(appPath);
 
   switch (command) {
     case "dev": {
       const runDev = async () => {
-        const { server } = await build({ appPath });
+        const { server } = await build({ appPath, configPath });
         return () => {
           const proc = spawnServer({ path: server.path });
           return () => proc.kill();
@@ -30,7 +45,7 @@ const main = async () => {
     }
 
     case "build": {
-      const { server } = await build({ appPath });
+      const { server } = await build({ appPath, configPath });
       console.log(server.path);
       return;
     }
