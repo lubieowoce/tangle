@@ -5,7 +5,9 @@ import * as path from "node:path";
 import { slowdown } from "../support/slowdown";
 import { cache } from "react";
 
-type DBContents = {
+export type ProfileData = { name: string; description: string };
+
+export type DBContents = {
   profiles: Record<string, ProfileData>;
 };
 
@@ -58,7 +60,7 @@ export async function getProfileFromDb(
 ) {
   await slowdown(700);
   const data = await dbClient.read();
-  const allProfileIds = Object.keys(data.profiles).sort();
+  const allProfileIds = sortNumeric(Object.keys(data.profiles));
   const index = allProfileIds.indexOf(profileId + "");
 
   if (index === -1) {
@@ -85,4 +87,6 @@ export async function getAllProfilesFromFb(dbClient: DBClient) {
   }));
 }
 
-type ProfileData = { name: string; description: string };
+function sortNumeric(arr: string[]) {
+  return [...arr].sort((a, b) => Number(a) - Number(b));
+}
