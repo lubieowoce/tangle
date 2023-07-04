@@ -5,12 +5,14 @@ import {
   ClientRouter,
   createEmptyLayoutCache,
   getPathFromDOMState,
+  NavigationContextValue,
 } from "@owoce/tangle-router/client";
 import { Use } from "./support/use";
 import { __DEV__ } from "./support/is-dev";
 import {
   OPTIONS_FOR_CREATE,
   fetchSubtree,
+  setGlobalRouter,
 } from "./router-integration/index.client";
 
 import "./generated/global-css";
@@ -114,6 +116,11 @@ const init = async () => {
   const layoutCache = createEmptyLayoutCache();
   const initialPath = getPathFromDOMState();
 
+  const receiveNavigation = (navigation: NavigationContextValue) => {
+    console.log("received navigation api from ClientRouter");
+    setGlobalRouter(navigation);
+  };
+
   onDocumentLoad(() => {
     startTransition(() => {
       hydrateRoot(
@@ -122,6 +129,7 @@ const init = async () => {
           initialCache={layoutCache}
           initialPath={initialPath}
           fetchSubtree={fetchSubtree}
+          receiveNavigation={receiveNavigation}
         >
           <Use thenable={initialServerTreeThenable} debugLabel={initialPath} />
         </ClientRouter>

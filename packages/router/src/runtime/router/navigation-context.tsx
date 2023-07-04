@@ -1,6 +1,7 @@
 "use client";
 import { createContext, useContext } from "react";
 import type { ParsedPath } from "./paths";
+import type { ServerActionResults } from "./server-actions-api";
 
 export type NavigateOptions = {
   type?: "push" | "replace";
@@ -16,6 +17,7 @@ export type NavigationContextValue = {
   isNavigating: boolean;
   navigate(newPath: string, opts?: NavigateOptions): void;
   refresh(): void;
+  changeByServerActionResults(results: ServerActionResults): void;
 };
 
 export const GlobalRouterContext =

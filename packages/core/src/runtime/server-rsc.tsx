@@ -17,6 +17,8 @@ import { serverActionHandlers } from "./generated/action-handlers";
 
 import type { Request, Response } from "express";
 import { RSC_CONTENT_TYPE } from "./shared";
+import { withRouterApi } from "@owoce/tangle-router/server";
+import { ActionResult } from "./router-integration/index.client";
 
 export type Options = {
   path: string;
@@ -75,6 +77,12 @@ export function createServerActionHandler(options: ServerActionHandlerOptions) {
       return handler;
     };
 
+    const runAction = async <T,>(fn: () => T): Promise<ActionResult<T>> => {
+      const [actionResult, routerApiResults] = await withRouterApi(fn);
+      console.log("results from withRouterApi", routerApiResults);
+      return { actionResult, router: routerApiResults };
+    };
+
     const handleFlightResult = (result: PipeableStream) => {
       res.status(200);
       res.header("content-type", RSC_CONTENT_TYPE);
@@ -93,7 +101,7 @@ export function createServerActionHandler(options: ServerActionHandlerOptions) {
       if (!decoded) {
         throw new Error("Could not decode form action");
       }
-      await decoded();
+      await runAction(decoded);
       return handleNoJsResult();
     }
 
@@ -125,10 +133,12 @@ export function createServerActionHandler(options: ServerActionHandlerOptions) {
 
     console.log("handleAction :: args", args);
 
-    const handlerResultPromise = handler(...args);
+    // TODO: do we need to do this streamingly?
+    // if so, how do we communicate paths to revalidate to the client?
+    const handlerResult = await runAction(() => handler(...args));
 
     const result = renderToPipeableStream(
-      handlerResultPromise,
+      handlerResult,
       options.webpackMapForClient
     );
     return handleFlightResult(result);

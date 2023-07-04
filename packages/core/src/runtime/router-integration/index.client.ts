@@ -7,7 +7,11 @@ import {
   RSC_CONTENT_TYPE,
 } from "../shared";
 import type { ReactNode } from "react";
-import type { FetchSubtreeArgs } from "@owoce/tangle-router";
+import type {
+  FetchSubtreeArgs,
+  NavigationContextValue,
+} from "@owoce/tangle-router";
+import type { ServerActionResults } from "@owoce/tangle-router/server";
 
 export type CreateFromFetchOptions = NonNullable<
   Parameters<typeof createFromFetch>[1]
@@ -17,7 +21,27 @@ export type CallServerCallback = NonNullable<
   CreateFromFetchOptions["callServer"]
 >;
 
-export const callServer = (async (id, args) => {
+export type ActionResult<T> = {
+  actionResult: T;
+  router: ServerActionResults;
+};
+
+const globalRouterRef: { current: NavigationContextValue | null } = {
+  current: null,
+};
+
+export const getGlobalRouter = () => {
+  if (!globalRouterRef.current) {
+    throw new Error("Internal error: globalRouter not set");
+  }
+  return globalRouterRef as typeof globalRouterRef & { current: {} };
+};
+
+export const setGlobalRouter = (router: NavigationContextValue) => {
+  globalRouterRef.current = router;
+};
+
+export const callServer = (async <A, T>(id: string, args: A): Promise<T> => {
   console.log("callServer", id, args);
   const url = ACTIONS_ROUTE_PREFIX + encodeURIComponent(id);
 
@@ -41,8 +65,16 @@ export const callServer = (async (id, args) => {
     method: "POST",
     ...requestOpts,
   });
-  // TODO: response value
-  return createFromFetch(responsePromise);
+
+  const { actionResult, router: routerPayload } = await createFromFetch<
+    ActionResult<T>
+  >(responsePromise);
+
+  console.log("callServer :: passing payload to router", routerPayload);
+  const router = getGlobalRouter();
+  router.current.processServerActionResults(routerPayload);
+
+  return actionResult;
 }) satisfies CallServerCallback;
 
 export const OPTIONS_FOR_CREATE = {
