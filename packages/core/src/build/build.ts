@@ -559,11 +559,7 @@ const getReactPackagesResolutions = async ({
 
   const aliases = Object.fromEntries(
     Object.entries(resolutions)
-      .map(([specifier, resolved]) =>
-        specifier.startsWith("react-server-dom-webpack")
-          ? undefined
-          : ([`${specifier}$`, resolved] as const)
-      )
+      .map(([specifier, resolved]) => [`${specifier}$`, resolved] as const)
       .filter((e) => !!e)
       .map((e) => e!)
   );
@@ -584,26 +580,27 @@ const createProxyOfClientModule = ({
   resource: string;
   exports: string[];
 }) => {
-  const CREATE_PROXY_MOD_PATH = path.resolve(
-    __dirname,
-    "../runtime/support/client-module-proxy-for-server"
-  );
-
-  const manifestId = getManifestId(resource);
+  const manifestIdUrl = getManifestId(resource);
+  const manifestId = stringLiteral(manifestIdUrl.href);
+  // NOTE: we don't need to call `registerClientReference`,
+  // because when we access a property on the proxy, it gives us the appropriate reference
+  // (and calls `registerClientReferenceImpl` internally)
   const generatedCode = [
-    `import { createProxy } from ${stringLiteral(CREATE_PROXY_MOD_PATH)};`,
+    `import { createClientModuleProxy } from 'react-server-dom-webpack/server';`,
     ``,
-    `const proxy = /*@__PURE__*/ createProxy(${JSON.stringify(manifestId)});`,
+    `const proxy = /*@__PURE__*/ createClientModuleProxy(${manifestId});`,
   ];
-  const proxyExpr = (exportName: string) =>
-    `(/*@__PURE__*/ proxy[${stringLiteral(exportName)}])`;
+  const getProxyExpr = (exportName: string) => {
+    const name = stringLiteral(exportName);
+    return `(/*@__PURE__*/ proxy[${name}])`;
+  };
 
   for (const exportName of modExports) {
-    const expr = proxyExpr(exportName);
+    const expr = getProxyExpr(exportName);
     if (exportName === "default") {
-      generatedCode.push(`export default ${expr}`);
+      generatedCode.push(`export default ${expr};`);
     } else {
-      generatedCode.push(`export const ${exportName} = ${expr}`);
+      generatedCode.push(`export const ${exportName} = ${expr};`);
     }
   }
   return generatedCode.join("\n");
@@ -641,17 +638,17 @@ const createProxyOfServerModule = ({
     ``,
   ];
 
-  const proxyExpr = (exportName: string) =>
-    `(/*@__PURE__*/ createServerActionProxy(${stringLiteral(
-      getActionId(exportName)
-    )}))`;
+  const getProxyExpr = (exportName: string) => {
+    const id = stringLiteral(getActionId(exportName));
+    return `(/*@__PURE__*/ createServerActionProxy(${id}))`;
+  };
 
   for (const exportName of exports) {
-    const expr = proxyExpr(exportName);
+    const expr = getProxyExpr(exportName);
     if (exportName === "default") {
-      generatedCode.push(`export default ${expr}`);
+      generatedCode.push(`export default ${expr};`);
     } else {
-      generatedCode.push(`export const ${exportName} = ${expr}`);
+      generatedCode.push(`export const ${exportName} = ${expr};`);
     }
   }
   return generatedCode.join("\n");
@@ -675,32 +672,29 @@ const enhanceUseServerModuleForServer = ({
         "Default exports from server actions are not supported yet. Please use a named export."
     );
   }
-  const METADATA_MOD_PATH = path.resolve(
-    __dirname,
-    "../runtime/support/add-server-action-metadata"
-  );
 
   const getActionId = (name: string) => getServerActionId(resource, name);
 
   const prefix = [
-    `import { addServerActionMetadata } from ${stringLiteral(
-      METADATA_MOD_PATH
-    )};`,
+    `import { registerServerReference } from 'react-server-dom-webpack/server';`,
     ``,
   ];
 
   const generatedCode: string[] = [];
 
-  const metaStmt = (exportName: string) =>
+  const getRegisterStmt = (exportName: string) =>
     [
-      `addServerActionMetadata(`,
-      `  ${stringLiteral(getActionId(exportName))},`,
-      `  (${exportName})`,
-      `);`,
+      `if (typeof ${exportName} === 'function') {`,
+      `  registerServerReference(`,
+      `    ${exportName},`,
+      `    ${stringLiteral(getActionId(exportName))},`,
+      `    ${stringLiteral(exportName)},`,
+      `  );`,
+      `}`,
     ].join("\n");
 
   for (const exportName of exports) {
-    const stmt = metaStmt(exportName);
+    const stmt = getRegisterStmt(exportName);
     generatedCode.push(stmt);
   }
 
