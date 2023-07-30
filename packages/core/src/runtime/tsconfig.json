@@ -13,6 +13,6 @@
     "skipLibCheck": true,
     "jsx": "react-jsx",
     "moduleResolution": "bundler",
-    "types": ["react/next"]
+    "types": ["react/experimental"]
   }
 }

@@ -41,7 +41,10 @@ export const setGlobalRouter = (router: NavigationContextValue) => {
   globalRouterRef.current = router;
 };
 
-export const callServer = (async <A, T>(id: string, args: A): Promise<T> => {
+export const callServer = (async <A extends any[], T>(
+  id: string,
+  args: A
+): Promise<T> => {
   // console.log("callServer", id, args);
   const url = ACTIONS_ROUTE_PREFIX + encodeURIComponent(id);
 
@@ -98,5 +101,6 @@ export async function fetchSubtree({ path, existingState }: FetchSubtreeArgs) {
     },
   });
 
-  return createFromFetch<ReactNode>(request, OPTIONS_FOR_CREATE);
+  type _ReactNode = Exclude<ReactNode, PromiseLike<any>>;
+  return createFromFetch<_ReactNode>(request, OPTIONS_FOR_CREATE);
 }

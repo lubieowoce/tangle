@@ -1,0 +1,13 @@
+{
+  "compilerOptions": {
+    "paths": {
+      "shared/*": ["./src/shared/*"],
+      "react-client/*": ["./src/react-client/*"],
+      "react-server/*": ["./src/react-server/*"],
+      "react-server-dom-webpack/*": ["./src/react-server-dom-webpack/*"]
+    },
+    "strict": true,
+    "types": ["node"],
+    "lib": ["ESNext", "DOM"]
+  }
+}

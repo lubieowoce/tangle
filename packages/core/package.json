@@ -54,6 +54,7 @@
   "author": "",
   "license": "MIT",
   "dependencies": {
+    "@owoce/react-server-dom-webpack": "^0.0.0-experimental-493f72b0a-20230727",
     "@owoce/tangle-router": "0.0.8",
     "busboy": "^1.6.0",
     "chokidar": "^3.5.3",
