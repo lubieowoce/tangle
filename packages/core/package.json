@@ -65,7 +65,7 @@
     "mini-css-extract-plugin": "^2.7.6",
     "postcss": "^8.4.24",
     "postcss-loader": "^7.3.3",
-    "react": "0.0.0-experimental-8ec962d82-20230623",
+    "react": "0.0.0-experimental-493f72b0a-20230727",
     "react-dom": "0.0.0-experimental-8ec962d82-20230623",
     "react-server-dom-webpack": "0.0.0-experimental-8ec962d82-20230623",
     "ts-loader": "^9.4.2",
