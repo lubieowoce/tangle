@@ -42,7 +42,7 @@ export const setGlobalRouter = (router: NavigationContextValue) => {
 };
 
 export const callServer = (async <A, T>(id: string, args: A): Promise<T> => {
-  console.log("callServer", id, args);
+  // console.log("callServer", id, args);
   const url = ACTIONS_ROUTE_PREFIX + encodeURIComponent(id);
 
   let requestOpts: Pick<RequestInit, "headers" | "body">;
@@ -70,7 +70,7 @@ export const callServer = (async <A, T>(id: string, args: A): Promise<T> => {
     ActionResult<T>
   >(responsePromise);
 
-  console.log("callServer :: passing payload to router", routerPayload);
+  // console.log("callServer :: passing payload to router", routerPayload);
   const router = getGlobalRouter();
   router.current.processServerActionResults(routerPayload);
 
