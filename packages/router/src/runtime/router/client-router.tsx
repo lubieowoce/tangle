@@ -118,6 +118,7 @@ export type ClientRouterProps = {
   globalErrorFallback?: ReactNode;
   globalErrorIncludeDocument?: boolean;
   fetchSubtree: FetchSubtreeFn;
+  receiveNavigation?: (navigation: NavigationContextValue) => void;
 };
 
 export const ClientRouter = ({
@@ -127,6 +128,7 @@ export const ClientRouter = ({
   globalErrorIncludeDocument,
   fetchSubtree,
   children,
+  receiveNavigation,
 }: PropsWithChildren<ClientRouterProps>) => {
   const [routerState, setRouterState] = useState<RouterState>(() =>
     createRouterState(initialPath, initialCache)
@@ -271,6 +273,13 @@ export const ClientRouter = ({
           changeRouterStateForRefetch();
         });
       },
+      changeByServerActionResults(results) {
+        console.log(
+          "Not implemented: changeByServerActionResults. calling refresh() instead",
+          results
+        );
+        return this.refresh();
+      },
     }),
     [
       routerState,
@@ -279,6 +288,10 @@ export const ClientRouter = ({
       changeRouterStateForRefetch,
     ]
   );
+
+  useEffect(() => {
+    receiveNavigation?.(navigation);
+  }, [navigation, receiveNavigation]);
 
   const ctx: GlobalRouterContextValue = useMemo(
     () => ({

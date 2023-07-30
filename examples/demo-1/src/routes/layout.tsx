@@ -1,5 +1,4 @@
 import { PropsWithChildren } from "react";
-import { createRouteLayout } from "../support/layout-template";
 import { HTMLPage } from "@owoce/tangle/server";
 import { Link } from "@owoce/tangle/client";
 import {
@@ -7,23 +6,24 @@ import {
   RefreshButton,
 } from "../components/navigation";
 import { linkStyles } from "../components/styles";
-
-const DummyLayout = createRouteLayout("RootLayout (/)");
+import { Timestamp } from "../components/timestamp";
 
 export default function Root({ children }: PropsWithChildren<{}>) {
   return (
     <HTMLPage>
       <main>
-        {/* @ts-expect-error  async component */}
-        <DummyLayout params={{}}>
-          <div className="flex gap-4">
+        <div className="min-h-screen">
+          <div className="p-4 flex items-center gap-4 mb-2 border border-solid border-b border-x-0 border-t-0 border-b-gray-300">
+            <span>Demo Page</span>
             <Link href="/" className={linkStyles}>
               Home
             </Link>
             <RefreshButton />
+            <div className="flex-auto" />
+            <Timestamp />
           </div>
           <FadeOnPendingNavigation>{children}</FadeOnPendingNavigation>
-        </DummyLayout>
+        </div>
       </main>
     </HTMLPage>
   );

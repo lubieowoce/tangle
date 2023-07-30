@@ -5,10 +5,15 @@ import {
   ClientRouter,
   createEmptyLayoutCache,
   getPathFromDOMState,
+  NavigationContextValue,
 } from "@owoce/tangle-router/client";
 import { Use } from "./support/use";
 import { __DEV__ } from "./support/is-dev";
-import { fetchSubtree } from "./router-integration/index.client";
+import {
+  OPTIONS_FOR_CREATE,
+  fetchSubtree,
+  setGlobalRouter,
+} from "./router-integration/index.client";
 
 import "./generated/global-css";
 
@@ -104,11 +109,17 @@ const onDocumentLoad = (fn: () => void) => {
 const init = async () => {
   console.log("client-side init!");
   const initialStream = getStreamFromInitialChunks(__RSC_CHUNKS__);
-  const initialServerTreeThenable =
-    createFromReadableStream<ReactNode>(initialStream);
+  const initialServerTreeThenable = createFromReadableStream<ReactNode>(
+    initialStream,
+    OPTIONS_FOR_CREATE
+  );
   const layoutCache = createEmptyLayoutCache();
   const initialPath = getPathFromDOMState();
-  // cache.set(initialKey, initialServerTreeThenable);
+
+  const receiveNavigation = (navigation: NavigationContextValue) => {
+    console.log("received navigation api from ClientRouter");
+    setGlobalRouter(navigation);
+  };
 
   onDocumentLoad(() => {
     startTransition(() => {
@@ -118,6 +129,7 @@ const init = async () => {
           initialCache={layoutCache}
           initialPath={initialPath}
           fetchSubtree={fetchSubtree}
+          receiveNavigation={receiveNavigation}
         >
           <Use thenable={initialServerTreeThenable} debugLabel={initialPath} />
         </ClientRouter>

@@ -142,12 +142,19 @@ declare module "react-server-dom-webpack/src/ReactFlightServerWebpackBundlerConf
 //================
 
 declare module "react-server-dom-webpack/src/ReactFlightDOMServerNode" {
+  import type { Thenable } from "react";
   import type { Writable } from "node:stream";
   import type { ReactClientValue } from "react-server/src/ReactFlightServer";
   import type { ServerContextJSONValue } from "react";
   import type { ClientManifest } from "react-server-dom-webpack/src/ReactFlightServerWebpackBundlerConfig";
+  import type {
+    ServerManifest,
+    ClientReferenceMetadata,
+  } from "react-client/src/ReactFlightClientHostConfig";
+  import type { Busboy } from "busboy";
 
-  export { ClientManifest }; // reexport for convenience
+  // reexport for convenience
+  export type { ClientManifest, ServerManifest, ClientReferenceMetadata };
 
   // https://github.com/facebook/react/blob/main/packages/react-server-dom-webpack/src/ReactFlightDOMServerNode.js
 
@@ -167,15 +174,29 @@ declare module "react-server-dom-webpack/src/ReactFlightDOMServerNode" {
     webpackMap: ClientManifest,
     options?: Options
   ): PipeableStream;
+
+  export function decodeReplyFromBusboy<T>(
+    busboyStream: Busboy,
+    moduleBasePath: ServerManifest
+  ): Thenable<T>;
+
+  export function decodeReply<T>(
+    body: string | FormData,
+    serverManifest: ServerManifest
+  ): Thenable<T>;
 }
 
 declare module "react-server-dom-webpack/src/ReactFlightDOMServerEdge" {
   import type { ReadableStream } from "node:stream/web";
   import type { ServerContextJSONValue } from "react";
   import type { ClientManifest } from "react-server-dom-webpack/src/ReactFlightServerWebpackBundlerConfig";
-  import type { ServerManifest } from "react-client/src/ReactFlightClientHostConfig";
+  import type {
+    ServerManifest,
+    ClientReferenceMetadata,
+  } from "react-client/src/ReactFlightClientHostConfig";
 
-  export { ClientManifest }; // reexport for convenience
+  // reexport for convenience
+  export type { ClientManifest, ServerManifest, ClientReferenceMetadata };
 
   export type Options = {
     identifierPrefix?: string;
@@ -194,6 +215,8 @@ declare module "react-server-dom-webpack/src/ReactFlightDOMServerEdge" {
     body: string | FormData,
     webpackMap: ServerManifest
   ): Thenable<T>;
+
+  export { decodeAction } from "react-server/src/ReactFlightActionServer";
 }
 
 //================
@@ -202,6 +225,7 @@ declare module "react-server-dom-webpack/src/ReactFlightDOMServerEdge" {
 
 declare module "react-server-dom-webpack/src/ReactFlightDOMClientBrowser" {
   import type { Thenable } from "react";
+  import type { ReactServerValue } from "react-client/src/ReactFlightReplyClient";
 
   // https://github.com/facebook/react/blob/main/packages/react-server-dom-webpack/src/ReactFlightDOMClientBrowser.js
 
@@ -221,23 +245,30 @@ declare module "react-server-dom-webpack/src/ReactFlightDOMClientBrowser" {
     options?: Options
   ): Thenable<T>;
 
-  export function createFromXHR<T>(
-    request: XMLHttpRequest,
-    options?: Options
-  ): Thenable<T>;
+  export function encodeReply(
+    value: ReactServerValue
+  ): Promise<string | URLSearchParams | FormData>;
+
+  export { createServerReference } from "react-client/src/ReactFlightReplyClient";
 }
 
 declare module "react-server-dom-webpack/src/ReactFlightDOMClientNode" {
   import type { Thenable } from "react";
   import type { Readable } from "node:stream";
-  import type { SSRManifest } from "react-client/src/ReactFlightClientHostConfig";
+  import type {
+    SSRManifest,
+    ClientReferenceMetadata,
+  } from "react-client/src/ReactFlightClientHostConfig";
 
-  export { SSRManifest }; // reexport for convenience
+  // reexport for convenience
+  export type { SSRManifest, ClientReferenceMetadata };
 
   export function createFromNodeStream<T>(
     stream: Readable,
     moduleMap: NonNullable<SSRManifest>
   ): Thenable<T>;
+
+  export { createServerReference } from "react-client/src/ReactFlightReplyClient";
 }
 
 declare module "react-server-dom-webpack/src/ReactFlightDOMClientEdge" {
@@ -260,6 +291,8 @@ declare module "react-server-dom-webpack/src/ReactFlightDOMClientEdge" {
     promiseForResponse: Promise<Response>,
     options?: Options
   ): Thenable<T>;
+
+  export { createServerReference } from "react-client/src/ReactFlightReplyClient";
 }
 
 //================
@@ -324,6 +357,49 @@ declare module "react-server/src/ReactFlightServer" {
     | Array<ReactClientValue>
     | ReactClientObject
     | Promise<ReactClientValue>; // Thenable<ReactClientValue>
+}
+
+declare module "react-server/src/ReactFlightActionServer" {
+  import type { ServerManifest } from "react-client/src/ReactFlightClientHostConfig";
+
+  export function decodeAction<T>(
+    body: FormData,
+    serverManifest: ServerManifest
+  ): Promise<() => T> | null;
+}
+
+declare module "react-client/src/ReactFlightReplyClient" {
+  export type ServerReference<T> = T;
+
+  // Serializable values
+  export type ReactServerValue =
+    // References are passed by their value
+    | ServerReference<any>
+    // The rest are passed as is. Sub-types can be passed in but lose their
+    // subtype, so the receiver can only accept once of these.
+    | string
+    | boolean
+    | number
+    | symbol
+    | null
+    | void
+    // | Iterable<ReactServerValue>
+    | ReactServerValue[]
+    | { [key: string]: ReactServerValue }
+    | Promise<ReactServerValue>; // Thenable<ReactServerValue>
+
+  export { createServerReference } from "react-client/src/ReactFlightServerReferenceRegistry";
+}
+
+declare module "react-client/src/ReactFlightServerReferenceRegistry" {
+  import type { ServerReferenceId } from "react-client/src/ReactFlightClientHostConfig";
+
+  export type CallServerCallback = <A, T>(id: any, args: A) => Promise<T>;
+
+  export function createServerReference<A extends any[], T>(
+    id: ServerReferenceId,
+    callServer: CallServerCallback
+  ): (...args: A) => Promise<T>;
 }
 
 //================

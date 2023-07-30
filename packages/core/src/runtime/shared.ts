@@ -5,7 +5,8 @@ export const ROUTER_RESPONSE_PREFIX_HEADER = "X-Router-Response-Prefix";
 
 export const RSC_CONTENT_TYPE = "text/x-component";
 
-export const ASSETS_ROUTE = "/_assets";
+export const ASSETS_ROUTE = "/_tangle/assets";
+export const ACTIONS_ROUTE_PREFIX = "/_tangle/actions/";
 
 export type AnyServerRootProps = Record<string, any>;
 
