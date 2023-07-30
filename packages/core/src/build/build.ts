@@ -613,9 +613,18 @@ const createProxyOfClientModule = ({
 const getHash = (s: string) =>
   crypto.createHash("sha1").update(s).digest().toString("hex");
 
-// TODO: this is vulnerable to version drift (filename might stay the same, but hash would change)
-const getServerActionId = (resource: string, name: string) =>
-  name + "-" + getHash(pathToFileURL(resource).href);
+// NOTE: the "<id>#<exportedName>" structure is prescribed by RSDW --
+// that's the id that `registerServerReference` will create if given an export name.
+// (if we wanted to use a different scheme, we can pass `null` there, but why fight the convention?)
+const getServerActionReferenceId = (resource: string, name: string) =>
+  getServerActionModuleId(resource) + "#" + name;
+
+// FIXME: this is can probably result in weird bugs --
+// we're only looking at the name of the module,
+// so we'll give it the same id even if the contents changed completely!
+// this id should probably look at some kind of source-hash...
+const getServerActionModuleId = (resource: string) =>
+  getHash(pathToFileURL(resource).href);
 
 const createProxyOfServerModule = ({
   resource,
@@ -629,7 +638,8 @@ const createProxyOfServerModule = ({
     "../runtime/support/server-action-proxy-for-client"
   );
 
-  const getActionId = (name: string) => getServerActionId(resource, name);
+  const getActionId = (name: string) =>
+    getServerActionReferenceId(resource, name);
 
   const generatedCode = [
     `import { createServerActionProxy } from ${stringLiteral(
@@ -673,8 +683,6 @@ const enhanceUseServerModuleForServer = ({
     );
   }
 
-  const getActionId = (name: string) => getServerActionId(resource, name);
-
   const prefix = [
     `import { registerServerReference } from 'react-server-dom-webpack/server';`,
     ``,
@@ -682,12 +690,14 @@ const enhanceUseServerModuleForServer = ({
 
   const generatedCode: string[] = [];
 
+  const actionModuleId = getServerActionModuleId(resource);
+
   const getRegisterStmt = (exportName: string) =>
     [
       `if (typeof ${exportName} === 'function') {`,
       `  registerServerReference(`,
       `    ${exportName},`,
-      `    ${stringLiteral(getActionId(exportName))},`,
+      `    ${stringLiteral(actionModuleId)},`,
       `    ${stringLiteral(exportName)},`,
       `  );`,
       `}`,
@@ -727,21 +737,21 @@ function getActionHandlersModuleSource(analysisCtx: {
   getTypeForModule(mod: Module): "client" | "server" | null;
   getTypeForResource(resource: string): "client" | "server" | null;
 }) {
-  let id = 0;
+  let unique = 0;
   const code: string[] = [];
   const handlersById: Record<string, string> = {};
 
   for (const [resource] of analysisCtx.modules.server.entries()) {
     const modExports = analysisCtx.exports.server.get(resource)!;
-    const modImportedName = `mod${id++}`;
+    const modImportedName = `$mod${unique++}`;
     code.push(
       `import * as ${modImportedName} from ${stringLiteral(resource)};`
     );
 
     for (const exportName of modExports) {
-      const id = getServerActionId(resource, exportName);
+      const actionId = getServerActionReferenceId(resource, exportName);
       const expr = `${modImportedName}.${exportName}`;
-      handlersById[id] = expr;
+      handlersById[actionId] = expr;
     }
   }
 
@@ -1024,7 +1034,7 @@ class RSCServerPlugin {
                   return;
                 }
                 for (const exportName of moduleInfo.exports) {
-                  const actionId = getServerActionId(
+                  const actionId = getServerActionReferenceId(
                     moduleInfo.originalResource,
                     exportName
                   );
