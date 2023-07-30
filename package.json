@@ -15,7 +15,7 @@
     "changeset": "changeset add",
     "version": "changeset version",
     "publish": "changeset publish",
-    "release-all": "npm run version && git add . && git commit -m 'chore: release' && git push && npm run build && npm run publish"
+    "release-all": "npm run clean && npm run build && npm run version && git add . && git commit -m 'chore: release' && git push && npm run publish"
   },
   "license": "MIT",
   "devDependencies": {
