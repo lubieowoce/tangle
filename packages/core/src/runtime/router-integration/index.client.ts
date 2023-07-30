@@ -72,7 +72,7 @@ export const callServer = (async <A, T>(id: string, args: A): Promise<T> => {
 
   // console.log("callServer :: passing payload to router", routerPayload);
   const router = getGlobalRouter();
-  router.current.processServerActionResults(routerPayload);
+  router.current.changeByServerActionResults(routerPayload);
 
   return actionResult;
 }) satisfies CallServerCallback;
