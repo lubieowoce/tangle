@@ -1,5 +1,15 @@
 # @owoce/tangle
 
+## 0.0.8
+
+### Patch Changes
+
+- edf6d8f: implement basic support for server actions - bundler transform, client wiring, server-side handlers
+- 19bad1e: rudimentary css support (enough to run tailwind)
+- Updated dependencies [19bad1e]
+- Updated dependencies [edf6d8f]
+  - @owoce/tangle-router@0.0.8
+
 ## 0.0.7
 
 ### Patch Changes

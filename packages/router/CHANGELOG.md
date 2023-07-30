@@ -1,5 +1,12 @@
 # @owoce/tangle-router
 
+## 0.0.8
+
+### Patch Changes
+
+- 19bad1e: forward all props from Link onto the underlying `<a>`
+- edf6d8f: add rudimentary revalidatePaths, scaffold reacting to server action results
+
 ## 0.0.7
 
 ### Patch Changes
