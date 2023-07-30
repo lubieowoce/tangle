@@ -12,7 +12,7 @@
     "build:bin": "tsup --config tsup.config.bin.js",
     "build:build": "tsc -p src/build/",
     "build:runtime": "tsc -p src/runtime/ && npm run postbuild:runtime",
-    "postbuild:runtime": "echo '{ \"type\": \"module\" }' > dist/runtime/package.json && cp -r src/types dist/",
+    "postbuild:runtime": "echo '{ \"type\": \"module\" }' > dist/runtime/package.json",
     "watch": "npm run clean && run-p watch:*",
     "watch:runtime": "mkdir -p dist/runtime && npm run postbuild:runtime && tsc -p src/runtime/ --watch",
     "watch:bin": "npm run build:bin -- --watch",
