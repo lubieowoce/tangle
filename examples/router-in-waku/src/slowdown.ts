@@ -1,4 +1,4 @@
-/// <reference types="react/next" />
+/// <reference types="react/experimental" />
 import { cache } from "react";
 
 const sleep = (ms: number) => {
