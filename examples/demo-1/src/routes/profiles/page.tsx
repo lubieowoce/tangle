@@ -59,7 +59,8 @@ export default async function AllProfilesView(_props: { params: {} }) {
         >
           Create new profile (via form action + bind)
         </Button>
-        {(() => {
+        {/* TODO: registerServerReference only supports one level of .bind(). Is that intentional? */}
+        {/* {(() => {
           const data = getExample("(bind individual args)");
           return (
             <Button
@@ -71,7 +72,7 @@ export default async function AllProfilesView(_props: { params: {} }) {
               Create new profile (via form action + bind x2)
             </Button>
           );
-        })()}
+        })()} */}
       </div>
     </>
   );

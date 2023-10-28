@@ -1,0 +1,17 @@
+{
+  "name": "@owoce/react-server-dom-webpack",
+  "version": "0.0.0-experimental-493f72b0a-20230727",
+  "description": "",
+  "types": "./dist/index.d.ts",
+  "files": [
+    "./dist"
+  ],
+  "scripts": {
+    "build": "tsx ./build.ts"
+  },
+  "devDependencies": {
+    "tsx": "^3.12.7"
+  },
+  "author": "",
+  "license": "MIT"
+}

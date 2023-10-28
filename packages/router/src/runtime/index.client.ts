@@ -1,5 +1,5 @@
 "use client";
-/// <reference types="react/next" />
+/// <reference types="react/experimental" />
 
 // Client APIs
 

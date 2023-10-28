@@ -1,4 +1,4 @@
-/// <reference types="react/next" />
+/// <reference types="react/experimental" />
 
 export { notFound, isNotFound } from "./router/not-found/not-found";
 

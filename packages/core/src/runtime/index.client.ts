@@ -1,5 +1,6 @@
 "use client";
-/// <reference types="../types/react-server-dom-webpack" />
+/// <reference types="@owoce/react-server-dom-webpack" />
+/// <reference types="react/experimental" />
 
 export {
   Link,

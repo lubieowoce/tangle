@@ -1,4 +1,4 @@
-/// <reference types="react/next" />
+/// <reference types="react/experimental" />
 
 export * from "./router/server-router";
 export * from "./router/paths";
