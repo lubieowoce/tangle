@@ -1,0 +1,8 @@
+arrow-1.invalid.jsx: functions marked with "use server" must be async
+  2 |   return (
+  3 |     <form
+> 4 |       action={() => {
+    |               ^
+  5 |         "use server";
+  6 |         console.log("not async", foo, bar);
+  7 |       }}

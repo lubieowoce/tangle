@@ -5,26 +5,24 @@ import {
   getDbClient,
 } from "../../server/db";
 import { buttonStyles } from "../../components/styles";
-import {
-  addNewProfile,
-  addNewProfileFromArgs,
-  addNewProfileFromObject,
-} from "./actions";
+import { addNewProfile, addNewProfileFromObject } from "./actions";
 import { Button } from "./button";
 import { ClientProfileForm } from "./profile-form";
+
+const getExampleProfile = (nameSuffix = ""): ProfileData => {
+  nameSuffix = nameSuffix ? " " + nameSuffix : "";
+  return {
+    name: "Example name" + nameSuffix,
+    description: "Example description" + nameSuffix,
+  };
+};
 
 export default async function AllProfilesView(_props: { params: {} }) {
   const dbClient = await getDbClient();
   const profiles = await getAllProfilesFromFb(dbClient);
   const meta = <title>{`All profiles`}</title>;
+  const profilesCount = profiles.length;
 
-  const getExample = (nameSuffix = ""): ProfileData => {
-    nameSuffix = nameSuffix ? " " + nameSuffix : "";
-    return {
-      name: "Example name" + nameSuffix,
-      description: "Example description" + nameSuffix,
-    };
-  };
   return (
     <>
       {meta}
@@ -44,7 +42,7 @@ export default async function AllProfilesView(_props: { params: {} }) {
       <hr className="my-8" />
       <div className="flex flex-col items-stretch gap-2">
         <Button
-          props={getExample("(form action)")}
+          props={getExampleProfile("(form action)")}
           className={buttonStyles}
           action={addNewProfile}
         >
@@ -54,11 +52,24 @@ export default async function AllProfilesView(_props: { params: {} }) {
           className={buttonStyles}
           action={addNewProfileFromObject.bind(
             null,
-            getExample("(bind object)")
+            getExampleProfile("(bind object)")
           )}
         >
           Create new profile (via form action + bind)
         </Button>
+
+        <Button
+          className={buttonStyles}
+          action={async () => {
+            "use server";
+            await addNewProfileFromObject(
+              getExampleProfile(`(from prop: ${profilesCount})`)
+            );
+          }}
+        >
+          Create new profile (via inline form action, prop: {profilesCount})
+        </Button>
+
         {/* TODO: registerServerReference only supports one level of .bind(). Is that intentional? */}
         {/* {(() => {
           const data = getExample("(bind individual args)");

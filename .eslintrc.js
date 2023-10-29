@@ -27,6 +27,8 @@ module.exports = {
   rules: {
     // we've got "jsxImportSource": "react-jsx" in tsconfig
     "react/react-in-jsx-scope": "off",
+    // don't care
+    "react/prop-types": "off",
     // no cheating!
     "react-hooks/exhaustive-deps": "error",
     // i don't care

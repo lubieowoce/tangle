@@ -84,6 +84,12 @@ const IMPORT_CONDITIONS = {
   rsc: IMPORT_CONDITIONS_RSC,
 };
 
+// use the absolute path -- the file we're in will be bundled with TSUp and put in dist/bin,
+// while that plugin will go in dist/build (compiled with regular TSC),
+// so require.resolve() would do weird things.
+const BABEL_PLUGIN_INLINE_ACTIONS =
+  "@owoce/tangle/build/babel-plugin-inline-actions";
+
 const nullIfNotExists = (p: string) => {
   if (!fs.existsSync(p)) {
     return null;
@@ -186,7 +192,14 @@ export const build = async ({
         {
           test: MODULE_EXTENSIONS_REGEX,
           exclude: [/node_modules/],
-          use: TS_LOADER,
+          use: [
+            {
+              // TODO: we're not applying this to node_modules, but we should...
+              loader: "babel-loader",
+              options: { plugins: [BABEL_PLUGIN_INLINE_ACTIONS] },
+            },
+            TS_LOADER,
+          ],
         },
         { test: /\.json$/, type: "json" },
       ],
@@ -227,16 +240,22 @@ export const build = async ({
   const analysisCtx = createAnalysisContext();
 
   console.log("performing analysis...");
+
+  // TODO: cheating a bit, because we're always resolving these to the server versions,
+  // but we only really need that for inline "use server" which'll be in server files anyway
+  const reactResolutionsAnalysis = await getReactPackagesResolutions({
+    importer: opts.server.entry,
+    conditionNames: IMPORT_CONDITIONS.rsc,
+  });
+
   const analysisConfig: Configuration = withUserWebpackConfig(
     mergeWebpackConfigs(shared, {
       mode: BUILD_MODE,
       devtool: false,
       entry: { main: opts.server.entry },
-      // resolve: {
-      //   ...shared.resolve,
-      //   // TODO: do we need react aliases here?
-      //   // could we be missing some import conditions or something?
-      // },
+      resolve: {
+        alias: reactResolutionsAnalysis.aliases,
+      },
       plugins: [...sharedPlugins(), new RSCAnalysisPlugin({ analysisCtx })],
       target: "node16", // TODO does this matter?
       experiments: { layers: true },
@@ -853,6 +872,27 @@ class RSCAnalysisPlugin {
           parser: Webpack.javascript.JavascriptParser
         ) => {
           parser.hooks.program.tap(RSCAnalysisPlugin.pluginName, (program) => {
+            // TODO: WHY aren't we getting comments here? are they getting added onto the first statement or something?
+            // (until we figure this out, the `babel-plugin-inline-actions:` info will have to be a string literal instead)
+
+            // const allComments = [
+            //   ...(program.leadingComments ?? []),
+            //   ...(program.comments ?? []),
+            //   ...(program.trailingComments ?? []),
+            // ];
+            // if (
+            //   allComments.length > 0
+            //   // allComments.some((c) =>
+            //   //   c.value.includes("babel-plugin-inline-actions:")
+            //   // )
+            // ) {
+            //   console.log(
+            //     "====================== COMMENTS! ========================",
+            //     allComments
+            //   );
+            // }
+            // console.log("parser.hooks.program", allComments.length);
+
             const isClientModule = program.body.some((node) => {
               return (
                 node.type === "ExpressionStatement" &&
@@ -864,7 +904,12 @@ class RSCAnalysisPlugin {
               return (
                 node.type === "ExpressionStatement" &&
                 node.expression.type === "Literal" &&
-                node.expression.value === "use server"
+                (node.expression.value === "use server" ||
+                  (typeof node.expression.value === "string" &&
+                    node.expression.value.startsWith(
+                      "babel-plugin-inline-actions: "
+                    ) &&
+                    (console.log("BEEEEEEEEEEEEEEP", node), true)))
               );
             });
 
@@ -907,9 +952,26 @@ class RSCAnalysisPlugin {
                 const type = this.options.analysisCtx.getTypeForModule(module);
                 if (!type) continue;
                 const exports = compilation.moduleGraph.getExportsInfo(module);
+
+                let exportNames = [...exports.orderedExports].map(
+                  (exp) => exp.name
+                );
+
+                // FIXME: gross, brittle
+                // we SHOULD be looking at the export info stashed in that "babel-plugin-inline-actions" literal,
+                // but that'd require some more refactoring, so do the dumb thing instead and look for the names
+                // that `babel-plugin-inline-actions` creates...
+                const isInlineAction = (name: string) =>
+                  name.includes("$$INLINE_ACTION");
+                if (exportNames.some((name) => isInlineAction(name))) {
+                  exportNames = exportNames.filter((name) =>
+                    isInlineAction(name)
+                  );
+                }
+
                 this.options.analysisCtx.exports[type].set(
                   module.resource,
-                  [...exports.orderedExports].map((exp) => exp.name)
+                  exportNames
                 );
               }
             }
