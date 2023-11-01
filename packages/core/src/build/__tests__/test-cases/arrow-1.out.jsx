@@ -5,13 +5,19 @@ export const Test = ({
   bar
 }) => {
   return <form action={_$$INLINE_ACTION.bind(null, {
-    foo: foo
+    get foo() {
+      return foo;
+    }
   })}>
       <input name="test" type="text" />
       <button type="submit">Submit</button>
       <button type="button" formAction={_$$INLINE_ACTION2.bind(null, {
-      foo: foo,
-      bar: bar
+      get foo() {
+        return foo;
+      },
+      get bar() {
+        return bar;
+      }
     })}>
         Submit
       </button>

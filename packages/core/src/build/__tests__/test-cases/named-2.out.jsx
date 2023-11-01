@@ -4,7 +4,9 @@ export const Test = ({
   foo
 }) => {
   return <form action={_$$INLINE_ACTION.bind(null, {
-    foo: foo
+    get foo() {
+      return foo;
+    }
   })}>
       <input name="test" type="text" />
       <button type="submit">Submit</button>

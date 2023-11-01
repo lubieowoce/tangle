@@ -21,6 +21,14 @@ export default async function AllProfilesView(_props: { params: {} }) {
   const dbClient = await getDbClient();
   const profiles = await getAllProfilesFromFb(dbClient);
   const meta = <title>{`All profiles`}</title>;
+
+  async function inlineAction1() {
+    "use server";
+    await addNewProfileFromObject(
+      getExampleProfile(`(from prop: ${profilesCount})`)
+    );
+  }
+
   const profilesCount = profiles.length;
 
   return (
@@ -57,7 +65,9 @@ export default async function AllProfilesView(_props: { params: {} }) {
         >
           Create new profile (via form action + bind)
         </Button>
-
+        <Button className={buttonStyles} action={inlineAction1}>
+          Create new profile (via inline form action 1, prop: {profilesCount})
+        </Button>
         <Button
           className={buttonStyles}
           action={async () => {
@@ -67,7 +77,7 @@ export default async function AllProfilesView(_props: { params: {} }) {
             );
           }}
         >
-          Create new profile (via inline form action, prop: {profilesCount})
+          Create new profile (via inline form action 2, prop: {profilesCount})
         </Button>
 
         {/* TODO: registerServerReference only supports one level of .bind(). Is that intentional? */}

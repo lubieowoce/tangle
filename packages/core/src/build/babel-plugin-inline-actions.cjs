@@ -160,9 +160,12 @@ const createPlugin = (/** @type {PluginOptions} */ { onActionFound } = {}) =>
         t.nullLiteral(),
         t.objectExpression(
           freeVariables.map((variable) => {
-            return t.objectProperty(
+            // `get [variable]() { return variable }`
+            return t.objectMethod(
+              "get",
               t.identifier(variable),
-              t.identifier(variable)
+              [],
+              t.blockStatement([t.returnStatement(t.identifier(variable))])
             );
           })
         ),
