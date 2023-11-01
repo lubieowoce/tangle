@@ -76,7 +76,7 @@ const createPlugin = (/** @type {PluginOptions} */ { onActionFound } = {}) =>
     const getFreeVariables = (/** @type {FnPath} */ path) => {
       /** @type {Set<string>} */
       const freeVariablesSet = new Set();
-      // Find free variables by walking through the function body.
+      const programScope = path.scope.getProgramParent();
       path.traverse({
         Identifier(innerPath) {
           if (!innerPath.isReferencedIdentifier()) {
@@ -84,15 +84,36 @@ const createPlugin = (/** @type {PluginOptions} */ { onActionFound } = {}) =>
           }
           const { name } = innerPath.node;
           if (freeVariablesSet.has(name)) {
+            // we've already determined this name to be a free var. no point in recomputing.
             return;
           }
-          if (
-            !path.scope.hasOwnBinding(name) &&
-            // FIXME: the "own" here looks a bit dicey, what if there's multiple scopes?
-            path.parentPath.scope.hasOwnBinding(name)
-          ) {
-            freeVariablesSet.add(name);
+
+          const binding = innerPath.scope.getBinding(name);
+          if (!binding) {
+            // probably a global, or an unbound variable. ignore it.
+            return;
           }
+          if (binding.scope === programScope) {
+            // module-level declaration. no need to close over it.
+            return;
+          }
+
+          if (
+            // function args or a var at the top-level of its body
+            binding.scope === path.scope ||
+            // decls from blocks within the function
+            isChildScope({
+              parent: path.scope,
+              child: binding.scope,
+              root: programScope,
+            })
+          ) {
+            // the binding came from within the function = it's not closed-over, so don't add it.
+            return;
+          }
+
+          // we've (hopefully) eliminated all the other cases, so we should treat this as a free var.
+          freeVariablesSet.add(name);
         },
       });
       const freeVariables = [...freeVariablesSet];
@@ -290,6 +311,24 @@ const createPlugin = (/** @type {PluginOptions} */ { onActionFound } = {}) =>
       },
     };
   });
+
+/** @typedef {import('@babel/traverse').Scope} BabelScope */
+const isChildScope = (
+  /** @type {{ root: BabelScope, parent: BabelScope, child: BabelScope }} */ {
+    root,
+    parent,
+    child,
+  }
+) => {
+  let curScope = child;
+  while (curScope !== root) {
+    if (curScope.parent === parent) {
+      return true;
+    }
+    curScope = curScope.parent;
+  }
+  return false;
+};
 
 const plugin = createPlugin();
 plugin.createPlugin = createPlugin;
