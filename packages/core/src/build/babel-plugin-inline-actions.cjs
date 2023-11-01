@@ -8,8 +8,6 @@ const { addNamed: addNamedImport } = require("@babel/helper-module-imports");
 const crypto = require("node:crypto");
 const { pathToFileURL } = require("node:url");
 
-// TODO: handle inline actions calling each other...? sounds tricky...
-
 // duplicated from packages/core/src/build/build.ts
 
 const getHash = (s) =>

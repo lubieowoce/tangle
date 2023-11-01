@@ -31,6 +31,12 @@ export default async function AllProfilesView(_props: { params: {} }) {
 
   const profilesCount = profiles.length;
 
+  async function inlineActionWrapped() {
+    "use server";
+    console.log("calling inlineAction1", inlineAction1);
+    return inlineAction1();
+  }
+
   return (
     <>
       {meta}
@@ -67,6 +73,10 @@ export default async function AllProfilesView(_props: { params: {} }) {
         </Button>
         <Button className={buttonStyles} action={inlineAction1}>
           Create new profile (via inline form action 1, prop: {profilesCount})
+        </Button>
+        <Button className={buttonStyles} action={inlineActionWrapped}>
+          Create new profile (via inline form action [wrapped], prop:{" "}
+          {profilesCount})
         </Button>
         <Button
           className={buttonStyles}
