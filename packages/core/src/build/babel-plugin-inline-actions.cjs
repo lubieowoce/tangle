@@ -211,11 +211,13 @@ const createPlugin = (/** @type {PluginOptions} */ { onActionFound } = {}) =>
               body: path.node.body,
             });
 
-          path.replaceWith(
-            t.variableDeclaration("var", [
-              t.variableDeclarator(fnId, getReplacement()),
-            ])
-          );
+          // note: if we do this *after* adding the new declaration, the bindings get messed up
+          path.remove();
+
+          // add a declaration in the place where the function decl would be hoisted to.
+          // (this avoids issues with functions defined after `return`, see `test-cases/named-after-return.jsx`)
+          path.scope.push({ id: fnId, init: getReplacement(), kind: "var" });
+
           this.onAction({
             exportedName: extractedIdentifier.name,
             file: getFilename(state),
@@ -265,28 +267,46 @@ const createPlugin = (/** @type {PluginOptions} */ { onActionFound } = {}) =>
     };
   });
 
+const DEBUG = false;
+
 const getFreeVariables = (/** @type {FnPath} */ path) => {
   /** @type {Set<string>} */
   const freeVariablesSet = new Set();
   const programScope = path.scope.getProgramParent();
   path.traverse({
     Identifier(innerPath) {
+      const { name } = innerPath.node;
+
+      const log = DEBUG
+        ? (...args) =>
+            console.log(
+              `GFV(${path.node.id?.name})`,
+              name,
+              ...args,
+              freeVariablesSet
+            )
+        : undefined;
+
       if (!innerPath.isReferencedIdentifier()) {
+        log?.("skipping - not referenced");
         return;
       }
-      const { name } = innerPath.node;
+
       if (freeVariablesSet.has(name)) {
         // we've already determined this name to be a free var. no point in recomputing.
+        log?.("skipping - already registered");
         return;
       }
 
       const binding = innerPath.scope.getBinding(name);
       if (!binding) {
         // probably a global, or an unbound variable. ignore it.
+        log?.("skipping - global or unbound, skipping");
         return;
       }
       if (binding.scope === programScope) {
         // module-level declaration. no need to close over it.
+        log?.("skipping - module-level binding");
         return;
       }
 
@@ -301,10 +321,12 @@ const getFreeVariables = (/** @type {FnPath} */ path) => {
         })
       ) {
         // the binding came from within the function = it's not closed-over, so don't add it.
+        log?.("skipping - declared within function");
         return;
       }
 
       // we've (hopefully) eliminated all the other cases, so we should treat this as a free var.
+      log?.("adding");
       freeVariablesSet.add(name);
     },
   });

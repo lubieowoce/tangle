@@ -78,6 +78,7 @@ export default async function AllProfilesView(_props: { params: {} }) {
           Create new profile (via inline form action [wrapped], prop:{" "}
           {profilesCount})
         </Button>
+        <ButtonWithActionAfterReturn prop={profilesCount} />
         <Button
           className={buttonStyles}
           action={async () => {
@@ -107,4 +108,20 @@ export default async function AllProfilesView(_props: { params: {} }) {
       </div>
     </>
   );
+}
+
+function ButtonWithActionAfterReturn({ prop }: { prop: string | number }) {
+  const x = prop;
+  return (
+    <Button className={buttonStyles} action={inlineAction}>
+      Create new profile (via inline form action [after return], prop: {x})
+    </Button>
+  );
+
+  async function inlineAction() {
+    "use server";
+    await addNewProfileFromObject(
+      getExampleProfile(`(defined after return, prop: ${x})`)
+    );
+  }
 }
