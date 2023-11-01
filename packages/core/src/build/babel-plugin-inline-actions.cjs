@@ -200,11 +200,7 @@ const createPlugin = (/** @type {PluginOptions} */ { onActionFound } = {}) =>
             );
           }
 
-          const freeVariables = getFreeVariables(path).filter(
-            // TODO: why is `getFreeVariables` returning the function's name too?
-            // TODO: if we're referencing other (named) inline actions, they'll end up in here, and do something stupid
-            (name) => name !== fnId.name
-          );
+          const freeVariables = getFreeVariables(path);
           const { extractedIdentifier, getReplacement } =
             extractInlineActionToTopLevel(path, state, {
               freeVariables,
@@ -267,7 +263,7 @@ const createPlugin = (/** @type {PluginOptions} */ { onActionFound } = {}) =>
     };
   });
 
-const DEBUG = false;
+const DEBUG = true;
 
 const getFreeVariables = (/** @type {FnPath} */ path) => {
   /** @type {Set<string>} */
