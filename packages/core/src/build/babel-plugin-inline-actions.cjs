@@ -73,53 +73,6 @@ const createPlugin = (/** @type {PluginOptions} */ { onActionFound } = {}) =>
       return true;
     };
 
-    const getFreeVariables = (/** @type {FnPath} */ path) => {
-      /** @type {Set<string>} */
-      const freeVariablesSet = new Set();
-      const programScope = path.scope.getProgramParent();
-      path.traverse({
-        Identifier(innerPath) {
-          if (!innerPath.isReferencedIdentifier()) {
-            return;
-          }
-          const { name } = innerPath.node;
-          if (freeVariablesSet.has(name)) {
-            // we've already determined this name to be a free var. no point in recomputing.
-            return;
-          }
-
-          const binding = innerPath.scope.getBinding(name);
-          if (!binding) {
-            // probably a global, or an unbound variable. ignore it.
-            return;
-          }
-          if (binding.scope === programScope) {
-            // module-level declaration. no need to close over it.
-            return;
-          }
-
-          if (
-            // function args or a var at the top-level of its body
-            binding.scope === path.scope ||
-            // decls from blocks within the function
-            isChildScope({
-              parent: path.scope,
-              child: binding.scope,
-              root: programScope,
-            })
-          ) {
-            // the binding came from within the function = it's not closed-over, so don't add it.
-            return;
-          }
-
-          // we've (hopefully) eliminated all the other cases, so we should treat this as a free var.
-          freeVariablesSet.add(name);
-        },
-      });
-      const freeVariables = [...freeVariablesSet];
-      return freeVariables;
-    };
-
     function extractInlineActionToTopLevel(
       /** @type {FnPath} */ path,
       /** @type {BabelState} */ state,
@@ -311,6 +264,53 @@ const createPlugin = (/** @type {PluginOptions} */ { onActionFound } = {}) =>
       },
     };
   });
+
+const getFreeVariables = (/** @type {FnPath} */ path) => {
+  /** @type {Set<string>} */
+  const freeVariablesSet = new Set();
+  const programScope = path.scope.getProgramParent();
+  path.traverse({
+    Identifier(innerPath) {
+      if (!innerPath.isReferencedIdentifier()) {
+        return;
+      }
+      const { name } = innerPath.node;
+      if (freeVariablesSet.has(name)) {
+        // we've already determined this name to be a free var. no point in recomputing.
+        return;
+      }
+
+      const binding = innerPath.scope.getBinding(name);
+      if (!binding) {
+        // probably a global, or an unbound variable. ignore it.
+        return;
+      }
+      if (binding.scope === programScope) {
+        // module-level declaration. no need to close over it.
+        return;
+      }
+
+      if (
+        // function args or a var at the top-level of its body
+        binding.scope === path.scope ||
+        // decls from blocks within the function
+        isChildScope({
+          parent: path.scope,
+          child: binding.scope,
+          root: programScope,
+        })
+      ) {
+        // the binding came from within the function = it's not closed-over, so don't add it.
+        return;
+      }
+
+      // we've (hopefully) eliminated all the other cases, so we should treat this as a free var.
+      freeVariablesSet.add(name);
+    },
+  });
+  const freeVariables = [...freeVariablesSet];
+  return freeVariables;
+};
 
 /** @typedef {import('@babel/traverse').Scope} BabelScope */
 const isChildScope = (
