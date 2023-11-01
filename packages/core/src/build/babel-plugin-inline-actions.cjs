@@ -81,12 +81,16 @@ const createPlugin = (/** @type {PluginOptions} */ { onActionFound } = {}) =>
       // Find free variables by walking through the function body.
       path.traverse({
         Identifier(innerPath) {
+          if (!innerPath.isReferencedIdentifier()) {
+            return;
+          }
           const { name } = innerPath.node;
           if (freeVariablesSet.has(name)) {
             return;
           }
           if (
             !path.scope.hasOwnBinding(name) &&
+            // FIXME: the "own" here looks a bit dicey, what if there's multiple scopes?
             path.parentPath.scope.hasOwnBinding(name)
           ) {
             freeVariablesSet.add(name);
