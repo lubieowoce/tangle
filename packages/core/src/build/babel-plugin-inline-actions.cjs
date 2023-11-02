@@ -56,12 +56,12 @@ const createPlugin = (/** @type {PluginOptions} */ { onActionFound } = {}) =>
       /** @type {BabelState} */ state,
       { body, freeVariables, ctx: { addRSDWImport, getActionModuleId } }
     ) {
-      let extractedFunctionParams;
-      if (freeVariables.length === 0) {
-        // no need to add a closure object if we're not closing over anything.
-        extractedFunctionParams = [...path.node.params];
-      } else {
-        const freeVarsParam = t.objectPattern(
+      let extractedFunctionParams = [...path.node.params];
+      let extractedFunctionBody = body.body;
+      if (freeVariables.length > 0) {
+        // only add a closure object if we're not closing over anything.
+        const closureParam = path.scope.generateUidIdentifier("$$CLOSURE");
+        const freeVarsPat = t.objectPattern(
           freeVariables.map((variable, i) => {
             return t.objectProperty(
               t.identifier("_" + i),
@@ -69,7 +69,15 @@ const createPlugin = (/** @type {PluginOptions} */ { onActionFound } = {}) =>
             );
           })
         );
-        extractedFunctionParams = [freeVarsParam, ...path.node.params];
+        extractedFunctionParams = [closureParam, ...path.node.params];
+        extractedFunctionBody = [
+          t.variableDeclaration("var", [
+            t.variableDeclarator(
+              t.assignmentPattern(freeVarsPat, closureParam)
+            ),
+          ]),
+          ...extractedFunctionBody,
+        ];
       }
 
       const wrapInRegister = (expr, exportedName) => {
@@ -90,7 +98,7 @@ const createPlugin = (/** @type {PluginOptions} */ { onActionFound } = {}) =>
       const extractedFunctionExpr = wrapInRegister(
         t.arrowFunctionExpression(
           extractedFunctionParams,
-          t.blockStatement(body.body),
+          t.blockStatement(extractedFunctionBody),
           true /* async */
         ),
         extractedIdentifier.name

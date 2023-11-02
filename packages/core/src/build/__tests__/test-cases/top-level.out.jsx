@@ -6,9 +6,10 @@ export const _$$INLINE_ACTION5 = _registerServerReference(async x => {
   return doSomethingOnTheServer([x, SOME_CONSTANT]);
 }, "6342690343ae5afda83cf88d839011024a342b16", "_$$INLINE_ACTION5");
 // hoisted action: <anonymous>
-export const _$$INLINE_ACTION4 = _registerServerReference(async ({
-  _0: fn
-}, ...args) => {
+export const _$$INLINE_ACTION4 = _registerServerReference(async (_$$CLOSURE, ...args) => {
+  var {
+    _0: fn
+  } = _$$CLOSURE;
   console.log("checking auth");
   return fn(...args);
 }, "6342690343ae5afda83cf88d839011024a342b16", "_$$INLINE_ACTION4");

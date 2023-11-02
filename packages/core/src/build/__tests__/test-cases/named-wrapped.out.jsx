@@ -2,15 +2,17 @@
 import { registerServerReference as _registerServerReference } from "react-server-dom-webpack/server";
 import { doSomethingOnTheServer } from "./server-stuff";
 // hoisted action: doStuffWrapped
-export const _$$INLINE_ACTION2 = _registerServerReference(async ({
-  _0: doStuff
-}, data) => {
+export const _$$INLINE_ACTION2 = _registerServerReference(async (_$$CLOSURE2, data) => {
+  var {
+    _0: doStuff
+  } = _$$CLOSURE2;
   return doStuff(data);
 }, "1da564ba7db5ecd6baae409ed16cf13fb02530ff", "_$$INLINE_ACTION2");
 // hoisted action: doStuff
-export const _$$INLINE_ACTION = _registerServerReference(async ({
-  _0: foo2
-}, data) => {
+export const _$$INLINE_ACTION = _registerServerReference(async (_$$CLOSURE, data) => {
+  var {
+    _0: foo2
+  } = _$$CLOSURE;
   const test = data.get("test");
   await doSomethingOnTheServer({
     test,

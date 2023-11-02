@@ -4,9 +4,10 @@ import { registerServerReference as _registerServerReference } from "react-serve
 import { doSomethingOnTheServer } from "./server-stuff";
 import "./server-stuff";
 // hoisted action: doStuff
-export const _$$INLINE_ACTION = _registerServerReference(async ({
-  _0: foo2
-}, data) => {
+export const _$$INLINE_ACTION = _registerServerReference(async (_$$CLOSURE, data) => {
+  var {
+    _0: foo2
+  } = _$$CLOSURE;
   const test = data.get("test");
   if (Math.random() > 0.5) {
     // @ts-expect-error  missing decl for `process`
