@@ -1,3 +1,4 @@
+/* eslint-disable max-statements */
 import { Link } from "@owoce/tangle/client";
 import {
   ProfileData,
@@ -78,6 +79,9 @@ export default async function AllProfilesView(_props: { params: {} }) {
           Create new profile (via inline form action [wrapped], prop:{" "}
           {profilesCount})
         </Button>
+        <Button className={buttonStyles} action={wrappedAction}>
+          Create new profile (via inline form action [higher-order wrapper])
+        </Button>
         <ButtonWithActionAfterReturn prop={profilesCount} />
         <Button
           className={buttonStyles}
@@ -125,3 +129,18 @@ function ButtonWithActionAfterReturn({ prop }: { prop: string | number }) {
     );
   }
 }
+
+const withAuth =
+  <TFn extends (...args: any[]) => Promise<any>>(fn: TFn) =>
+  async (...args: Parameters<TFn>): Promise<Awaited<ReturnType<TFn>>> => {
+    "use server";
+    console.log("fake auth check");
+    return fn(...args);
+  };
+
+const wrappedAction = withAuth(async () => {
+  "use server";
+  await addNewProfileFromObject(
+    getExampleProfile(`(wrapped in higher-order wrapper)`)
+  );
+});

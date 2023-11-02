@@ -702,6 +702,14 @@ const enhanceUseServerModuleForServer = ({
     );
   }
 
+  // FIXME: horrible hack
+  if (
+    originalSource.includes("babel-plugin-inline-actions: ") &&
+    originalSource.includes("react-server-dom-webpack/server")
+  ) {
+    // the babel plugin already added the register calls, nothing to do here
+    return originalSource;
+  }
   const prefix = [
     `import { registerServerReference } from 'react-server-dom-webpack/server';`,
     ``,

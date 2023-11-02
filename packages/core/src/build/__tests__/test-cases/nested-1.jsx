@@ -1,5 +1,6 @@
 /* eslint-disable @typescript-eslint/no-unused-vars */
 import { doSomethingOnTheServer } from "./server-stuff";
+import "./server-stuff";
 
 export const Test = ({ foo }) => {
   const foo1 = foo;
