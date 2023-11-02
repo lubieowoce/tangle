@@ -59,6 +59,7 @@
   "license": "MIT",
   "dependencies": {
     "@babel/core": "^7.23.2",
+    "@babel/helper-module-imports": "^7.22.15",
     "@babel/plugin-syntax-jsx": "^7.22.5",
     "@owoce/react-server-dom-webpack": "^0.0.0-experimental-493f72b0a-20230727",
     "@owoce/tangle-router": "0.0.8",
