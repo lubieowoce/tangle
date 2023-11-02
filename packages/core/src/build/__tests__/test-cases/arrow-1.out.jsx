@@ -3,8 +3,8 @@ import { registerServerReference as _registerServerReference } from "react-serve
 import { doSomethingOnTheServer } from "./server-stuff";
 // hoisted action: <anonymous>
 export const _$$INLINE_ACTION2 = _registerServerReference(async ({
-  foo: foo,
-  bar: bar
+  _0: bar,
+  _1: foo
 }, data) => {
   const test = data.get("test");
   await doSomethingOnTheServer({
@@ -18,7 +18,7 @@ export const _$$INLINE_ACTION2 = _registerServerReference(async ({
 }, "8c2a6c94017ef807ec8e673721a09feb51dc164a", "_$$INLINE_ACTION2");
 // hoisted action: <anonymous>
 export const _$$INLINE_ACTION = _registerServerReference(async ({
-  foo: foo
+  _0: foo
 }, data) => {
   const test = data.get("test");
   await doSomethingOnTheServer({
@@ -34,18 +34,18 @@ export const Test = ({
   bar
 }) => {
   return <form action={_$$INLINE_ACTION.bind(null, {
-    get foo() {
+    get _0() {
       return foo;
     }
   })}>
       <input name="test" type="text" />
       <button type="submit">Submit</button>
       <button type="button" formAction={_$$INLINE_ACTION2.bind(null, {
-      get foo() {
-        return foo;
-      },
-      get bar() {
+      get _0() {
         return bar;
+      },
+      get _1() {
+        return foo;
       }
     })}>
         Submit

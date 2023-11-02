@@ -3,13 +3,13 @@ import { registerServerReference as _registerServerReference } from "react-serve
 import { doSomethingOnTheServer } from "./server-stuff";
 // hoisted action: doStuffWrapped
 export const _$$INLINE_ACTION2 = _registerServerReference(async ({
-  doStuff: doStuff
+  _0: doStuff
 }, data) => {
   return doStuff(data);
 }, "1da564ba7db5ecd6baae409ed16cf13fb02530ff", "_$$INLINE_ACTION2");
 // hoisted action: doStuff
 export const _$$INLINE_ACTION = _registerServerReference(async ({
-  foo2: foo2
+  _0: foo2
 }, data) => {
   const test = data.get("test");
   await doSomethingOnTheServer({
@@ -24,12 +24,12 @@ export const Test = ({
   foo
 }) => {
   var doStuffWrapped = _$$INLINE_ACTION2.bind(null, {
-    get doStuff() {
+    get _0() {
       return doStuff;
     }
   });
   var doStuff = _$$INLINE_ACTION.bind(null, {
-    get foo2() {
+    get _0() {
       return foo2;
     }
   });

@@ -5,7 +5,7 @@ import { doSomethingOnTheServer } from "./server-stuff";
 import "./server-stuff";
 // hoisted action: doStuff
 export const _$$INLINE_ACTION = _registerServerReference(async ({
-  foo2: foo2
+  _0: foo2
 }, data) => {
   const test = data.get("test");
   if (Math.random() > 0.5) {
@@ -34,7 +34,7 @@ export const Test = ({
     // eslint-disable-next-line no-constant-condition
     if (true) {
       var doStuff = _$$INLINE_ACTION.bind(null, {
-        get foo2() {
+        get _0() {
           return foo2;
         }
       });

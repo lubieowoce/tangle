@@ -3,7 +3,7 @@ import { registerServerReference as _registerServerReference } from "react-serve
 import { doSomethingOnTheServer } from "./server-stuff";
 // hoisted action: doStuff
 export const _$$INLINE_ACTION = _registerServerReference(async ({
-  foo2: foo2
+  _0: foo2
 }, data) => {
   const test = data.get("test");
   await doSomethingOnTheServer({
@@ -18,7 +18,7 @@ export const Test = ({
   foo
 }) => {
   var doStuff = _$$INLINE_ACTION.bind(null, {
-    get foo2() {
+    get _0() {
       return foo2;
     }
   });

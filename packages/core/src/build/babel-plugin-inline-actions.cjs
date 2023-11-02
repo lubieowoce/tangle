@@ -62,9 +62,9 @@ const createPlugin = (/** @type {PluginOptions} */ { onActionFound } = {}) =>
         extractedFunctionParams = [...path.node.params];
       } else {
         const freeVarsParam = t.objectPattern(
-          freeVariables.map((variable) => {
+          freeVariables.map((variable, i) => {
             return t.objectProperty(
-              t.identifier(variable),
+              t.identifier("_" + i),
               t.identifier(variable)
             );
           })
@@ -136,11 +136,11 @@ const createPlugin = (/** @type {PluginOptions} */ { onActionFound } = {}) =>
       return t.callExpression(t.memberExpression(id, t.identifier("bind")), [
         t.nullLiteral(),
         t.objectExpression(
-          freeVariables.map((variable) => {
+          freeVariables.map((variable, i) => {
             // `get [variable]() { return variable }`
             return t.objectMethod(
               "get",
-              t.identifier(variable),
+              t.identifier("_" + i),
               [],
               t.blockStatement([t.returnStatement(t.identifier(variable))])
             );
@@ -391,7 +391,7 @@ const getFreeVariables = (/** @type {FnPath} */ path) => {
       freeVariablesSet.add(name);
     },
   });
-  const freeVariables = [...freeVariablesSet];
+  const freeVariables = [...freeVariablesSet].sort();
   return freeVariables;
 };
 
