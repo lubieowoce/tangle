@@ -7,6 +7,7 @@ const { addNamed: addNamedImport } = require("@babel/helper-module-imports");
 
 const crypto = require("node:crypto");
 const { pathToFileURL } = require("node:url");
+const { relative: getRelativePath } = require("node:path");
 
 // duplicated from packages/core/src/build/build.ts
 
@@ -53,7 +54,7 @@ const createPlugin = (/** @type {PluginOptions} */ { onActionFound } = {}) =>
     function extractInlineActionToTopLevel(
       /** @type {FnPath} */ path,
       /** @type {BabelState} */ state,
-      { body, freeVariables, addRSDWImport }
+      { body, freeVariables, ctx: { addRSDWImport, getActionModuleId } }
     ) {
       let extractedFunctionParams;
       if (freeVariables.length === 0) {
@@ -72,8 +73,7 @@ const createPlugin = (/** @type {PluginOptions} */ { onActionFound } = {}) =>
       }
 
       const wrapInRegister = (expr, exportedName) => {
-        const filePath = getFilename(state);
-        const actionModuleId = getServerActionModuleId(filePath);
+        const actionModuleId = getActionModuleId();
         const registerServerReferenceId = addRSDWImport(path);
 
         return t.callExpression(registerServerReferenceId, [
@@ -158,7 +158,7 @@ const createPlugin = (/** @type {PluginOptions} */ { onActionFound } = {}) =>
     };
 
     return {
-      pre() {
+      pre(file) {
         this.extractedActions = [];
         this.onAction = (args) => {
           onActionFound?.(args);
@@ -179,6 +179,23 @@ const createPlugin = (/** @type {PluginOptions} */ { onActionFound } = {}) =>
         };
 
         this.addRSDWImport = addRSDWImport;
+
+        let cachedActionModuleId = null;
+        const getActionModuleId = () => {
+          if (cachedActionModuleId) {
+            return cachedActionModuleId;
+          }
+          const filePathForId = file.opts.root
+            ? // prefer relative paths, because we hash those for usage as module ids
+              "/__project__/" +
+              getRelativePath(file.opts.root, file.opts.filename)
+            : file.opts.filename;
+
+          return (cachedActionModuleId =
+            getServerActionModuleId(filePathForId));
+        };
+
+        this.getActionModuleId = getActionModuleId;
       },
       visitor: {
         // () => {}
@@ -198,7 +215,7 @@ const createPlugin = (/** @type {PluginOptions} */ { onActionFound } = {}) =>
             extractInlineActionToTopLevel(path, state, {
               freeVariables,
               body,
-              addRSDWImport: this.addRSDWImport.bind(this),
+              ctx: this,
             });
 
           path.replaceWith(getReplacement());
@@ -226,7 +243,7 @@ const createPlugin = (/** @type {PluginOptions} */ { onActionFound } = {}) =>
             extractInlineActionToTopLevel(path, state, {
               freeVariables,
               body: path.node.body,
-              addRSDWImport: this.addRSDWImport.bind(this),
+              ctx: this,
             });
 
           const tlb = getTopLevelBinding(path);
@@ -279,7 +296,7 @@ const createPlugin = (/** @type {PluginOptions} */ { onActionFound } = {}) =>
             extractInlineActionToTopLevel(path, state, {
               freeVariables,
               body,
-              addRSDWImport: this.addRSDWImport.bind(this),
+              ctx: this,
             });
 
           path.replaceWith(getReplacement());
@@ -296,7 +313,10 @@ const createPlugin = (/** @type {PluginOptions} */ { onActionFound } = {}) =>
         console.log("extracted actions", this.extractedActions);
         const stashedData =
           "babel-plugin-inline-actions: " +
-          JSON.stringify(this.extractedActions.map((e) => e.exportedName));
+          JSON.stringify({
+            id: this.getActionModuleId(),
+            names: this.extractedActions.map((e) => e.exportedName),
+          });
 
         state.path.node.body.unshift(
           t.expressionStatement(t.stringLiteral(stashedData))

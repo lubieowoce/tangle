@@ -23,6 +23,7 @@ describe("babel transform", () => {
     const getResult = () =>
       transformSync(inputCode, {
         filename: inputPath,
+        root: inputsDir,
         plugins: ["@babel/plugin-syntax-jsx", inlineActionPLugin],
       });
 

@@ -1,4 +1,4 @@
-"babel-plugin-inline-actions: [\"_$$INLINE_ACTION\"]";
+"babel-plugin-inline-actions: {\"id\":\"e71f0f1f5a13b4248f020398c81e5a5caa34d07e\",\"names\":[\"_$$INLINE_ACTION\"]}";
 import { registerServerReference as _registerServerReference } from "react-server-dom-webpack/server";
 import { doSomethingOnTheServer } from "./server-stuff";
 // hoisted action: doStuff
@@ -13,7 +13,7 @@ export const _$$INLINE_ACTION = _registerServerReference(async ({
   return {
     success: true
   };
-}, "a70c0831b824dbcf54e74d123a9668f57f6c577a", "_$$INLINE_ACTION");
+}, "e71f0f1f5a13b4248f020398c81e5a5caa34d07e", "_$$INLINE_ACTION");
 export const Test = ({
   foo
 }) => {
