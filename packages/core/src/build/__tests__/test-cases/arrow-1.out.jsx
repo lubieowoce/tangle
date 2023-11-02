@@ -3,10 +3,7 @@ import { registerServerReference as _registerServerReference } from "react-serve
 import { doSomethingOnTheServer } from "./server-stuff";
 // hoisted action: <anonymous>
 export const _$$INLINE_ACTION2 = _registerServerReference(async (_$$CLOSURE2, data) => {
-  var {
-    _0: bar,
-    _1: foo
-  } = _$$CLOSURE2;
+  var [bar, foo] = _$$CLOSURE2.value;
   const test = data.get("test");
   await doSomethingOnTheServer({
     test,
@@ -19,9 +16,7 @@ export const _$$INLINE_ACTION2 = _registerServerReference(async (_$$CLOSURE2, da
 }, "8c2a6c94017ef807ec8e673721a09feb51dc164a", "_$$INLINE_ACTION2");
 // hoisted action: <anonymous>
 export const _$$INLINE_ACTION = _registerServerReference(async (_$$CLOSURE, data) => {
-  var {
-    _0: foo
-  } = _$$CLOSURE;
+  var [foo] = _$$CLOSURE.value;
   const test = data.get("test");
   await doSomethingOnTheServer({
     test,
@@ -36,18 +31,15 @@ export const Test = ({
   bar
 }) => {
   return <form action={_$$INLINE_ACTION.bind(null, {
-    get _0() {
-      return foo;
+    get value() {
+      return [foo];
     }
   })}>
       <input name="test" type="text" />
       <button type="submit">Submit</button>
       <button type="button" formAction={_$$INLINE_ACTION2.bind(null, {
-      get _0() {
-        return bar;
-      },
-      get _1() {
-        return foo;
+      get value() {
+        return [bar, foo];
       }
     })}>
         Submit

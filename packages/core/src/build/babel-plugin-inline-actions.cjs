@@ -9,6 +9,9 @@ const crypto = require("node:crypto");
 const { pathToFileURL } = require("node:url");
 const { relative: getRelativePath } = require("node:path");
 
+// TODO: try capturing as little as possible i.e. if only `x.y` is used, don't pass all of `x`
+// e.g.: `id4.x` here: packages/next-swc/crates/core/tests/fixture/server-actions/server/5/input.js
+
 // duplicated from packages/core/src/build/build.ts
 
 const getHash = (s) =>
@@ -61,19 +64,17 @@ const createPlugin = (/** @type {PluginOptions} */ { onActionFound } = {}) =>
       if (freeVariables.length > 0) {
         // only add a closure object if we're not closing over anything.
         const closureParam = path.scope.generateUidIdentifier("$$CLOSURE");
-        const freeVarsPat = t.objectPattern(
-          freeVariables.map((variable, i) => {
-            return t.objectProperty(
-              t.identifier("_" + i),
-              t.identifier(variable)
-            );
-          })
+        const freeVarsPat = t.arrayPattern(
+          freeVariables.map((variable) => t.identifier(variable))
         );
         extractedFunctionParams = [closureParam, ...path.node.params];
         extractedFunctionBody = [
           t.variableDeclaration("var", [
             t.variableDeclarator(
-              t.assignmentPattern(freeVarsPat, closureParam)
+              t.assignmentPattern(
+                freeVarsPat,
+                t.memberExpression(closureParam, t.identifier("value"))
+              )
             ),
           ]),
           ...extractedFunctionBody,
@@ -141,18 +142,24 @@ const createPlugin = (/** @type {PluginOptions} */ { onActionFound } = {}) =>
       if (freeVariables.length === 0) {
         return id;
       }
+      const lazyWrapper = (
+        /** @type {import('@babel/types').Expression} */ expr
+      ) =>
+        t.objectExpression([
+          t.objectMethod(
+            "get",
+            t.identifier("value"),
+            [],
+            t.blockStatement([t.returnStatement(expr)])
+          ),
+        ]);
+
       return t.callExpression(t.memberExpression(id, t.identifier("bind")), [
         t.nullLiteral(),
-        t.objectExpression(
-          freeVariables.map((variable, i) => {
-            // `get [variable]() { return variable }`
-            return t.objectMethod(
-              "get",
-              t.identifier("_" + i),
-              [],
-              t.blockStatement([t.returnStatement(t.identifier(variable))])
-            );
-          })
+        lazyWrapper(
+          t.arrayExpression(
+            freeVariables.map((variable) => t.identifier(variable))
+          )
         ),
       ]);
     };

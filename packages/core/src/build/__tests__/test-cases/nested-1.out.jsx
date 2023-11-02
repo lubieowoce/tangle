@@ -5,9 +5,7 @@ import { doSomethingOnTheServer } from "./server-stuff";
 import "./server-stuff";
 // hoisted action: doStuff
 export const _$$INLINE_ACTION = _registerServerReference(async (_$$CLOSURE, data) => {
-  var {
-    _0: foo2
-  } = _$$CLOSURE;
+  var [foo2] = _$$CLOSURE.value;
   const test = data.get("test");
   if (Math.random() > 0.5) {
     // @ts-expect-error  missing decl for `process`
@@ -35,8 +33,8 @@ export const Test = ({
     // eslint-disable-next-line no-constant-condition
     if (true) {
       var doStuff = _$$INLINE_ACTION.bind(null, {
-        get _0() {
-          return foo2;
+        get value() {
+          return [foo2];
         }
       });
       // eslint-disable-next-line no-inner-declarations
