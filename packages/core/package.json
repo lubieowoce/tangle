@@ -46,6 +46,10 @@
       "types": "./dist/runtime/index.server.d.ts",
       "react-server": "./dist/runtime/index.server.js",
       "default": "./dist/runtime/server-only-error.js"
+    },
+    "./dist/*": {
+      "types": "./dist/*.d.ts",
+      "import": "./dist/*.js"
     }
   },
   "bin": {

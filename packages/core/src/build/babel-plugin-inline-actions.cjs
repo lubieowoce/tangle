@@ -12,6 +12,9 @@ const { relative: getRelativePath } = require("node:path");
 // TODO: try capturing as little as possible i.e. if only `x.y` is used, don't pass all of `x`
 // e.g.: `id4.x` here: packages/next-swc/crates/core/tests/fixture/server-actions/server/5/input.js
 
+// TODO: can we just strip .value before passing it down to decrypt()?
+// that'd simplify integration. same for encrypt() really, just move that inside `get value()`
+
 // duplicated from packages/core/src/build/build.ts
 
 const getHash = (s) =>
@@ -57,7 +60,11 @@ const createPlugin = (/** @type {PluginOptions} */ { onActionFound } = {}) =>
     function extractInlineActionToTopLevel(
       /** @type {FnPath} */ path,
       /** @type {BabelState} */ state,
-      { body, freeVariables, ctx: { addRSDWImport, getActionModuleId } }
+      {
+        body,
+        freeVariables,
+        ctx: { addRSDWImport, getActionModuleId, addCryptImport },
+      }
     ) {
       let extractedFunctionParams = [...path.node.params];
       let extractedFunctionBody = body.body;
@@ -67,18 +74,26 @@ const createPlugin = (/** @type {PluginOptions} */ { onActionFound } = {}) =>
         const freeVarsPat = t.arrayPattern(
           freeVariables.map((variable) => t.identifier(variable))
         );
+        const closureExpr = t.memberExpression(
+          t.parenthesizedExpression(
+            t.awaitExpression(
+              t.callExpression(t.identifier("_decryptActionBoundArgs"), [
+                closureParam,
+              ])
+            )
+          ),
+          t.identifier("value")
+        );
+
         extractedFunctionParams = [closureParam, ...path.node.params];
         extractedFunctionBody = [
           t.variableDeclaration("var", [
-            t.variableDeclarator(
-              t.assignmentPattern(
-                freeVarsPat,
-                t.memberExpression(closureParam, t.identifier("value"))
-              )
-            ),
+            t.variableDeclarator(t.assignmentPattern(freeVarsPat, closureExpr)),
           ]),
           ...extractedFunctionBody,
         ];
+
+        addCryptImport();
       }
 
       const wrapInRegister = (expr, exportedName) => {
@@ -154,13 +169,18 @@ const createPlugin = (/** @type {PluginOptions} */ { onActionFound } = {}) =>
           ),
         ]);
 
+      const _boundArgs = lazyWrapper(
+        t.arrayExpression(
+          freeVariables.map((variable) => t.identifier(variable))
+        )
+      );
+      const boundArgs = t.callExpression(
+        t.identifier("_encryptActionBoundArgs"),
+        [_boundArgs]
+      );
       return t.callExpression(t.memberExpression(id, t.identifier("bind")), [
         t.nullLiteral(),
-        lazyWrapper(
-          t.arrayExpression(
-            freeVariables.map((variable) => t.identifier(variable))
-          )
-        ),
+        boundArgs,
       ]);
     };
 
@@ -181,12 +201,12 @@ const createPlugin = (/** @type {PluginOptions} */ { onActionFound } = {}) =>
         };
 
         /** @type {import('@babel/types').Identifier | null} */
-        let cachedImport = null;
+        let cachedRSDWImport = null;
         const addRSDWImport = (path) => {
-          if (cachedImport) {
-            return cachedImport;
+          if (cachedRSDWImport) {
+            return cachedRSDWImport;
           }
-          return (cachedImport = addNamedImport(
+          return (cachedRSDWImport = addNamedImport(
             path,
             "registerServerReference",
             "react-server-dom-webpack/server"
@@ -194,6 +214,34 @@ const createPlugin = (/** @type {PluginOptions} */ { onActionFound } = {}) =>
         };
 
         this.addRSDWImport = addRSDWImport;
+
+        /** @type {{ encrypt:  import('@babel/types').Identifier, decrypt: import('@babel/types').Identifier } | null} */
+        let cachedCryptImport = null;
+        const addCryptImport = () => {
+          const path = file.path;
+          if (cachedCryptImport) {
+            return cachedCryptImport;
+          }
+          const importSource =
+            "@owoce/tangle/dist/runtime/support/encrypt-action-bound-args";
+          // "@owoce/tangle/server"
+
+          const val = {
+            encrypt: addNamedImport(
+              path,
+              "encryptActionBoundArgs",
+              importSource
+            ),
+            decrypt: addNamedImport(
+              path,
+              "decryptActionBoundArgs",
+              importSource
+            ),
+          };
+          return (cachedCryptImport = val);
+        };
+
+        this.addCryptImport = addCryptImport;
 
         let cachedActionModuleId = null;
         const getActionModuleId = () => {

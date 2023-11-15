@@ -125,6 +125,10 @@ export const build = async ({
       entry: path.join(INTERNAL_CODE, "server.js"),
       ssrModule: path.join(INTERNAL_CODE, "server-ssr.js"),
       rscModule: path.join(INTERNAL_CODE, "server-rsc.js"),
+      actionSupportModule: path.join(
+        INTERNAL_CODE,
+        "support/encrypt-action-bound-args.js"
+      ),
       generatedRoutesModule: path.join(INTERNAL_CODE, "generated/routes.js"),
       generatedActionHandlersModule: path.join(
         INTERNAL_CODE,
@@ -425,6 +429,11 @@ export const build = async ({
                 layer: LAYERS.ssr,
                 ...SERVER_MODULE_RULES.ssr,
               },
+              {
+                test: opts.server.actionSupportModule,
+                layer: LAYERS.shared,
+                ...SERVER_MODULE_RULES.rsc,
+              },
             ],
           },
           {
@@ -436,6 +445,10 @@ export const build = async ({
               },
               {
                 issuerLayer: LAYERS.rsc,
+                ...SERVER_MODULE_RULES.rsc,
+              },
+              {
+                issuerLayer: LAYERS.shared,
                 ...SERVER_MODULE_RULES.rsc,
               },
             ],
@@ -1291,20 +1304,38 @@ function getModuleReplacementsForServer(analysisCtx: RSCAnalysisCtx) {
   return [
     new VirtualModulesPlugin(virtualModules),
     createImportRewritePlugin(
-      (
-        originalResource: string,
-        resolveData: PartialResolveData
-      ): string | null => {
+      (originalResource: string, resolveData: PartialResolveData) => {
+        const issuerLayer = resolveData.contextInfo.issuerLayer;
+        // if (
+        //   issuerLayer &&
+        //   !(issuerLayer === LAYERS.rsc || issuerLayer === LAYERS.ssr)
+        // ) {
+        //   console.log("hmmm", originalResource, resolveData.contextInfo);
+        //   return null;
+        // }
+
+        // not sure why this happens, but looks like it does!
+        // i guess we're creating these virtual paths someplace else too?
+        // anyway, if it does, make DOUBLE sure we're assigning the correct layer
+        if (isVirtualPath(originalResource)) {
+          if (isVirtualPathSSR(originalResource)) {
+            return { request: originalResource, layer: LAYERS.ssr };
+          }
+          if (isVirtualPathRSC(originalResource)) {
+            return { request: originalResource, layer: LAYERS.rsc };
+          }
+        }
+
         const type = analysisCtx.getTypeForResource(originalResource);
         if (type !== "client" && type !== "server") {
           return null;
         }
 
-        const isSSR = resolveData.contextInfo.issuerLayer === LAYERS.ssr;
+        const isSSR = issuerLayer === LAYERS.ssr;
 
-        const newResource = isSSR
-          ? getVirtualPathSSR(originalResource)
-          : getVirtualPathRSC(originalResource);
+        const [newResource, newLayer] = isSSR
+          ? [getVirtualPathSSR(originalResource), LAYERS.ssr]
+          : [getVirtualPathRSC(originalResource), LAYERS.rsc];
         const label = `(${isSSR ? "ssr" : "proxy"})`;
 
         if (LOG_OPTIONS.importRewrites) {
@@ -1318,7 +1349,7 @@ function getModuleReplacementsForServer(analysisCtx: RSCAnalysisCtx) {
           console.log(`${label} rewriting request to`, newResource);
           console.log();
         }
-        return newResource;
+        return { request: newResource, layer: newLayer };
       }
     ),
   ];
@@ -1327,11 +1358,12 @@ function getModuleReplacementsForServer(analysisCtx: RSCAnalysisCtx) {
 type PartialResolveData = {
   request: string | undefined;
   contextInfo: {
-    laer?: string;
-    issuerLayer?: string;
+    layer?: string;
+    issuerLayer?: string | null;
     issuer: string;
   };
   createData: {
+    layer?: string | null;
     request: string;
     resource: string;
     userRequest: string;
@@ -1342,7 +1374,7 @@ const createImportRewritePlugin = (
   assignModule: (
     originalResource: string,
     resolveData: PartialResolveData
-  ) => string | null
+  ) => string | null | { request: string; layer: string }
 ) => {
   return new NormalModuleReplacementPlugin(
     MODULE_EXTENSIONS_REGEX,
@@ -1352,16 +1384,26 @@ const createImportRewritePlugin = (
 
       if (!originalResource) return;
 
-      const newResource = assignModule(originalResource, resolveData);
+      // TODO: consider doing layer assignments here? shared-layer is wreaking havoc on everything...
+      const _rewrite = assignModule(originalResource, resolveData);
+      const rewrite: { request: string | null; layer: string | null } =
+        _rewrite === null
+          ? { request: null, layer: null }
+          : typeof _rewrite === "string"
+          ? { request: _rewrite, layer: null }
+          : _rewrite;
 
-      if (newResource !== null) {
-        resolveData.request = newResource;
+      if (rewrite.request !== null) {
+        resolveData.request = rewrite.request;
         resolveData.createData.request = resolveData.createData.request.replace(
           originalResource,
-          newResource
+          rewrite.request
         );
-        resolveData.createData.resource = newResource;
-        resolveData.createData.userRequest = newResource;
+        resolveData.createData.resource = rewrite.request;
+        resolveData.createData.userRequest = rewrite.request;
+      }
+      if (rewrite.layer !== null) {
+        resolveData.createData.layer = rewrite.layer;
       }
     }
   );

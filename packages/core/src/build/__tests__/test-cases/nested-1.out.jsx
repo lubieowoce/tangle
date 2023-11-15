@@ -1,11 +1,13 @@
 "babel-plugin-inline-actions: {\"id\":\"dd2085e09763e728ce459e4843749a293c3f6665\",\"names\":[\"_$$INLINE_ACTION\"]}";
 import { registerServerReference as _registerServerReference } from "react-server-dom-webpack/server";
+import { decryptActionBoundArgs as _decryptActionBoundArgs } from "@owoce/tangle/dist/runtime/support/encrypt-action-bound-args";
+import { encryptActionBoundArgs as _encryptActionBoundArgs } from "@owoce/tangle/dist/runtime/support/encrypt-action-bound-args";
 /* eslint-disable @typescript-eslint/no-unused-vars */
 import { doSomethingOnTheServer } from "./server-stuff";
 import "./server-stuff";
 // hoisted action: doStuff
 export const _$$INLINE_ACTION = _registerServerReference(async (_$$CLOSURE, data) => {
-  var [foo2] = _$$CLOSURE.value;
+  var [foo2] = (await _decryptActionBoundArgs(_$$CLOSURE)).value;
   const test = data.get("test");
   if (Math.random() > 0.5) {
     // @ts-expect-error  missing decl for `process`
@@ -32,11 +34,11 @@ export const Test = ({
     const foo2 = foo1;
     // eslint-disable-next-line no-constant-condition
     if (true) {
-      var doStuff = _$$INLINE_ACTION.bind(null, {
+      var doStuff = _$$INLINE_ACTION.bind(null, _encryptActionBoundArgs({
         get value() {
           return [foo2];
         }
-      });
+      }));
       // eslint-disable-next-line no-inner-declarations
 
       return <form action={doStuff}>
