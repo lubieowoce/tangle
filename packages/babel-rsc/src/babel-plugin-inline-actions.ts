@@ -1,47 +1,77 @@
 // eslint-disable-next-line @typescript-eslint/ban-ts-comment
-// @ts-nocheck
 
-/* eslint-disable @typescript-eslint/no-var-requires */
-const { declare: declarePlugin } = require("@babel/helper-plugin-utils");
-const { addNamed: addNamedImport } = require("@babel/helper-module-imports");
+import type { NodePath, PluginObj, PluginPass } from "@babel/core";
+import type * as t from "@babel/types";
+import type { Scope as BabelScope } from "@babel/traverse";
 
-const crypto = require("node:crypto");
-const { pathToFileURL } = require("node:url");
-const { relative: getRelativePath } = require("node:path");
+import type { BabelAPI } from "@babel/helper-plugin-utils";
+import { addNamed as addNamedImport } from "@babel/helper-module-imports";
+
+import crypto from "node:crypto";
+import { pathToFileURL } from "node:url";
+import { relative as getRelativePath } from "node:path";
+
+type FnPath =
+  | NodePath<t.ArrowFunctionExpression>
+  | NodePath<t.FunctionDeclaration>
+  | NodePath<t.FunctionExpression>;
 
 // TODO: try capturing as little as possible i.e. if only `x.y` is used, don't pass all of `x`
 // e.g.: `id4.x` here: packages/next-swc/crates/core/tests/fixture/server-actions/server/5/input.js
 
-// TODO: can we just strip .value before passing it down to decrypt()?
-// that'd simplify integration. same for encrypt() really, just move that inside `get value()`
+// TODO: change output to be
+//   _ACTION.bind(null, { get value() { return _encryptActionBoundArgs([x, y, z]) } })
+// and
+//   const [x, y, z] = await _decryptActionBoundArgs($$CLOSURE.value)
+// that way, encrypt/decrypt doesn't need to know about our value() hacks
 
 // duplicated from packages/core/src/build/build.ts
 
-const getHash = (s) =>
+const getHash = (s: string) =>
   crypto.createHash("sha1").update(s).digest().toString("hex");
 
 // FIXME: this is can probably result in weird bugs --
 // we're only looking at the name of the module,
 // so we'll give it the same id even if the contents changed completely!
 // this id should probably look at some kind of source-hash...
-const getServerActionModuleId = (resource) =>
+const getServerActionModuleId = (resource: string) =>
   getHash(pathToFileURL(resource).href);
 
-/** @typedef {import('./babel-types').FnPath} FnPath */
+type PluginOptions = {
+  onActionFound?: (arg: { file: string } & ExtractedActionInfo) => void;
+};
 
-// /** @typedef {import('@babel/core').PluginPass} BabelState */
-/** @typedef {any} BabelState */
+type ExtractedActionInfo = { exportedName: string };
 
-/** @typedef {{ onActionFound?: (arg: { file: string, exportedName: string }) => void }} PluginOptions */
+type ThisExtras = {
+  extractedActions: ExtractedActionInfo[];
+  onAction(action: ExtractedActionInfo): void;
+  addRSDWImport: () => t.Identifier;
+  addCryptImport(): CryptImport;
+  getActionModuleId: () => string;
+};
 
-const createPlugin = (/** @type {PluginOptions} */ { onActionFound } = {}) =>
-  declarePlugin((api) => {
+type ThisWithExtras = PluginPass & ThisExtras;
+
+type CryptImport = {
+  encrypt: t.Identifier;
+  decrypt: t.Identifier;
+};
+
+const createPlugin =
+  ({ onActionFound }: PluginOptions = {}) =>
+  (
+    api: BabelAPI,
+    _options: unknown,
+    _dirname: string
+  ): PluginObj<ThisWithExtras> => {
     api.assertVersion(7);
     const { types: t } = api;
 
-    const getFilename = (state) => state.file.opts.filename ?? "<unnamed>";
+    // const getFilename = (state: PluginPass) =>
+    //   state.file.opts.filename ?? "<unnamed>";
 
-    const hasUseServerDirective = (/** @type {FnPath} */ path) => {
+    const hasUseServerDirective = (path: FnPath) => {
       const { body } = path.node;
       if (!t.isBlockStatement(body)) {
         return false;
@@ -57,15 +87,19 @@ const createPlugin = (/** @type {PluginOptions} */ { onActionFound } = {}) =>
       return true;
     };
 
-    function extractInlineActionToTopLevel(
-      /** @type {FnPath} */ path,
-      /** @type {BabelState} */ state,
+    const extractInlineActionToTopLevel = (
+      path: FnPath,
+      _state: PluginPass,
       {
         body,
         freeVariables,
         ctx: { addRSDWImport, getActionModuleId, addCryptImport },
+      }: {
+        body: t.BlockStatement;
+        freeVariables: string[];
+        ctx: ThisWithExtras;
       }
-    ) {
+    ) => {
       let extractedFunctionParams = [...path.node.params];
       let extractedFunctionBody = body.body;
       if (freeVariables.length > 0) {
@@ -96,9 +130,9 @@ const createPlugin = (/** @type {PluginOptions} */ { onActionFound } = {}) =>
         addCryptImport();
       }
 
-      const wrapInRegister = (expr, exportedName) => {
+      const wrapInRegister = (expr: t.Expression, exportedName: string) => {
         const actionModuleId = getActionModuleId();
-        const registerServerReferenceId = addRSDWImport(path);
+        const registerServerReferenceId = addRSDWImport();
 
         return t.callExpression(registerServerReferenceId, [
           expr,
@@ -135,11 +169,11 @@ const createPlugin = (/** @type {PluginOptions} */ { onActionFound } = {}) =>
         (stmt) => stmt.isImportDeclaration()
       );
 
-      const [inserted] = lastImportPath.insertAfter(functionDeclaration);
+      const [inserted] = lastImportPath!.insertAfter(functionDeclaration);
       moduleScope.registerBinding(bindingKind, inserted);
       inserted.addComment(
         "leading",
-        " hoisted action: " + (path.node.id?.name ?? "<anonymous>"),
+        " hoisted action: " + (getFnPathName(path) ?? "<anonymous>"),
         true
       );
 
@@ -151,15 +185,19 @@ const createPlugin = (/** @type {PluginOptions} */ { onActionFound } = {}) =>
             freeVariables,
           }),
       };
-    }
+    };
 
-    const getInlineActionReplacement = ({ id, freeVariables }) => {
+    const getInlineActionReplacement = ({
+      id,
+      freeVariables,
+    }: {
+      id: t.Identifier;
+      freeVariables: string[];
+    }) => {
       if (freeVariables.length === 0) {
         return id;
       }
-      const lazyWrapper = (
-        /** @type {import('@babel/types').Expression} */ expr
-      ) =>
+      const lazyWrapper = (expr: t.Expression) =>
         t.objectExpression([
           t.objectMethod(
             "get",
@@ -184,30 +222,21 @@ const createPlugin = (/** @type {PluginOptions} */ { onActionFound } = {}) =>
       ]);
     };
 
-    const assertIsAsyncFn = (/** @type {FnPath} */ path) => {
-      if (!path.node.async) {
-        throw path.buildCodeFrameError(
-          `functions marked with "use server" must be async`
-        );
-      }
-    };
-
     return {
       pre(file) {
         this.extractedActions = [];
-        this.onAction = (args) => {
-          onActionFound?.(args);
-          this.extractedActions.push(args);
+        this.onAction = (info) => {
+          onActionFound?.({ ...info, file: file.opts.filename! });
+          this.extractedActions.push(info);
         };
 
-        /** @type {import('@babel/types').Identifier | null} */
-        let cachedRSDWImport = null;
-        const addRSDWImport = (path) => {
+        let cachedRSDWImport: t.Identifier | null = null;
+        const addRSDWImport = () => {
           if (cachedRSDWImport) {
             return cachedRSDWImport;
           }
           return (cachedRSDWImport = addNamedImport(
-            path,
+            file.path,
             "registerServerReference",
             "react-server-dom-webpack/server"
           ));
@@ -215,8 +244,7 @@ const createPlugin = (/** @type {PluginOptions} */ { onActionFound } = {}) =>
 
         this.addRSDWImport = addRSDWImport;
 
-        /** @type {{ encrypt:  import('@babel/types').Identifier, decrypt: import('@babel/types').Identifier } | null} */
-        let cachedCryptImport = null;
+        let cachedCryptImport: CryptImport | null = null;
         const addCryptImport = () => {
           const path = file.path;
           if (cachedCryptImport) {
@@ -243,7 +271,7 @@ const createPlugin = (/** @type {PluginOptions} */ { onActionFound } = {}) =>
 
         this.addCryptImport = addCryptImport;
 
-        let cachedActionModuleId = null;
+        let cachedActionModuleId: string | null = null;
         const getActionModuleId = () => {
           if (cachedActionModuleId) {
             return cachedActionModuleId;
@@ -251,17 +279,19 @@ const createPlugin = (/** @type {PluginOptions} */ { onActionFound } = {}) =>
           const filePathForId = file.opts.root
             ? // prefer relative paths, because we hash those for usage as module ids
               "/__project__/" +
-              getRelativePath(file.opts.root, file.opts.filename)
+              getRelativePath(file.opts.root, file.opts.filename!)
             : file.opts.filename;
 
-          return (cachedActionModuleId =
-            getServerActionModuleId(filePathForId));
+          return (cachedActionModuleId = getServerActionModuleId(
+            filePathForId!
+          ));
         };
 
         this.getActionModuleId = getActionModuleId;
       },
+
       visitor: {
-        // () => {}
+        // `() => {}`
         ArrowFunctionExpression(path, state) {
           const { body } = path.node;
           if (!t.isBlockStatement(body)) {
@@ -285,9 +315,10 @@ const createPlugin = (/** @type {PluginOptions} */ { onActionFound } = {}) =>
 
           this.onAction({
             exportedName: extractedIdentifier.name,
-            file: getFilename(state),
           });
         },
+
+        // `function foo() { ... }`
         FunctionDeclaration(path, state) {
           if (!hasUseServerDirective(path)) {
             return;
@@ -340,9 +371,10 @@ const createPlugin = (/** @type {PluginOptions} */ { onActionFound } = {}) =>
 
           this.onAction({
             exportedName: extractedIdentifier.name,
-            file: getFilename(state),
           });
         },
+
+        // `const foo = function() { ... }`
         FunctionExpression(path, state) {
           if (!hasUseServerDirective(path)) {
             return;
@@ -365,11 +397,11 @@ const createPlugin = (/** @type {PluginOptions} */ { onActionFound } = {}) =>
           path.replaceWith(getReplacement());
           this.onAction({
             exportedName: extractedIdentifier.name,
-            file: getFilename(state),
           });
         },
       },
-      post(state) {
+
+      post(file) {
         if (this.extractedActions.length === 0) {
           return;
         }
@@ -381,7 +413,7 @@ const createPlugin = (/** @type {PluginOptions} */ { onActionFound } = {}) =>
             names: this.extractedActions.map((e) => e.exportedName),
           });
 
-        state.path.node.body.unshift(
+        file.path.node.body.unshift(
           t.expressionStatement(t.stringLiteral(stashedData))
         );
 
@@ -389,22 +421,24 @@ const createPlugin = (/** @type {PluginOptions} */ { onActionFound } = {}) =>
         // console.log(state.path.node);
       },
     };
-  });
+  };
+
+// ===================================================================================
+// ===================================================================================
 
 const DEBUG = false;
 
-const getFreeVariables = (/** @type {FnPath} */ path) => {
-  /** @type {Set<string>} */
-  const freeVariablesSet = new Set();
+const getFreeVariables = (path: FnPath) => {
+  const freeVariablesSet = new Set<string>();
   const programScope = path.scope.getProgramParent();
   path.traverse({
     Identifier(innerPath) {
       const { name } = innerPath.node;
 
       const log = DEBUG
-        ? (...args) =>
+        ? (...args: any[]) =>
             console.log(
-              `GFV(${path.node.id?.name})`,
+              `GFV(${getFnPathName(path)})`,
               name,
               ...args,
               freeVariablesSet
@@ -458,14 +492,22 @@ const getFreeVariables = (/** @type {FnPath} */ path) => {
   return freeVariables;
 };
 
-/** @typedef {import('@babel/traverse').Scope} BabelScope */
-const isChildScope = (
-  /** @type {{ root: BabelScope, parent: BabelScope, child: BabelScope }} */ {
-    root,
-    parent,
-    child,
+const getFnPathName = (path: FnPath) => {
+  if (path.isArrowFunctionExpression()) {
+    return undefined;
   }
-) => {
+  return path.node!.id!.name;
+};
+
+const isChildScope = ({
+  root,
+  parent,
+  child,
+}: {
+  root: BabelScope;
+  parent: BabelScope;
+  child: BabelScope;
+}) => {
   let curScope = child;
   while (curScope !== root) {
     if (curScope.parent === parent) {
@@ -476,12 +518,10 @@ const isChildScope = (
   return false;
 };
 
-/** @template T
- * @param {T[]} arr
- * @param {(el: T) => boolean} pred
- * @returns {number | undefined}
- */
-const findLastIndex = (arr, pred) => {
+function findLastIndex<T>(
+  arr: T[],
+  pred: (el: T) => boolean
+): number | undefined {
   for (let i = arr.length - 1; i >= 0; i--) {
     const el = arr[i];
     if (pred(el)) {
@@ -489,24 +529,18 @@ const findLastIndex = (arr, pred) => {
     }
   }
   return undefined;
-};
+}
 
-/** @template T
- * @param {T[]} arr
- * @param {(el: T) => boolean} pred
- * @returns {T | undefined}
- */
-const findLast = (arr, pred) => {
+function findLast<T>(arr: T[], pred: (el: T) => boolean): T | undefined {
   const index = findLastIndex(arr, pred);
   if (index === undefined) {
     return undefined;
   }
   return arr[index];
-};
+}
 
-const findImmediatelyEnclosingDeclaration = (/** @type {FnPath} */ path) => {
-  /** @type {import('@babel/core').NodePath} */
-  let currentPath = path;
+function findImmediatelyEnclosingDeclaration(path: FnPath) {
+  let currentPath: NodePath = path;
   while (!currentPath.isProgram()) {
     if (
       // const foo = async () => { ... }
@@ -523,32 +557,44 @@ const findImmediatelyEnclosingDeclaration = (/** @type {FnPath} */ path) => {
     if (currentPath !== path && currentPath.isExpression()) {
       return null;
     }
-
+    if (!currentPath.parentPath) {
+      return null;
+    }
     currentPath = currentPath.parentPath;
   }
   return null;
-};
+}
 
-const getTopLevelBinding = (/** @type {FnPath} */ path) => {
+function getTopLevelBinding(path: FnPath) {
   const decl = findImmediatelyEnclosingDeclaration(path);
   if (!decl) {
     return null;
   }
 
+  if (!("id" in decl.node) || !decl.node.id) {
+    return null;
+  }
+  if (!("name" in decl.node.id)) {
+    return null;
+  }
+
   // console.log("id", decl.node.id.name);
   const declBinding = decl.scope.getBinding(decl.node.id.name);
-  const isTopLevel = declBinding.scope === path.scope.getProgramParent();
+  const isTopLevel = declBinding!.scope === path.scope.getProgramParent();
 
   // console.log("enclosing declaration", decl.type, decl.parent.type, {
   //   isTopLevel,
   //   // declBinding: declBinding.scope,
   // });
   return isTopLevel ? declBinding : null;
+}
+
+const assertIsAsyncFn = (path: FnPath) => {
+  if (!path.node.async) {
+    throw path.buildCodeFrameError(
+      `functions marked with "use server" must be async`
+    );
+  }
 };
 
-const plugin = createPlugin();
-plugin.createPlugin = createPlugin;
-
-module.exports = plugin;
-// export = plugin;
-// module.exports = { default: createPlugin(), createPlugin };
+export { createPlugin };

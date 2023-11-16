@@ -4,7 +4,7 @@ import { readFileSync, readdirSync } from "node:fs";
 import * as path from "path";
 
 import { transformSync } from "@babel/core";
-import { createPlugin } from "../babel-plugin-inline-actions.cjs";
+import { createPlugin } from "../babel-plugin-inline-actions.js";
 
 describe("babel transform", () => {
   const here = path.dirname(fileURLToPath(import.meta.url));
@@ -33,7 +33,7 @@ describe("babel transform", () => {
         try {
           getResult();
         } catch (err) {
-          thrown = err;
+          thrown = err as Error;
           throw err;
         }
       }).toThrow();

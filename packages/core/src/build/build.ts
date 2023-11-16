@@ -87,8 +87,7 @@ const IMPORT_CONDITIONS = {
 // use the absolute path -- the file we're in will be bundled with TSUp and put in dist/bin,
 // while that plugin will go in dist/build (compiled with regular TSC),
 // so require.resolve() would do weird things.
-const BABEL_PLUGIN_INLINE_ACTIONS =
-  "@owoce/tangle/build/babel-plugin-inline-actions";
+const BABEL_PLUGIN_INLINE_ACTIONS = "@owoce/babel-rsc";
 
 const nullIfNotExists = (p: string) => {
   if (!fs.existsSync(p)) {
@@ -200,7 +199,7 @@ export const build = async ({
             {
               // TODO: we're not applying this to node_modules, but we should...
               loader: "babel-loader",
-              options: { plugins: [BABEL_PLUGIN_INLINE_ACTIONS] },
+              options: { plugins: ["module:" + BABEL_PLUGIN_INLINE_ACTIONS] },
             },
             TS_LOADER,
           ],
