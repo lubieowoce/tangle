@@ -1,7 +1,7 @@
 "babel-plugin-inline-actions: {\"id\":\"34ed2f283410c36422592355b6fad14b1772797e\",\"names\":[\"_$$INLINE_ACTION\"]}";
 import { registerServerReference as _registerServerReference } from "react-server-dom-webpack/server";
-import { decryptActionBoundArgs as _decryptActionBoundArgs } from "@owoce/tangle/dist/runtime/support/encrypt-action-bound-args";
-import { encryptActionBoundArgs as _encryptActionBoundArgs } from "@owoce/tangle/dist/runtime/support/encrypt-action-bound-args";
+import { decryptActionBoundArgs as _decryptActionBoundArgs } from "@example/my-framework/encryption";
+import { encryptActionBoundArgs as _encryptActionBoundArgs } from "@example/my-framework/encryption";
 import { doSomethingOnTheServer } from "./server-stuff";
 // hoisted action: doStuff
 export const _$$INLINE_ACTION = _registerServerReference(async (_$$CLOSURE, data) => {

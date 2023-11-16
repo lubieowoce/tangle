@@ -47,6 +47,14 @@ type ThisExtras = {
   getActionModuleId: () => string;
 };
 
+export type PluginOptions = {
+  encryption: {
+    importSource: string;
+    encryptFn: string;
+    decryptFn: string;
+  };
+};
+
 type ThisWithExtras = PluginPass & ThisExtras;
 
 type CryptImport = {
@@ -58,11 +66,12 @@ const createPlugin =
   ({ onActionFound }: PluginInjected = {}) =>
   (
     api: BabelAPI,
-    _options: unknown,
+    rawOptions: unknown = {},
     _dirname: string
   ): PluginObj<ThisWithExtras> => {
     api.assertVersion(7);
     const { types: t } = api;
+    const options = rawOptions as PluginOptions; // FIXME: zod
 
     // const getFilename = (state: PluginPass) =>
     //   state.file.opts.filename ?? "<unnamed>";
@@ -107,13 +116,15 @@ const createPlugin =
         // only add a closure object if we're not closing over anything.
         // const [x, y, z] = await _decryptActionBoundArgs(await $$CLOSURE.value);
 
+        const { decrypt: decryptFnId } = ctx.addCryptImport();
+
         const closureParam = path.scope.generateUidIdentifier("$$CLOSURE");
         const freeVarsPat = t.arrayPattern(
           freeVariables.map((variable) => t.identifier(variable))
         );
 
         const closureExpr = t.awaitExpression(
-          t.callExpression(t.identifier("_decryptActionBoundArgs"), [
+          t.callExpression(decryptFnId, [
             t.awaitExpression(
               t.memberExpression(closureParam, t.identifier("value"))
             ),
@@ -129,8 +140,6 @@ const createPlugin =
           ]),
           ...extractedFunctionBody,
         ];
-
-        ctx.addCryptImport();
       }
 
       const wrapInRegister = (expr: t.Expression, exportedName: string) => {
@@ -198,6 +207,7 @@ const createPlugin =
       if (freeVariables.length === 0) {
         return id;
       }
+      const { encrypt: encryptFnId } = ctx.addCryptImport();
       const lazyWrapper = (expr: t.Expression) =>
         t.objectExpression([
           t.objectMethod(
@@ -210,7 +220,7 @@ const createPlugin =
 
       const actionModuleId = ctx.getActionModuleId();
       const boundArgs = lazyWrapper(
-        t.callExpression(t.identifier("_encryptActionBoundArgs"), [
+        t.callExpression(encryptFnId, [
           t.arrayExpression(
             freeVariables.map((variable) => t.identifier(variable))
           ),
@@ -246,20 +256,17 @@ const createPlugin =
 
         this.addCryptImport = once(() => {
           const path = file.path;
-          const importSource =
-            "@owoce/tangle/dist/runtime/support/encrypt-action-bound-args";
-          // "@owoce/tangle/server"
 
           return {
             encrypt: addNamedImport(
               path,
-              "encryptActionBoundArgs",
-              importSource
+              options.encryption.encryptFn,
+              options.encryption.importSource
             ),
             decrypt: addNamedImport(
               path,
-              "decryptActionBoundArgs",
-              importSource
+              options.encryption.decryptFn,
+              options.encryption.importSource
             ),
           };
         });

@@ -1,6 +1,6 @@
 "babel-plugin-inline-actions: {\"id\":\"6342690343ae5afda83cf88d839011024a342b16\",\"names\":[\"_$$INLINE_ACTION\",\"_$$INLINE_ACTION2\",\"_$$INLINE_ACTION3\",\"_$$INLINE_ACTION4\",\"_$$INLINE_ACTION5\"]}";
-import { decryptActionBoundArgs as _decryptActionBoundArgs } from "@owoce/tangle/dist/runtime/support/encrypt-action-bound-args";
-import { encryptActionBoundArgs as _encryptActionBoundArgs } from "@owoce/tangle/dist/runtime/support/encrypt-action-bound-args";
+import { decryptActionBoundArgs as _decryptActionBoundArgs } from "@example/my-framework/encryption";
+import { encryptActionBoundArgs as _encryptActionBoundArgs } from "@example/my-framework/encryption";
 import { registerServerReference as _registerServerReference } from "react-server-dom-webpack/server";
 import { doSomethingOnTheServer } from "./server-stuff";
 // hoisted action: <anonymous>

@@ -1,7 +1,7 @@
 "babel-plugin-inline-actions: {\"id\":\"dd2085e09763e728ce459e4843749a293c3f6665\",\"names\":[\"_$$INLINE_ACTION\"]}";
 import { registerServerReference as _registerServerReference } from "react-server-dom-webpack/server";
-import { decryptActionBoundArgs as _decryptActionBoundArgs } from "@owoce/tangle/dist/runtime/support/encrypt-action-bound-args";
-import { encryptActionBoundArgs as _encryptActionBoundArgs } from "@owoce/tangle/dist/runtime/support/encrypt-action-bound-args";
+import { decryptActionBoundArgs as _decryptActionBoundArgs } from "@example/my-framework/encryption";
+import { encryptActionBoundArgs as _encryptActionBoundArgs } from "@example/my-framework/encryption";
 /* eslint-disable @typescript-eslint/no-unused-vars */
 import { doSomethingOnTheServer } from "./server-stuff";
 import "./server-stuff";

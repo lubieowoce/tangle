@@ -4,7 +4,15 @@ import { readFileSync, readdirSync } from "node:fs";
 import * as path from "path";
 
 import { transformSync } from "@babel/core";
-import { createPlugin } from "../babel-plugin-inline-actions.js";
+import { createPlugin, PluginOptions } from "../babel-plugin-inline-actions.js";
+
+const pluginOptions: PluginOptions = {
+  encryption: {
+    importSource: "@example/my-framework/encryption",
+    encryptFn: "encryptActionBoundArgs",
+    decryptFn: "decryptActionBoundArgs",
+  },
+};
 
 describe("babel transform", () => {
   const here = path.dirname(fileURLToPath(import.meta.url));
@@ -24,7 +32,10 @@ describe("babel transform", () => {
       transformSync(inputCode, {
         filename: inputPath,
         root: inputsDir,
-        plugins: ["@babel/plugin-syntax-jsx", inlineActionPLugin],
+        plugins: [
+          "@babel/plugin-syntax-jsx",
+          [inlineActionPLugin, pluginOptions],
+        ],
       });
 
     if (inputPath.includes(".invalid.")) {
