@@ -31,8 +31,10 @@ const getHash = (s: string) =>
 const getServerActionModuleId = (resource: string) =>
   getHash(pathToFileURL(resource).href);
 
-type PluginOptions = {
-  onActionFound?: (arg: { file: string } & ExtractedActionInfo) => void;
+type PluginInjected = {
+  onActionFound?: (
+    arg: { file: string | undefined } & ExtractedActionInfo
+  ) => void;
 };
 
 type ExtractedActionInfo = { exportedName: string };
@@ -53,7 +55,7 @@ type CryptImport = {
 };
 
 const createPlugin =
-  ({ onActionFound }: PluginOptions = {}) =>
+  ({ onActionFound }: PluginInjected = {}) =>
   (
     api: BabelAPI,
     _options: unknown,
@@ -228,36 +230,27 @@ const createPlugin =
     return {
       pre(file) {
         this.extractedActions = [];
+
         this.onAction = (info) => {
-          onActionFound?.({ ...info, file: file.opts.filename! });
+          onActionFound?.({ file: file.opts.filename ?? undefined, ...info });
           this.extractedActions.push(info);
         };
 
-        let cachedRSDWImport: t.Identifier | null = null;
-        const addRSDWImport = () => {
-          if (cachedRSDWImport) {
-            return cachedRSDWImport;
-          }
-          return (cachedRSDWImport = addNamedImport(
+        this.addRSDWImport = once(() => {
+          return addNamedImport(
             file.path,
             "registerServerReference",
             "react-server-dom-webpack/server"
-          ));
-        };
+          );
+        });
 
-        this.addRSDWImport = addRSDWImport;
-
-        let cachedCryptImport: CryptImport | null = null;
-        const addCryptImport = () => {
+        this.addCryptImport = once(() => {
           const path = file.path;
-          if (cachedCryptImport) {
-            return cachedCryptImport;
-          }
           const importSource =
             "@owoce/tangle/dist/runtime/support/encrypt-action-bound-args";
           // "@owoce/tangle/server"
 
-          const val = {
+          return {
             encrypt: addNamedImport(
               path,
               "encryptActionBoundArgs",
@@ -269,28 +262,17 @@ const createPlugin =
               importSource
             ),
           };
-          return (cachedCryptImport = val);
-        };
+        });
 
-        this.addCryptImport = addCryptImport;
-
-        let cachedActionModuleId: string | null = null;
-        const getActionModuleId = () => {
-          if (cachedActionModuleId) {
-            return cachedActionModuleId;
-          }
+        this.getActionModuleId = once(() => {
           const filePathForId = file.opts.root
             ? // prefer relative paths, because we hash those for usage as module ids
               "/__project__/" +
               getRelativePath(file.opts.root, file.opts.filename!)
             : file.opts.filename;
 
-          return (cachedActionModuleId = getServerActionModuleId(
-            filePathForId!
-          ));
-        };
-
-        this.getActionModuleId = getActionModuleId;
+          return getServerActionModuleId(filePathForId!);
+        });
       },
 
       visitor: {
@@ -598,6 +580,20 @@ const assertIsAsyncFn = (path: FnPath) => {
       `functions marked with "use server" must be async`
     );
   }
+};
+
+const once = <T>(fn: () => T) => {
+  type Cache<T> = { has: true; value: T } | { has: false; value: undefined };
+  let cache: Cache<T> = { has: false, value: undefined };
+  const wrapped = (): T => {
+    if (cache.has) {
+      return cache.value;
+    }
+    const value = fn();
+    cache = { has: true, value };
+    return value;
+  };
+  return wrapped;
 };
 
 export { createPlugin };
