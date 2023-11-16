@@ -28,42 +28,22 @@ const noClientReferences = new Proxy(
   }
 );
 
-type Lazy<T> = {
-  /* a getter that evaluates the value. */
-  value: T;
-};
-
-const createLazy = <T>(thunk: () => T): Lazy<T> => {
-  type Cache<T> = { has: false; value: undefined } | { has: true; value: T };
-  let cache: Cache<T> = {
-    has: false,
-    value: undefined,
-  };
-  return {
-    get value() {
-      if (cache.has) {
-        return cache.value;
-      }
-      const value = thunk();
-      cache = { has: true, value };
-      return value;
-    },
-  };
-};
-
-type BoundArgs = Lazy<ReactClientValue[]>;
-type BoundArgsToDeserialize = Lazy<Promise<string>>;
+type BoundArgs = ReactClientValue[];
+type BoundArgsToDeserialize = string;
 
 export function encryptActionBoundArgs(
-  args: BoundArgs
-): BoundArgsToDeserialize {
-  return createLazy(() => serializeValue(args.value).then(encryptValue));
+  args: BoundArgs,
+  _actionModuleId: string,
+  _actionName: string
+): Promise<BoundArgsToDeserialize> {
+  return serializeValue(args).then(encryptValue);
 }
 
 export async function decryptActionBoundArgs(
-  args: BoundArgsToDeserialize
+  raw: BoundArgsToDeserialize,
+  _actionId: string,
+  _actionName: string
 ): Promise<BoundArgs> {
-  const raw = await args.value;
   return decryptValue(raw).then(deserializeValue);
 }
 
@@ -133,7 +113,7 @@ async function deserializeValue(decrypted: string): Promise<BoundArgs> {
   if (!Array.isArray(transformed)) {
     console.error("Deserialized value is not an array", transformed);
   }
-  return { value: transformed as ReactClientValue[] };
+  return transformed as ReactClientValue[];
 }
 
 async function streamToString(stream: streams.Transform) {

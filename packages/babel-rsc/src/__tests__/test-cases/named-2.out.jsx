@@ -5,7 +5,7 @@ import { encryptActionBoundArgs as _encryptActionBoundArgs } from "@owoce/tangle
 import { doSomethingOnTheServer } from "./server-stuff";
 // hoisted action: doStuff
 export const _$$INLINE_ACTION = _registerServerReference(async (_$$CLOSURE, data) => {
-  var [foo] = (await _decryptActionBoundArgs(_$$CLOSURE)).value;
+  var [foo] = await _decryptActionBoundArgs(await _$$CLOSURE.value, "34ed2f283410c36422592355b6fad14b1772797e", "_$$INLINE_ACTION");
   const test = data.get("test");
   await doSomethingOnTheServer({
     test,
@@ -18,11 +18,11 @@ export const _$$INLINE_ACTION = _registerServerReference(async (_$$CLOSURE, data
 export const Test = ({
   foo
 }) => {
-  return <form action={_$$INLINE_ACTION.bind(null, _encryptActionBoundArgs({
+  return <form action={_$$INLINE_ACTION.bind(null, {
     get value() {
-      return [foo];
+      return _encryptActionBoundArgs([foo], "34ed2f283410c36422592355b6fad14b1772797e", "_$$INLINE_ACTION");
     }
-  }))}>
+  })}>
       <input name="test" type="text" />
       <button type="submit">Submit</button>
     </form>;

@@ -5,7 +5,7 @@ import { encryptActionBoundArgs as _encryptActionBoundArgs } from "@owoce/tangle
 import { doSomethingOnTheServer } from "./server-stuff";
 // hoisted action: doStuff
 export const _$$INLINE_ACTION2 = _registerServerReference(async (_$$CLOSURE2, data) => {
-  var [foo2] = (await _decryptActionBoundArgs(_$$CLOSURE2)).value;
+  var [foo2] = await _decryptActionBoundArgs(await _$$CLOSURE2.value, "57d3508490fed7c3a870ed862bb4b569f936dab8", "_$$INLINE_ACTION2");
   const test = data.get("test");
   await doSomethingOnTheServer({
     test,
@@ -17,7 +17,7 @@ export const _$$INLINE_ACTION2 = _registerServerReference(async (_$$CLOSURE2, da
 }, "57d3508490fed7c3a870ed862bb4b569f936dab8", "_$$INLINE_ACTION2");
 // hoisted action: doStuff
 export const _$$INLINE_ACTION = _registerServerReference(async (_$$CLOSURE, data) => {
-  var [foo2] = (await _decryptActionBoundArgs(_$$CLOSURE)).value;
+  var [foo2] = await _decryptActionBoundArgs(await _$$CLOSURE.value, "57d3508490fed7c3a870ed862bb4b569f936dab8", "_$$INLINE_ACTION");
   const test = data.get("test");
   await doSomethingOnTheServer({
     test,
@@ -30,11 +30,11 @@ export const _$$INLINE_ACTION = _registerServerReference(async (_$$CLOSURE, data
 export const Test = ({
   foo
 }) => {
-  var doStuff = _$$INLINE_ACTION.bind(null, _encryptActionBoundArgs({
+  var doStuff = _$$INLINE_ACTION.bind(null, {
     get value() {
-      return [foo2];
+      return _encryptActionBoundArgs([foo2], "57d3508490fed7c3a870ed862bb4b569f936dab8", "_$$INLINE_ACTION");
     }
-  }));
+  });
   const foo2 = foo;
   return <form action={doStuff}>
       <input name="test" type="text" />
@@ -46,11 +46,11 @@ export const Test2 = ({
 }) => {
   const foo2 = foo;
   {
-    var doStuff = _$$INLINE_ACTION2.bind(null, _encryptActionBoundArgs({
+    var doStuff = _$$INLINE_ACTION2.bind(null, {
       get value() {
-        return [foo2];
+        return _encryptActionBoundArgs([foo2], "57d3508490fed7c3a870ed862bb4b569f936dab8", "_$$INLINE_ACTION2");
       }
-    }));
+    });
     return <form action={doStuff}>
         <input name="test" type="text" />
         <button type="submit">Submit</button>

@@ -19,12 +19,6 @@ type FnPath =
 // TODO: try capturing as little as possible i.e. if only `x.y` is used, don't pass all of `x`
 // e.g.: `id4.x` here: packages/next-swc/crates/core/tests/fixture/server-actions/server/5/input.js
 
-// TODO: change output to be
-//   _ACTION.bind(null, { get value() { return _encryptActionBoundArgs([x, y, z]) } })
-// and
-//   const [x, y, z] = await _decryptActionBoundArgs($$CLOSURE.value)
-// that way, encrypt/decrypt doesn't need to know about our value() hacks
-
 // duplicated from packages/core/src/build/build.ts
 
 const getHash = (s: string) =>
@@ -93,30 +87,37 @@ const createPlugin =
       {
         body,
         freeVariables,
-        ctx: { addRSDWImport, getActionModuleId, addCryptImport },
+        ctx,
       }: {
         body: t.BlockStatement;
         freeVariables: string[];
         ctx: ThisWithExtras;
       }
     ) => {
+      const actionModuleId = ctx.getActionModuleId();
+      const moduleScope = path.scope.getProgramParent();
+      const extractedIdentifier =
+        moduleScope.generateUidIdentifier("$$INLINE_ACTION");
+
       let extractedFunctionParams = [...path.node.params];
       let extractedFunctionBody = body.body;
       if (freeVariables.length > 0) {
         // only add a closure object if we're not closing over anything.
+        // const [x, y, z] = await _decryptActionBoundArgs(await $$CLOSURE.value);
+
         const closureParam = path.scope.generateUidIdentifier("$$CLOSURE");
         const freeVarsPat = t.arrayPattern(
           freeVariables.map((variable) => t.identifier(variable))
         );
-        const closureExpr = t.memberExpression(
-          t.parenthesizedExpression(
+
+        const closureExpr = t.awaitExpression(
+          t.callExpression(t.identifier("_decryptActionBoundArgs"), [
             t.awaitExpression(
-              t.callExpression(t.identifier("_decryptActionBoundArgs"), [
-                closureParam,
-              ])
-            )
-          ),
-          t.identifier("value")
+              t.memberExpression(closureParam, t.identifier("value"))
+            ),
+            t.stringLiteral(actionModuleId),
+            t.stringLiteral(extractedIdentifier.name),
+          ])
         );
 
         extractedFunctionParams = [closureParam, ...path.node.params];
@@ -127,12 +128,11 @@ const createPlugin =
           ...extractedFunctionBody,
         ];
 
-        addCryptImport();
+        ctx.addCryptImport();
       }
 
       const wrapInRegister = (expr: t.Expression, exportedName: string) => {
-        const actionModuleId = getActionModuleId();
-        const registerServerReferenceId = addRSDWImport();
+        const registerServerReferenceId = ctx.addRSDWImport();
 
         return t.callExpression(registerServerReferenceId, [
           expr,
@@ -140,10 +140,6 @@ const createPlugin =
           t.stringLiteral(exportedName),
         ]);
       };
-
-      const moduleScope = path.scope.getProgramParent();
-      const extractedIdentifier =
-        moduleScope.generateUidIdentifier("$$INLINE_ACTION");
 
       const extractedFunctionExpr = wrapInRegister(
         t.arrowFunctionExpression(
@@ -183,6 +179,7 @@ const createPlugin =
           getInlineActionReplacement({
             id: extractedIdentifier,
             freeVariables,
+            ctx,
           }),
       };
     };
@@ -190,9 +187,11 @@ const createPlugin =
     const getInlineActionReplacement = ({
       id,
       freeVariables,
+      ctx,
     }: {
       id: t.Identifier;
       freeVariables: string[];
+      ctx: ThisWithExtras;
     }) => {
       if (freeVariables.length === 0) {
         return id;
@@ -207,15 +206,19 @@ const createPlugin =
           ),
         ]);
 
-      const _boundArgs = lazyWrapper(
-        t.arrayExpression(
-          freeVariables.map((variable) => t.identifier(variable))
-        )
+      const actionModuleId = ctx.getActionModuleId();
+      const boundArgs = lazyWrapper(
+        t.callExpression(t.identifier("_encryptActionBoundArgs"), [
+          t.arrayExpression(
+            freeVariables.map((variable) => t.identifier(variable))
+          ),
+          t.stringLiteral(actionModuleId),
+          t.stringLiteral(id.name),
+        ])
       );
-      const boundArgs = t.callExpression(
-        t.identifier("_encryptActionBoundArgs"),
-        [_boundArgs]
-      );
+
+      // _ACTION.bind(null, { get value() { return _encryptActionBoundArgs([x, y, z]) } })
+
       return t.callExpression(t.memberExpression(id, t.identifier("bind")), [
         t.nullLiteral(),
         boundArgs,

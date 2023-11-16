@@ -9,7 +9,7 @@ export const _$$INLINE_ACTION5 = _registerServerReference(async x => {
 }, "6342690343ae5afda83cf88d839011024a342b16", "_$$INLINE_ACTION5");
 // hoisted action: <anonymous>
 export const _$$INLINE_ACTION4 = _registerServerReference(async (_$$CLOSURE, ...args) => {
-  var [fn] = (await _decryptActionBoundArgs(_$$CLOSURE)).value;
+  var [fn] = await _decryptActionBoundArgs(await _$$CLOSURE.value, "6342690343ae5afda83cf88d839011024a342b16", "_$$INLINE_ACTION4");
   console.log("checking auth");
   return fn(...args);
 }, "6342690343ae5afda83cf88d839011024a342b16", "_$$INLINE_ACTION4");
@@ -30,9 +30,9 @@ export const test1 = _$$INLINE_ACTION;
 export var test2 = _$$INLINE_ACTION2;
 var test2a = _$$INLINE_ACTION3;
 export { test2a };
-const withAuth = fn => _$$INLINE_ACTION4.bind(null, _encryptActionBoundArgs({
+const withAuth = fn => _$$INLINE_ACTION4.bind(null, {
   get value() {
-    return [fn];
+    return _encryptActionBoundArgs([fn], "6342690343ae5afda83cf88d839011024a342b16", "_$$INLINE_ACTION4");
   }
-}));
+});
 export const test3 = withAuth(_$$INLINE_ACTION5);
