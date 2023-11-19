@@ -1,6 +1,0 @@
-top-level-directive-default-3.invalid.jsx: Not implemented: 'export default' declarations in "use server" files. Try using 'export { name as default }' instead.
-   8 | }
-   9 |
-> 10 | export default test;
-     | ^^^^^^^^^^^^^^^^^^^^
-  11 |

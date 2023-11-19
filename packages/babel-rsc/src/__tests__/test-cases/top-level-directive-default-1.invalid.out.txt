@@ -1,8 +1,0 @@
-top-level-directive-default-1.invalid.jsx: Not implemented: 'export default' declarations in "use server" files. Try using 'export { name as default }' instead.
-  4 | const SOME_CONSTANT = "beep";
-  5 |
-> 6 | export default async (formData) => {
-    | ^
-  7 |   return doSomethingOnTheServer([formData, SOME_CONSTANT]);
-  8 | };
-  9 |

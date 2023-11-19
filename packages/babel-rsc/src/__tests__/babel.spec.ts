@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { fileURLToPath } from "node:url";
-import { readFileSync, readdirSync } from "node:fs";
+import { readFileSync, readdirSync, statSync } from "node:fs";
 import * as path from "path";
 
 import { transformSync } from "@babel/core";
@@ -17,44 +17,54 @@ const pluginOptions: PluginOptions = {
 describe("babel transform", () => {
   const here = path.dirname(fileURLToPath(import.meta.url));
   const inputsDir = path.join(here, "test-cases");
-  const files = readdirSync(inputsDir).filter(
-    (p) => p.endsWith(".jsx") && !p.endsWith(".out.jsx")
-  );
+  const files = readdirSync(inputsDir)
+    .map((p) => path.join(inputsDir, p))
+    .filter((p) => statSync(p).isDirectory())
+    .map((p) => path.join(p, "input.jsx"));
 
-  it.each(files)("case %s", async (inputFile) => {
-    const inputPath = path.join(inputsDir, inputFile);
+  it.each(files)("case %s", async (inputPath) => {
     const inputCode = readFileSync(inputPath, "utf-8");
 
     const onActionFound = vi.fn();
     const inlineActionPLugin = createPlugin({ onActionFound });
 
-    const getResult = () =>
+    const runTransform = () =>
       transformSync(inputCode, {
         filename: inputPath,
-        root: inputsDir,
+        root: path.dirname(inputPath),
         plugins: [
           "@babel/plugin-syntax-jsx",
           [inlineActionPLugin, pluginOptions],
         ],
       });
 
-    if (inputPath.includes(".invalid.")) {
-      let thrown: Error = undefined!;
-      expect(() => {
-        try {
-          getResult();
-        } catch (err) {
-          thrown = err as Error;
-          throw err;
-        }
-      }).toThrow();
-      const outputFile = inputPath.replace(".jsx", ".out.txt");
-      const message = thrown.message["replaceAll"](inputPath, inputFile); // don't write the absolute path into the snapshot
+    type Result<T, E = Error> =
+      | { type: "ok"; value: T }
+      | { type: "err"; error: E };
+
+    const asResult = <T>(fn: () => T): Result<T> => {
+      try {
+        return { type: "ok", value: fn() };
+      } catch (err) {
+        return { type: "err", error: err as Error };
+      }
+    };
+
+    const result = asResult(() => runTransform());
+
+    if (result.type === "err") {
+      const outputFile = path.join(path.dirname(inputPath), "error.txt");
+      const inputFileRelative = path.basename(inputPath);
+      // don't write the absolute path into the snapshot
+      const message = result.error.message["replaceAll"](
+        inputPath,
+        inputFileRelative
+      );
       expect(message).toMatchFileSnapshot(outputFile);
     } else {
-      const result = getResult();
+      const result = runTransform();
       const { code: outputCode } = result!;
-      const outputFile = inputPath.replace(".jsx", ".out.jsx");
+      const outputFile = path.join(path.dirname(inputPath), "output.jsx");
       await expect(outputCode).toMatchFileSnapshot(outputFile);
       expect(onActionFound).toHaveBeenCalled();
     }
