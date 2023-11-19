@@ -1,23 +1,39 @@
 import streams from "node:stream";
 
 import {
+  ClientManifest,
   decodeReply,
   renderToPipeableStream,
 } from "react-server-dom-webpack/server";
-import { createFromNodeStream } from "react-server-dom-webpack/client";
+import type { SSRManifest } from "react-server-dom-webpack/client";
 
-// TODO: can't do the thing next does because `client.edge` with `encodeReply` only got released 2 weeks ago
-// and `client.browser` would need extra hacks
-// (some kind of render div w/ action -> SSR -> createFromReadableStream dance to get the action fn into its `knownServerReferences`.)
-// so skip that for now
-import { encodeReply } from "react-server-dom-webpack/client.browser";
+// We have to use the same client to deserialize + reencode, otherwise it won't know the server references.
+// And as of "0.0.0-experimental-bbb9cb116-20231117", encodeReply is only available in client.edge
+import {
+  createFromReadableStream,
+  encodeReply,
+} from "react-server-dom-webpack/client.edge";
 
 import { readablefromPipeable } from "../utils";
 
 // TODO
 type ReactClientValue = any;
 
-const noClientReferences = new Proxy(
+const noClientReferencesDeserialize: SSRManifest = {
+  moduleLoading: null,
+  moduleMap: new Proxy(
+    {},
+    {
+      get(_, key) {
+        throw new Error(
+          `Not implemented: Client references as action arguments (${key.toString()})`
+        );
+      },
+    }
+  ),
+};
+
+const noClientReferencesSerialize: ClientManifest = new Proxy(
   {},
   {
     get(_, key) {
@@ -59,44 +75,45 @@ async function decryptValue(str: string): Promise<string> {
 
 async function serializeValue(arg: ReactClientValue) {
   const stream = readablefromPipeable(
-    renderToPipeableStream(arg, noClientReferences)
+    renderToPipeableStream(arg, noClientReferencesSerialize)
   );
   return streamToString(stream);
 }
 
 async function deserializeValue(decrypted: string): Promise<BoundArgs> {
+  // This is heavily based on NextJS's implementation of the same thing.
+  // In order to properly recover server references, we need to do this complicated dance of:
+  //
+  // 1. deserialize into client (createFromReadableStream)
+  // 2. reencode from client (encodeReply)
+  // 3. decode from client (decodeReply)
+  //
+  // We have to do it because by encrypting the bound args, we've bypassed React's usual mechanism
+  // that'd do all of this for us in `decodeReply` (in the main action handler).
+  // so essentially we need to reprocess the reply AGAIN by doing a `encodeReply` from a fake client.
+
   console.log("deserializeValue :: decrypted", decrypted);
 
   // Using Flight to deserialize the args from the string.
-  const stream = new streams.Readable({
-    read() {},
+  const stream = new ReadableStream({
+    start(controller) {
+      controller.enqueue(new TextEncoder().encode(decrypted));
+      controller.close();
+    },
   });
-  stream.push(Buffer.from(decrypted));
-  stream.push(null);
 
-  const deserialized = await createFromNodeStream<[ReactClientValue]>(
+  const deserialized = await createFromReadableStream<[ReactClientValue]>(
     stream,
-    noClientReferences
+    { ssrManifest: noClientReferencesDeserialize }
   );
   console.log("deserializeValue :: deserialized", deserialized);
 
   // This extra step ensures that the server references are recovered.
-  // const serverModuleMap = getServerModuleMap();
-  const serverModuleMap = new Proxy(
-    {},
-    {
-      get(_, id) {
-        console.log("tried to get", id, "from serverModuleMap");
-        throw new Error(
-          `Not implemented: Cannot deserialize server reference ${id.toString()}`
-        );
-      },
-      has(_, id) {
-        console.log("checked if", id, "exists in serverModuleMap");
-        return false;
-      },
-    }
-  );
+
+  // @ts-expect-error hack
+  const serverModuleMap = globalThis["__TANGLE_SERVER_ACTIONS_MANIFEST__"];
+
+  console.log("deserializeValue :: (reply trick) encoding...");
   const encoded = await encodeReply(deserialized);
   console.log("deserializeValue :: (reply trick) encoded", encoded);
   const transformed = await decodeReply(

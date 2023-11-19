@@ -2,9 +2,19 @@
 
 import type { Thenable } from "shared/ReactTypes";
 
-import type { SSRManifest } from "./ReactFlightClientConfigWebpackBundler";
+import type { ReactServerValue } from "react-client/src/ReactFlightReplyClient";
 
-export { SSRManifest };
+import type {
+  SSRModuleMap,
+  ModuleLoading,
+} from "react-client/src/ReactFlightClientConfig";
+
+export type SSRManifest = {
+  moduleMap: SSRModuleMap;
+  moduleLoading: ModuleLoading;
+};
+
+export { SSRModuleMap };
 
 export function createServerReference<A extends any[], T>(
   id: any,
@@ -12,7 +22,8 @@ export function createServerReference<A extends any[], T>(
 ): (...args: A) => Promise<T>;
 
 export type Options = {
-  moduleMap?: NonNullable<SSRManifest>;
+  ssrManifest?: SSRManifest;
+  nonce?: string;
 };
 
 declare function createFromReadableStream<T>(
@@ -25,4 +36,8 @@ declare function createFromFetch<T>(
   options?: Options
 ): Thenable<T>;
 
-export { createFromFetch, createFromReadableStream };
+declare function encodeReply(
+  value: ReactServerValue
+): Promise<string | URLSearchParams | FormData>;
+
+export { createFromFetch, createFromReadableStream, encodeReply };

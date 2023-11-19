@@ -11,10 +11,10 @@ import ReactFlightWebpackPlugin, {
   Options as ReactFlightWebpackPluginOptions,
 } from "react-server-dom-webpack/plugin";
 
-import type {
-  ServerManifest,
-  ClientReferenceMetadata,
-} from "react-server-dom-webpack/server";
+import type { ServerManifest } from "react-server-dom-webpack/server";
+import { ImportManifestEntry } from "react-server-dom-webpack/src/shared/ReactFlightImportMetadata";
+import type { SSRModuleMap as SSRModuleMapUnbundled } from "react-server-dom-webpack/src/ReactFlightClientConfigBundlerNode";
+import type { SSRManifest as SSRManifestBundled } from "react-server-dom-webpack/client";
 
 import { runWebpack } from "./run-webpack";
 import Webpack, {
@@ -200,14 +200,14 @@ export const build = async ({
                     "module:" + "@owoce/babel-rsc/plugin-use-server",
                     {
                       // TODO: enable encryption after updating react
-                      encryption: null,
-                      // encryption: {
-                      //   importSource:
-                      //     "@owoce/tangle/dist/runtime/support/encrypt-action-bound-args",
-                      //   encryptFn: "encryptActionBoundArgs",
-                      //   decryptFn: "decryptActionBoundArgs",
-                      // },
-                    },
+                      // encryption: null,
+                      encryption: {
+                        importSource:
+                          "@owoce/tangle/dist/runtime/support/encrypt-action-bound-args",
+                        encryptFn: "encryptActionBoundArgs",
+                        decryptFn: "decryptActionBoundArgs",
+                      },
+                    } satisfies import("@owoce/babel-rsc/plugin-use-server").PluginOptions,
                   ],
                 ],
               },
@@ -365,7 +365,7 @@ export const build = async ({
     INTERMEDIATE_SSR_MANIFEST
   );
 
-  const ssrManifestFromRSDW: SSRManifest = JSON.parse(
+  const ssrManifestFromRSDW: SSRManifestUnbundled = JSON.parse(
     readFileSync(ssrManifestPath, "utf-8")
   );
 
@@ -446,7 +446,7 @@ export const build = async ({
               },
               {
                 test: opts.server.actionSupportModule,
-                layer: LAYERS.shared,
+                layer: LAYERS.rsc,
                 ...SERVER_MODULE_RULES.rsc,
               },
             ],
@@ -853,16 +853,9 @@ function getReplaceMentsOfServerModules({
 // Initial bundle analysis
 //=========================
 
-type SSRManifest = {
-  [id: string]: {
-    [exportName: string]: { specifier: string | number; name: string };
-  };
-};
-
-type SSRManifestActual = {
-  [id: string]: {
-    [exportName: string]: ClientReferenceMetadata;
-  };
+type SSRManifestUnbundled = {
+  moduleLoading: unknown;
+  moduleMap: SSRModuleMapUnbundled;
 };
 
 const createAnalysisContext = () => ({
@@ -1063,7 +1056,7 @@ class RSCAnalysisPlugin {
 
 type RSCPluginOptions = {
   analysisCtx: RSCAnalysisCtx;
-  ssrManifestFromClient: SSRManifest;
+  ssrManifestFromClient: SSRManifestUnbundled;
   ssrManifestFilename: string;
   serverActionsManifestFilename: string;
 };
@@ -1179,7 +1172,6 @@ class RSCServerPlugin {
                   );
                   serverActionsManifest[actionId] = {
                     id: moduleId,
-                    async: false,
                     chunks: chunkIds,
                     name: exportName,
                   };
@@ -1197,10 +1189,10 @@ class RSCServerPlugin {
             });
           });
 
-          const finalSSRManifest: SSRManifestActual = {};
+          const finalSSRModuleMap: SSRManifestBundled["moduleMap"] = {};
           const toRewrite = new Set(Object.keys(ssrManifestSpecifierRewrite));
           for (const [clientModuleId, moduleExportMap] of Object.entries(
-            this.options.ssrManifestFromClient
+            this.options.ssrManifestFromClient.moduleMap!
           )) {
             for (const [exportName, exportInfo] of Object.entries(
               moduleExportMap
@@ -1208,18 +1200,28 @@ class RSCServerPlugin {
               if (exportInfo.specifier in ssrManifestSpecifierRewrite) {
                 const rewriteInfo =
                   ssrManifestSpecifierRewrite[exportInfo.specifier];
-                const newExportInfo = {
+                const newExportInfo: ImportManifestEntry = {
                   name: exportName,
                   id: rewriteInfo.moduleId,
-                  chunks: rewriteInfo.chunkIds, // TODO: these are server-side chunks, is this right...?
-                  async: true, // TODO
+                  chunks: rewriteInfo.chunkIds.flatMap((id) => [
+                    id,
+                    `<no filename: ${id}>`, // Seemingly unused by react, but `preloadModule` breaks if not supplied
+                  ]),
+                  // we used to have this, not sure why it's not in the types anymore
+                  // async: true,
                 };
-                finalSSRManifest[clientModuleId] ||= {};
-                finalSSRManifest[clientModuleId][exportName] = newExportInfo;
+                finalSSRModuleMap[clientModuleId] ||= {};
+                finalSSRModuleMap[clientModuleId][exportName] = newExportInfo;
                 toRewrite.delete(ensureString(exportInfo.specifier));
               }
             }
           }
+          const finalSSRManifest: SSRManifestBundled = {
+            // moduleLoading: this.options.ssrManifestFromClient
+            //   .moduleLoading as any,
+            moduleLoading: null,
+            moduleMap: finalSSRModuleMap,
+          };
 
           if (LOG_OPTIONS.manifestRewrites) {
             console.log("manifest rewrites", ssrManifestSpecifierRewrite);

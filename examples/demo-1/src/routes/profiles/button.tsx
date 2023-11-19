@@ -3,7 +3,7 @@
 "use client";
 
 import type { ComponentProps } from "react";
-import { experimental_useFormStatus as useFormStatus } from "react-dom";
+import { useFormStatus } from "react-dom";
 import { twMerge } from "tailwind-merge";
 
 type Action = (formData: FormData) => Promise<any>;

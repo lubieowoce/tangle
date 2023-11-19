@@ -8,7 +8,10 @@ import type {
 } from "./ReactFlightServerConfigWebpackBundler";
 import type { ServerManifest } from "react-client/src/ReactFlightClientConfig";
 
-import { decodeAction } from "react-server/src/ReactFlightActionServer";
+import {
+  decodeAction,
+  decodeFormState,
+} from "react-server/src/ReactFlightActionServer";
 
 export { ClientManifest, ClientReferenceMetadata, ServerManifest };
 
@@ -23,6 +26,7 @@ export type Options = {
   signal?: AbortSignal;
   context?: Array<[string, ServerContextJSONValue]>;
   onError?: (error: unknown) => void;
+  onPostpone?: (reason: string) => void;
 };
 
 declare function renderToReadableStream(
@@ -36,4 +40,4 @@ declare function decodeReply<T>(
   webpackMap: ServerManifest
 ): Thenable<T>;
 
-export { renderToReadableStream, decodeReply, decodeAction };
+export { renderToReadableStream, decodeReply, decodeAction, decodeFormState };
