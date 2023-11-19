@@ -2,6 +2,17 @@
 import { registerServerReference as _registerServerReference } from "react-server-dom-webpack/server";
 import { decryptActionBoundArgs as _decryptActionBoundArgs } from "@example/my-framework/encryption";
 import { encryptActionBoundArgs as _encryptActionBoundArgs } from "@example/my-framework/encryption";
+var _wrapBoundArgs = thunk => {
+  let cache = undefined;
+  return {
+    get value() {
+      if (!cache) {
+        cache = thunk();
+      }
+      return cache;
+    }
+  };
+};
 /* eslint-disable @typescript-eslint/no-unused-vars */
 import { doSomethingOnTheServer } from "./server-stuff";
 import "./server-stuff";
@@ -34,11 +45,7 @@ export const Test = ({
     const foo2 = foo1;
     // eslint-disable-next-line no-constant-condition
     if (true) {
-      var doStuff = _$$INLINE_ACTION.bind(null, {
-        get value() {
-          return _encryptActionBoundArgs([foo2], "dd2085e09763e728ce459e4843749a293c3f6665", "_$$INLINE_ACTION");
-        }
-      });
+      var doStuff = _$$INLINE_ACTION.bind(null, _wrapBoundArgs(() => _encryptActionBoundArgs([foo2], "dd2085e09763e728ce459e4843749a293c3f6665", "_$$INLINE_ACTION")));
       // eslint-disable-next-line no-inner-declarations
 
       return <form action={doStuff}>

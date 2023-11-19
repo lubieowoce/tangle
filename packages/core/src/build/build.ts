@@ -199,12 +199,14 @@ export const build = async ({
                   [
                     "module:" + "@owoce/babel-rsc",
                     {
-                      encryption: {
-                        importSource:
-                          "@owoce/tangle/dist/runtime/support/encrypt-action-bound-args",
-                        encryptFn: "encryptActionBoundArgs",
-                        decryptFn: "decryptActionBoundArgs",
-                      },
+                      // TODO: enable encryption after updating react
+                      encryption: null,
+                      // encryption: {
+                      //   importSource:
+                      //     "@owoce/tangle/dist/runtime/support/encrypt-action-bound-args",
+                      //   encryptFn: "encryptActionBoundArgs",
+                      //   decryptFn: "decryptActionBoundArgs",
+                      // },
                     },
                   ],
                 ],

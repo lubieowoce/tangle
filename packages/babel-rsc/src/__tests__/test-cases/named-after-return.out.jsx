@@ -2,6 +2,17 @@
 import { registerServerReference as _registerServerReference } from "react-server-dom-webpack/server";
 import { decryptActionBoundArgs as _decryptActionBoundArgs } from "@example/my-framework/encryption";
 import { encryptActionBoundArgs as _encryptActionBoundArgs } from "@example/my-framework/encryption";
+var _wrapBoundArgs = thunk => {
+  let cache = undefined;
+  return {
+    get value() {
+      if (!cache) {
+        cache = thunk();
+      }
+      return cache;
+    }
+  };
+};
 import { doSomethingOnTheServer } from "./server-stuff";
 // hoisted action: doStuff
 export const _$$INLINE_ACTION2 = _registerServerReference(async (_$$CLOSURE2, data) => {
@@ -30,11 +41,7 @@ export const _$$INLINE_ACTION = _registerServerReference(async (_$$CLOSURE, data
 export const Test = ({
   foo
 }) => {
-  var doStuff = _$$INLINE_ACTION.bind(null, {
-    get value() {
-      return _encryptActionBoundArgs([foo2], "57d3508490fed7c3a870ed862bb4b569f936dab8", "_$$INLINE_ACTION");
-    }
-  });
+  var doStuff = _$$INLINE_ACTION.bind(null, _wrapBoundArgs(() => _encryptActionBoundArgs([foo2], "57d3508490fed7c3a870ed862bb4b569f936dab8", "_$$INLINE_ACTION")));
   const foo2 = foo;
   return <form action={doStuff}>
       <input name="test" type="text" />
@@ -46,11 +53,7 @@ export const Test2 = ({
 }) => {
   const foo2 = foo;
   {
-    var doStuff = _$$INLINE_ACTION2.bind(null, {
-      get value() {
-        return _encryptActionBoundArgs([foo2], "57d3508490fed7c3a870ed862bb4b569f936dab8", "_$$INLINE_ACTION2");
-      }
-    });
+    var doStuff = _$$INLINE_ACTION2.bind(null, _wrapBoundArgs(() => _encryptActionBoundArgs([foo2], "57d3508490fed7c3a870ed862bb4b569f936dab8", "_$$INLINE_ACTION2")));
     return <form action={doStuff}>
         <input name="test" type="text" />
         <button type="submit">Submit</button>

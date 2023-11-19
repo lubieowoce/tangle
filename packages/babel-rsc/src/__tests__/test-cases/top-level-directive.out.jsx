@@ -1,5 +1,3 @@
-"use server";
-
 "babel-rsc/actions: {\"id\":\"173aba84aa3f77c287bc2b3ed4eef2dd4b1c9502\",\"names\":[\"test1\",\"test2\",\"default\",\"test3\",\"test2a\"]}";
 import { registerServerReference as _registerServerReference } from "react-server-dom-webpack/server";
 import { doSomethingOnTheServer } from "./server-stuff";

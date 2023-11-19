@@ -1,6 +1,11 @@
 // eslint-disable-next-line @typescript-eslint/ban-ts-comment
 
-import type { NodePath, PluginObj, PluginPass } from "@babel/core";
+import {
+  template,
+  type NodePath,
+  type PluginObj,
+  type PluginPass,
+} from "@babel/core";
 import type * as t from "@babel/types";
 import type { Scope as BabelScope } from "@babel/traverse";
 
@@ -22,6 +27,8 @@ type FnPath =
 // TODO: mode: 'client' | 'server', emit proxies in server mode
 // but in client mode, we should only reach this file if it's top-level "use server" --
 // i guess we just error otherwise?
+
+// TODO: encryption should be applied in top-level "use server" too, which means that we'll need a custom bind() after all...
 
 // duplicated from packages/core/src/build/build.ts
 
@@ -49,8 +56,10 @@ type ThisExtras = {
   hasModuleLevelUseServerDirective: boolean;
   onAction(action: ExtractedActionInfo): void;
   addRSDWImport: () => t.Identifier;
-  addCryptImport(): CryptImport;
+  addCryptImport(): CryptImport | null;
   getActionModuleId: () => string;
+  defineBoundArgsWrapperHelper(): t.Identifier;
+  wrapBoundArgs(expr: t.Expression): t.Expression;
 };
 
 export type PluginOptions = {
@@ -58,14 +67,34 @@ export type PluginOptions = {
     importSource: string;
     encryptFn: string;
     decryptFn: string;
-  };
+  } | null;
 };
 
 type ThisWithExtras = PluginPass & ThisExtras;
 
 type CryptImport = {
-  encrypt: t.Identifier;
-  decrypt: t.Identifier;
+  encryptFn: t.Identifier;
+  decryptFn: t.Identifier;
+};
+
+const LAZY_WRAPPER_VALUE_KEY = "value";
+
+// React doesn't like non-enumerable properties on serialized objects (see `isSimpleObject`),
+// so we have to use closure scope for the cache (instead of a non-enumerable `this._cache`)
+const _buildLazyWrapperHelper = template(`(thunk) => {
+  let cache = undefined;
+  return {
+    get ${LAZY_WRAPPER_VALUE_KEY}() {
+      if (!cache) {
+        cache = thunk();
+      }
+      return cache;
+    }
+  }
+}`);
+
+const buildLazyWrapperHelper = () => {
+  return (_buildLazyWrapperHelper({}) as t.ExpressionStatement).expression;
 };
 
 const createPlugin =
@@ -122,22 +151,30 @@ const createPlugin =
         // only add a closure object if we're not closing over anything.
         // const [x, y, z] = await _decryptActionBoundArgs(await $$CLOSURE.value);
 
-        const { decrypt: decryptFnId } = ctx.addCryptImport();
+        const encryption = ctx.addCryptImport();
 
         const closureParam = path.scope.generateUidIdentifier("$$CLOSURE");
         const freeVarsPat = t.arrayPattern(
           freeVariables.map((variable) => t.identifier(variable))
         );
 
-        const closureExpr = t.awaitExpression(
-          t.callExpression(decryptFnId, [
-            t.awaitExpression(
-              t.memberExpression(closureParam, t.identifier("value"))
-            ),
-            t.stringLiteral(actionModuleId),
-            t.stringLiteral(extractedIdentifier.name),
-          ])
-        );
+        const closureExpr = encryption
+          ? t.awaitExpression(
+              t.callExpression(encryption.decryptFn, [
+                t.awaitExpression(
+                  t.memberExpression(
+                    closureParam,
+                    t.identifier(LAZY_WRAPPER_VALUE_KEY)
+                  )
+                ),
+                t.stringLiteral(actionModuleId),
+                t.stringLiteral(extractedIdentifier.name),
+              ])
+            )
+          : t.memberExpression(
+              closureParam,
+              t.identifier(LAZY_WRAPPER_VALUE_KEY)
+            );
 
         extractedFunctionParams = [closureParam, ...path.node.params];
         extractedFunctionBody = [
@@ -213,26 +250,20 @@ const createPlugin =
       if (freeVariables.length === 0) {
         return id;
       }
-      const { encrypt: encryptFnId } = ctx.addCryptImport();
-      const lazyWrapper = (expr: t.Expression) =>
-        t.objectExpression([
-          t.objectMethod(
-            "get",
-            t.identifier("value"),
-            [],
-            t.blockStatement([t.returnStatement(expr)])
-          ),
-        ]);
+      const encryption = ctx.addCryptImport();
 
       const actionModuleId = ctx.getActionModuleId();
-      const boundArgs = lazyWrapper(
-        t.callExpression(encryptFnId, [
-          t.arrayExpression(
-            freeVariables.map((variable) => t.identifier(variable))
-          ),
-          t.stringLiteral(actionModuleId),
-          t.stringLiteral(id.name),
-        ])
+      const capturedVarsExpr = t.arrayExpression(
+        freeVariables.map((variable) => t.identifier(variable))
+      );
+      const boundArgs = ctx.wrapBoundArgs(
+        encryption
+          ? t.callExpression(encryption.encryptFn, [
+              capturedVarsExpr,
+              t.stringLiteral(actionModuleId),
+              t.stringLiteral(id.name),
+            ])
+          : capturedVarsExpr
       );
 
       // _ACTION.bind(null, { get value() { return _encryptActionBoundArgs([x, y, z]) } })
@@ -268,15 +299,18 @@ const createPlugin =
         });
 
         this.addCryptImport = once(() => {
+          if (!options.encryption) {
+            return null;
+          }
           const path = file.path;
 
           return {
-            encrypt: addNamedImport(
+            encryptFn: addNamedImport(
               path,
               options.encryption.encryptFn,
               options.encryption.importSource
             ),
-            decrypt: addNamedImport(
+            decryptFn: addNamedImport(
               path,
               options.encryption.decryptFn,
               options.encryption.importSource
@@ -293,6 +327,24 @@ const createPlugin =
 
           return getServerActionModuleId(filePathForId!);
         });
+
+        this.defineBoundArgsWrapperHelper = once(() => {
+          const id =
+            this.file.path.scope.generateUidIdentifier("wrapBoundArgs");
+          this.file.path.scope.push({
+            id,
+            kind: "var",
+            init: buildLazyWrapperHelper(),
+          });
+          return id;
+        });
+
+        this.wrapBoundArgs = (expr) => {
+          const wrapperFn = this.defineBoundArgsWrapperHelper();
+          return t.callExpression(wrapperFn, [
+            t.arrowFunctionExpression([], expr),
+          ]);
+        };
       },
 
       visitor: {

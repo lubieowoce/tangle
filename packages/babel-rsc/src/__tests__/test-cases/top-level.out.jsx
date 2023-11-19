@@ -2,6 +2,17 @@
 import { decryptActionBoundArgs as _decryptActionBoundArgs } from "@example/my-framework/encryption";
 import { encryptActionBoundArgs as _encryptActionBoundArgs } from "@example/my-framework/encryption";
 import { registerServerReference as _registerServerReference } from "react-server-dom-webpack/server";
+var _wrapBoundArgs = thunk => {
+  let cache = undefined;
+  return {
+    get value() {
+      if (!cache) {
+        cache = thunk();
+      }
+      return cache;
+    }
+  };
+};
 import { doSomethingOnTheServer } from "./server-stuff";
 // hoisted action: <anonymous>
 export const _$$INLINE_ACTION5 = _registerServerReference(async x => {
@@ -30,9 +41,5 @@ export const test1 = _$$INLINE_ACTION;
 export var test2 = _$$INLINE_ACTION2;
 var test2a = _$$INLINE_ACTION3;
 export { test2a };
-const withAuth = fn => _$$INLINE_ACTION4.bind(null, {
-  get value() {
-    return _encryptActionBoundArgs([fn], "6342690343ae5afda83cf88d839011024a342b16", "_$$INLINE_ACTION4");
-  }
-});
+const withAuth = fn => _$$INLINE_ACTION4.bind(null, _wrapBoundArgs(() => _encryptActionBoundArgs([fn], "6342690343ae5afda83cf88d839011024a342b16", "_$$INLINE_ACTION4")));
 export const test3 = withAuth(_$$INLINE_ACTION5);
