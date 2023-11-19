@@ -14,7 +14,14 @@
   "type": "commonjs",
   "main": "dist/index.js",
   "exports": {
-    ".": "./dist/index.js"
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./plugin-use-server": {
+      "types": "./dist/plugin-use-server.d.ts",
+      "default": "./dist/plugin-use-server.js"
+    }
   },
   "files": [
     "./src",

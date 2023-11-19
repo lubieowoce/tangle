@@ -197,7 +197,7 @@ export const build = async ({
               options: {
                 plugins: [
                   [
-                    "module:" + "@owoce/babel-rsc",
+                    "module:" + "@owoce/babel-rsc/plugin-use-server",
                     {
                       // TODO: enable encryption after updating react
                       encryption: null,
