@@ -280,7 +280,12 @@ export const build = async ({
       },
     })
   );
-  await runWebpack(analysisConfig);
+  await runWebpack(
+    analysisConfig,
+    // FIXME: the way we do the analysis is kinda wonky (ignoring conditions and such),
+    // so it generates a ton of noise. hide the warnings until we figure out a better way to deal with it.
+    { quiet: true }
+  );
 
   console.log("analysis context");
   console.log(analysisCtx);
@@ -653,14 +658,14 @@ const createProxyOfClientModule = ({
 const getHash = (s: string) =>
   crypto.createHash("sha1").update(s).digest().toString("hex");
 
-// NOTE: the "<id>#<exportedName>" structure is prescribed by RSDW --
-// that's the id that `registerServerReference` will create if given an export name.
-// (if we wanted to use a different scheme, we can pass `null` there, but why fight the convention?)
-const getServerActionReferenceId = (resource: string, name: string) =>
-  getServerActionReferenceIdForModuleId(
-    getServerActionModuleId(resource),
-    name
-  );
+// // NOTE: the "<id>#<exportedName>" structure is prescribed by RSDW --
+// // that's the id that `registerServerReference` will create if given an export name.
+// // (if we wanted to use a different scheme, we can pass `null` there, but why fight the convention?)
+// const getServerActionReferenceId = (resource: string, name: string) =>
+//   getServerActionReferenceIdForModuleId(
+//     getServerActionModuleId(resource),
+//     name
+//   );
 
 // NOTE: the "<id>#<exportedName>" structure is prescribed by RSDW --
 // that's the id that `registerServerReference` will create if given an export name.
@@ -672,23 +677,25 @@ const getServerActionReferenceIdForModuleId = (id: string, name: string) =>
 // we're only looking at the name of the module,
 // so we'll give it the same id even if the contents changed completely!
 // this id should probably look at some kind of source-hash...
-const getServerActionModuleId = (resource: string) =>
+const createServerActionModuleId = (resource: string) =>
   getHash(pathToFileURL(resource).href);
 
 const createProxyOfServerModule = ({
   resource,
   exports,
+  analysisCtx,
 }: {
   resource: string;
   exports: string[];
+  analysisCtx: RSCAnalysisCtx;
 }) => {
   const CREATE_PROXY_MOD_PATH = path.resolve(
     __dirname,
     "../runtime/support/server-action-proxy-for-client"
   );
 
-  const getActionId = (name: string) =>
-    getServerActionReferenceId(resource, name);
+  const getActionId = (exportName: string) =>
+    getActionIdFromCtx(analysisCtx, resource, exportName);
 
   const generatedCode = [
     `import { createServerActionProxy } from ${stringLiteral(
@@ -739,7 +746,7 @@ const enhanceUseServerModuleForServer = ({
 
   const generatedCode: string[] = [];
 
-  const actionModuleId = getServerActionModuleId(resource);
+  const actionModuleId = createServerActionModuleId(resource);
 
   const getRegisterStmt = (exportName: string) =>
     [
@@ -790,13 +797,7 @@ function getActionHandlersModuleSource(analysisCtx: RSCAnalysisCtx) {
     );
 
     for (const exportName of modExports) {
-      const moduleId =
-        analysisCtx.actionModuleIds.get(resource) ??
-        getServerActionModuleId(resource);
-      const actionId = getServerActionReferenceIdForModuleId(
-        moduleId,
-        exportName
-      );
+      const actionId = getActionIdFromCtx(analysisCtx, resource, exportName);
       const expr = `${modImportedName}.${exportName}`;
       handlersById[actionId] = expr;
     }
@@ -835,6 +836,7 @@ function getReplaceMentsOfServerModules({
       : createProxyOfServerModule({
           resource,
           exports: modExports,
+          analysisCtx,
         });
     if (LOG_OPTIONS.generatedCode) {
       console.log("VirtualModule (rsc): " + resource, "\n" + source + "\n");
@@ -956,15 +958,24 @@ class RSCAnalysisPlugin {
               ) {
                 return false;
               }
-              if (node.expression.value === "use server") {
-                return true;
-              }
               if (typeof node.expression.value === "string") {
                 const stashedInfo = getStashedInfo(node.expression.value);
                 if (stashedInfo) {
                   prebuiltInfo = stashedInfo;
+                  console.log(
+                    "GOT STASHED INFO",
+                    stashedInfo,
+                    parser.state.module.resource
+                  );
                   return true;
                 }
+              }
+              if (node.expression.value === "use server") {
+                console.log(
+                  'GOT TOP-LEVEL "use server"',
+                  parser.state.module.resource
+                );
+                return true;
               }
             });
 
@@ -1159,11 +1170,9 @@ class RSCServerPlugin {
                 }
                 for (const exportName of moduleInfo.exports) {
                   const resource = moduleInfo.originalResource;
-                  const actionModuleId =
-                    analysisCtx.actionModuleIds.get(resource) ??
-                    getServerActionModuleId(resource);
-                  const actionId = getServerActionReferenceIdForModuleId(
-                    actionModuleId,
+                  const actionId = getActionIdFromCtx(
+                    analysisCtx,
+                    resource,
                     exportName
                   );
                   serverActionsManifest[actionId] = {
@@ -1284,6 +1293,7 @@ function getModuleReplacementsForServer(analysisCtx: RSCAnalysisCtx) {
       const source = createProxyOfServerModule({
         resource,
         exports: getExportsFromCtx(analysisCtx, resource, "server"),
+        analysisCtx,
       });
       if (LOG_OPTIONS.generatedCode) {
         console.log(
@@ -1553,4 +1563,15 @@ const getExportsFromCtx = (
     );
   }
   return res;
+};
+
+const getActionIdFromCtx = (
+  analysisCtx: RSCAnalysisCtx,
+  resource: string,
+  exportName: string
+) => {
+  const moduleId =
+    analysisCtx.actionModuleIds.get(resource) ??
+    createServerActionModuleId(resource);
+  return getServerActionReferenceIdForModuleId(moduleId, exportName);
 };

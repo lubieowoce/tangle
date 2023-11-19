@@ -44,6 +44,7 @@ type PluginInjected = {
 type ExtractedActionInfo = { localName?: string; exportedName: string };
 
 type ThisExtras = {
+  didSkip?: boolean;
   extractedActions: ExtractedActionInfo[];
   hasModuleLevelUseServerDirective: boolean;
   onAction(action: ExtractedActionInfo): void;
@@ -244,6 +245,12 @@ const createPlugin =
 
     return {
       pre(file) {
+        if (!file.code.includes("use server")) {
+          this.didSkip = true;
+          file.path.skip();
+          return;
+        }
+
         this.extractedActions = [];
         this.hasModuleLevelUseServerDirective = false;
 
@@ -293,10 +300,11 @@ const createPlugin =
           if (
             path.node.directives.some((d) => d.value.value === "use server")
           ) {
-            // throw path.buildCodeFrameError(
-            //   `top-level "use server" directives are not supported yet`
-            // );
             this.hasModuleLevelUseServerDirective = true;
+            // remove the directive so that downstream consumers don't transform the module again.
+            path.node.directives = path.node.directives.filter(
+              (d) => d.value.value !== "use server"
+            );
           }
         },
 
@@ -548,6 +556,9 @@ const createPlugin =
       },
 
       post(file) {
+        if (this.didSkip) {
+          return;
+        }
         if (this.extractedActions.length === 0) {
           return;
         }

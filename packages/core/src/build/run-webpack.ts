@@ -1,15 +1,16 @@
 import { Configuration, Stats, StatsError, webpack } from "webpack";
 
 type WebpackResult = { err: Error | undefined; stats: Stats | undefined };
+type LogOpts = { quiet?: boolean };
 
-export const runWebpack = async (config: Configuration) => {
+export const runWebpack = async (config: Configuration, logOpts?: LogOpts) => {
   const pRes = new Promise<WebpackResult>((resolve) => {
     webpack(config, (err, stats) => {
       resolve({ err, stats });
     });
   });
   const { err, stats } = await pRes;
-  const ok = report({ err, stats });
+  const ok = report({ err, stats }, logOpts);
   if (!ok) {
     throw new Error(
       "Encountered errors from webpack, aborting. See output above"
@@ -24,7 +25,10 @@ export const runWebpack = async (config: Configuration) => {
 /**
  * based on https://webpack.js.org/api/node/#error-handling
  */
-const report = ({ err, stats }: WebpackResult) => {
+const report = (
+  { err, stats }: WebpackResult,
+  { quiet = false }: LogOpts = {}
+) => {
   // webpack crashed
   if (err) {
     console.error(err.stack || err);
@@ -46,7 +50,7 @@ const report = ({ err, stats }: WebpackResult) => {
     return false;
   }
 
-  if (stats.hasWarnings()) {
+  if (!quiet && stats.hasWarnings()) {
     logMany(info.warnings);
   }
 
