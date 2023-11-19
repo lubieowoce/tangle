@@ -4,7 +4,7 @@ import { readFileSync, readdirSync } from "node:fs";
 import * as path from "path";
 
 import { transformSync } from "@babel/core";
-import { createPlugin, PluginOptions } from "../babel-plugin-inline-actions.js";
+import { createPlugin, PluginOptions } from "../babel-rsc-actions.js";
 
 const pluginOptions: PluginOptions = {
   encryption: {

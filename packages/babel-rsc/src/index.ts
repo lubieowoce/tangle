@@ -1,4 +1,4 @@
-import BPIA = require("./babel-plugin-inline-actions");
+import BPIA = require("./babel-rsc-actions");
 const { createPlugin } = BPIA;
 
 type Exported = ReturnType<typeof createPlugin> & {

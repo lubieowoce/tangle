@@ -19,6 +19,10 @@ type FnPath =
 // TODO: try capturing as little as possible i.e. if only `x.y` is used, don't pass all of `x`
 // e.g.: `id4.x` here: packages/next-swc/crates/core/tests/fixture/server-actions/server/5/input.js
 
+// TODO: mode: 'client' | 'server', emit proxies in server mode
+// but in client mode, we should only reach this file if it's top-level "use server" --
+// i guess we just error otherwise?
+
 // duplicated from packages/core/src/build/build.ts
 
 const getHash = (s: string) =>
@@ -41,6 +45,7 @@ type ExtractedActionInfo = { exportedName: string };
 
 type ThisExtras = {
   extractedActions: ExtractedActionInfo[];
+  hasModuleLevelUseServerDirective: boolean;
   onAction(action: ExtractedActionInfo): void;
   addRSDWImport: () => t.Identifier;
   addCryptImport(): CryptImport;
@@ -240,6 +245,7 @@ const createPlugin =
     return {
       pre(file) {
         this.extractedActions = [];
+        this.hasModuleLevelUseServerDirective = false;
 
         this.onAction = (info) => {
           onActionFound?.({ file: file.opts.filename ?? undefined, ...info });
@@ -283,6 +289,17 @@ const createPlugin =
       },
 
       visitor: {
+        Program(path) {
+          if (
+            path.node.directives.some((d) => d.value.value === "use server")
+          ) {
+            // throw path.buildCodeFrameError(
+            //   `top-level "use server" directives are not supported yet`
+            // );
+            this.hasModuleLevelUseServerDirective = true;
+          }
+        },
+
         // `() => {}`
         ArrowFunctionExpression(path, state) {
           const { body } = path.node;
@@ -391,6 +408,87 @@ const createPlugin =
             exportedName: extractedIdentifier.name,
           });
         },
+
+        // Top-level "use server"
+
+        ExportDeclaration() {
+          // TODO: i guess this can be either default or named
+          // TODO: where does `export { x, y }` go?
+          // that one's tricky, might need to accumulate names for later processing
+          // or just insert registerServerReference() calls blindly?
+          // we just gotta make sure we don't step on our own toes and register something twice
+        },
+        ExportDefaultDeclaration(path) {
+          if (!this.hasModuleLevelUseServerDirective) {
+            return;
+          }
+          // TODO
+          throw path.buildCodeFrameError(
+            `Not implemented: 'export default' declarations in "use server" files`
+          );
+        },
+
+        ExportNamedDeclaration(path) {
+          if (!this.hasModuleLevelUseServerDirective) {
+            return;
+          }
+          if (path.node.specifiers.length > 0) {
+            throw path.buildCodeFrameError(
+              `Not implemented: standalone export declarations`
+            );
+          }
+          if (!path.node.declaration) {
+            throw path.buildCodeFrameError(
+              `Internal error: Unexpected 'ExportNamedDeclaration' without declarations `
+            );
+          }
+
+          const registerServerReferenceId = this.addRSDWImport();
+          const actionModuleId = this.getActionModuleId();
+
+          const identifiers: t.Identifier[] = (() => {
+            const innerPath = path.get("declaration");
+            if (innerPath.isVariableDeclaration()) {
+              return innerPath.get("declarations").map((d) => {
+                // TODO: insert `typeof <identifier> === 'function'` check -- it's a variable, so it could be anything
+                const id = d.node.id;
+                if (!t.isIdentifier(id)) {
+                  // TODO
+                  throw innerPath.buildCodeFrameError(
+                    "Not implemented: whatever this is"
+                  );
+                }
+                return id;
+              });
+            } else if (innerPath.isFunctionDeclaration()) {
+              if (!innerPath.get("async")) {
+                throw innerPath.buildCodeFrameError(
+                  `Functions exported from "use server" files must be async.`
+                );
+              }
+              return [innerPath.get("id").node!];
+            } else {
+              throw innerPath.buildCodeFrameError(
+                `Not implemented (or possibly unsupported): whatever is being exported here`
+              );
+            }
+          })();
+
+          path.insertAfter(
+            identifiers.map((identifier) =>
+              t.callExpression(registerServerReferenceId, [
+                identifier,
+                t.stringLiteral(actionModuleId),
+                // TODO: we're assuming the local and exported name are the same,
+                // which is true for vars and functions, but `export { x as y }` can ruin that...
+                t.stringLiteral(identifier.name),
+              ])
+            )
+          );
+          for (const identifier of identifiers) {
+            this.onAction({ exportedName: identifier.name });
+          }
+        },
       },
 
       post(file) {
@@ -399,7 +497,7 @@ const createPlugin =
         }
         console.log("extracted actions", this.extractedActions);
         const stashedData =
-          "babel-plugin-inline-actions: " +
+          "babel-rsc/actions: " +
           JSON.stringify({
             id: this.getActionModuleId(),
             names: this.extractedActions.map((e) => e.exportedName),

@@ -1,4 +1,4 @@
-"babel-plugin-inline-actions: {\"id\":\"57d3508490fed7c3a870ed862bb4b569f936dab8\",\"names\":[\"_$$INLINE_ACTION\",\"_$$INLINE_ACTION2\"]}";
+"babel-rsc/actions: {\"id\":\"57d3508490fed7c3a870ed862bb4b569f936dab8\",\"names\":[\"_$$INLINE_ACTION\",\"_$$INLINE_ACTION2\"]}";
 import { registerServerReference as _registerServerReference } from "react-server-dom-webpack/server";
 import { decryptActionBoundArgs as _decryptActionBoundArgs } from "@example/my-framework/encryption";
 import { encryptActionBoundArgs as _encryptActionBoundArgs } from "@example/my-framework/encryption";

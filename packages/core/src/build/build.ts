@@ -940,7 +940,7 @@ class RSCAnalysisPlugin {
             let prebuiltInfo: PrebuiltModuleInfo | null = null;
 
             const getStashedInfo = (str: string) => {
-              const prefix = "babel-plugin-inline-actions: ";
+              const prefix = "babel-rsc/actions: ";
               if (!str.startsWith(prefix)) {
                 return null;
               }
