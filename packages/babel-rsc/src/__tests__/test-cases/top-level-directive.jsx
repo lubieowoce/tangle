@@ -11,23 +11,10 @@ export async function test2() {
   return doSomethingOnTheServer([SOME_CONSTANT]);
 }
 
-// export default async () => {};
+export { test2 as default, test2 as test3 };
 
-// async function test2a(formData) {
-//   return doSomethingOnTheServer([formData, SOME_CONSTANT]);
-// }
+async function test2a(formData) {
+  return doSomethingOnTheServer([formData, SOME_CONSTANT]);
+}
 
-// export { test2a };
-
-// const withAuth =
-//   (fn) =>
-//   async (...args) => {
-//     "use server";
-//     console.log("checking auth");
-//     return fn(...args);
-//   };
-
-// export const test3 = withAuth(async (x) => {
-//   "use server";
-//   return doSomethingOnTheServer([x, SOME_CONSTANT]);
-// });
+export { test2a };

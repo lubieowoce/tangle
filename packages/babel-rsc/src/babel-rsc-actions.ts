@@ -41,7 +41,7 @@ type PluginInjected = {
   ) => void;
 };
 
-type ExtractedActionInfo = { exportedName: string };
+type ExtractedActionInfo = { localName?: string; exportedName: string };
 
 type ThisExtras = {
   extractedActions: ExtractedActionInfo[];
@@ -312,6 +312,7 @@ const createPlugin =
           assertIsAsyncFn(path);
 
           const freeVariables = getFreeVariables(path);
+          const tlb = getTopLevelBinding(path);
 
           const { extractedIdentifier, getReplacement } =
             extractInlineActionToTopLevel(path, state, {
@@ -323,6 +324,7 @@ const createPlugin =
           path.replaceWith(getReplacement());
 
           this.onAction({
+            localName: tlb?.identifier.name,
             exportedName: extractedIdentifier.name,
           });
         },
@@ -379,6 +381,7 @@ const createPlugin =
           }
 
           this.onAction({
+            localName: tlb?.identifier.name,
             exportedName: extractedIdentifier.name,
           });
         },
@@ -403,28 +406,29 @@ const createPlugin =
               ctx: this,
             });
 
+          const tlb = getTopLevelBinding(path);
+
           path.replaceWith(getReplacement());
           this.onAction({
+            localName: tlb?.identifier.name,
             exportedName: extractedIdentifier.name,
           });
         },
 
         // Top-level "use server"
 
-        ExportDeclaration() {
-          // TODO: i guess this can be either default or named
-          // TODO: where does `export { x, y }` go?
-          // that one's tricky, might need to accumulate names for later processing
-          // or just insert registerServerReference() calls blindly?
-          // we just gotta make sure we don't step on our own toes and register something twice
-        },
+        // ExportDeclaration(path) {
+        //   // TODO: i guess this can be either default or named. maybe worth unifying some of the code for default & named
+        //   // when we implement default exports?
+        // },
+
         ExportDefaultDeclaration(path) {
           if (!this.hasModuleLevelUseServerDirective) {
             return;
           }
           // TODO
           throw path.buildCodeFrameError(
-            `Not implemented: 'export default' declarations in "use server" files`
+            `Not implemented: 'export default' declarations in "use server" files. Try using 'export { name as default }' instead.`
           );
         },
 
@@ -432,19 +436,76 @@ const createPlugin =
           if (!this.hasModuleLevelUseServerDirective) {
             return;
           }
+
+          const registerServerReferenceId = this.addRSDWImport();
+          const actionModuleId = this.getActionModuleId();
+
+          const createRegisterCall = (
+            identifier: t.Identifier,
+            exported: t.Identifier | t.StringLiteral = identifier
+          ) => {
+            const exportedName = t.isIdentifier(exported)
+              ? exported.name
+              : exported.value;
+            return t.callExpression(registerServerReferenceId, [
+              identifier,
+              t.stringLiteral(actionModuleId),
+              t.stringLiteral(exportedName),
+            ]);
+          };
+
           if (path.node.specifiers.length > 0) {
-            throw path.buildCodeFrameError(
-              `Not implemented: standalone export declarations`
-            );
+            for (const specifier of path.node.specifiers) {
+              // `export * as ns from './foo';`
+              if (t.isExportNamespaceSpecifier(specifier)) {
+                throw path.buildCodeFrameError(
+                  "Not implemented: Namespace exports"
+                );
+              } else if (t.isExportDefaultSpecifier(specifier)) {
+                // `export default foo;`
+                console.log(specifier.exported);
+                throw path.buildCodeFrameError(
+                  "Not implemented (ExportDefaultSpecifier in ExportNamedDeclaration)"
+                );
+              } else if (t.isExportSpecifier(specifier)) {
+                // `export { foo };`
+                // `export { foo as [bar|default] };`
+                const localName = specifier.local.name;
+                const exportedName = t.isIdentifier(specifier.exported)
+                  ? specifier.exported.name
+                  : specifier.exported.value;
+
+                // if we're reexporting an existing action under a new name, we shouldn't register() it again.
+                if (
+                  !this.extractedActions.some(
+                    (info) => info.localName === localName
+                  )
+                ) {
+                  // referencing the function's local identifier here *should* be safe (w.r.t. TDZ) because
+                  // 1. if it's a `export async function foo() {}`, the declaration will be hoisted,
+                  //    so it's safe to reference no matter how the declarations are ordered
+                  // 2. if it's an `export const foo = async () => {}`, then the standalone `export { foo }`
+                  //    has to follow the definition, so we can reference it right before the export decl as well
+                  path.insertBefore(
+                    createRegisterCall(specifier.local, specifier.exported)
+                  );
+                }
+
+                this.onAction({ localName, exportedName });
+              } else {
+                throw path.buildCodeFrameError(
+                  "Not implemented: whatever this is"
+                );
+              }
+            }
+            return;
           }
+
           if (!path.node.declaration) {
             throw path.buildCodeFrameError(
               `Internal error: Unexpected 'ExportNamedDeclaration' without declarations `
             );
           }
-
-          const registerServerReferenceId = this.addRSDWImport();
-          const actionModuleId = this.getActionModuleId();
 
           const identifiers: t.Identifier[] = (() => {
             const innerPath = path.get("declaration");
@@ -475,18 +536,13 @@ const createPlugin =
           })();
 
           path.insertAfter(
-            identifiers.map((identifier) =>
-              t.callExpression(registerServerReferenceId, [
-                identifier,
-                t.stringLiteral(actionModuleId),
-                // TODO: we're assuming the local and exported name are the same,
-                // which is true for vars and functions, but `export { x as y }` can ruin that...
-                t.stringLiteral(identifier.name),
-              ])
-            )
+            identifiers.map((identifier) => createRegisterCall(identifier))
           );
           for (const identifier of identifiers) {
-            this.onAction({ exportedName: identifier.name });
+            this.onAction({
+              localName: identifier.name,
+              exportedName: identifier.name,
+            });
           }
         },
       },
