@@ -722,53 +722,6 @@ const createProxyOfServerModule = ({
   return generatedCode.join("\n");
 };
 
-const enhanceUseServerModuleForServer = ({
-  resource,
-  originalSource,
-  exports,
-}: {
-  resource: string;
-  originalSource: string;
-  exports: string[];
-}) => {
-  if (exports.includes("default")) {
-    // if the export is a default export, we can't just use its name
-    // in the addServerActionMetadata call.
-    // we'd need to do some kind of babel transform to support that
-    throw new Error(
-      `Found default export in \n  ${originalSource}\n` +
-        "Default exports from server actions are not supported yet. Please use a named export."
-    );
-  }
-
-  const prefix = [
-    `import { registerServerReference } from 'react-server-dom-webpack/server';`,
-    ``,
-  ];
-
-  const generatedCode: string[] = [];
-
-  const actionModuleId = createServerActionModuleId(resource);
-
-  const getRegisterStmt = (exportName: string) =>
-    [
-      `if (typeof ${exportName} === 'function') {`,
-      `  registerServerReference(`,
-      `    ${exportName},`,
-      `    ${stringLiteral(actionModuleId)},`,
-      `    ${stringLiteral(exportName)},`,
-      `  );`,
-      `}`,
-    ].join("\n");
-
-  for (const exportName of exports) {
-    const stmt = getRegisterStmt(exportName);
-    generatedCode.push(stmt);
-  }
-
-  return [...prefix, originalSource, ...generatedCode].join("\n");
-};
-
 function getActionHandlersModule(
   analysisCtx: RSCAnalysisCtx,
   targetFilePath: string
@@ -827,14 +780,13 @@ function getReplaceMentsOfServerModules({
 
     const source = isServer
       ? analysisCtx.actionModuleIds.has(resource)
-        ? // if we have a pre-generated id for this module, we've already transformed it in babel.
+        ? // if we have a pre-generated id for this module, we've already transformed it in babel-rsc.
           getOriginalSource(mod)
-        : // hasn't been transformed yet.
-          enhanceUseServerModuleForServer({
-            resource,
-            exports: modExports,
-            originalSource: getOriginalSource(mod),
-          })
+        : (() => {
+            throw new Error(
+              `Internal error: Server module '${resource}' not found in analysisCtx.actionModuleIds`
+            );
+          })()
       : createProxyOfServerModule({
           resource,
           exports: modExports,
@@ -1299,17 +1251,14 @@ function getModuleReplacementsForServer(analysisCtx: RSCAnalysisCtx) {
       virtualModules[virtualPath] = source;
     }
     {
+      // "use server" modules should already be transformed by babel-rsc.
       const virtualPath = getVirtualPathRSC(resource);
-      const source = analysisCtx.actionModuleIds.has(resource)
-        ? getOriginalSource(mod)
-        : enhanceUseServerModuleForServer({
-            resource,
-            exports: getExportsFromCtx(analysisCtx, resource, "server"),
-            originalSource: getOriginalSource(mod),
-          });
-      if (LOG_OPTIONS.generatedCode) {
-        console.log("VirtualModule (rsc):" + virtualPath, "\n" + source + "\n");
+      if (!analysisCtx.actionModuleIds.has(resource)) {
+        throw new Error(
+          `Internal error: Server module '${resource}' not found in analysisCtx.actionModuleIds`
+        );
       }
+      const source = getOriginalSource(mod);
       virtualModules[virtualPath] = source;
     }
   }
