@@ -1,10 +1,19 @@
 import { Link } from "@owoce/tangle/client";
 import { notFound } from "@owoce/tangle/server";
-import { getDbClient, getProfileFromDb } from "../../../server/db";
-import { Timestamp } from "../../../components/timestamp";
+import { z } from "zod";
+import { zfd } from "zod-form-data";
 import { linkStyles } from "../../../components/styles";
+import { Timestamp } from "../../../components/timestamp";
+import { ProfileData, getDbClient, getProfileFromDb } from "../../../server/db";
+import { updateProfile } from "../../profiles/actions";
+import { ProfileEditForm } from "./profile-edit-form";
 
 type Params = { profileId: string };
+
+const profileFormSchema = zfd.formData({
+  name: z.optional(zfd.text()),
+  description: z.optional(zfd.text()),
+});
 
 export default async function ProfileView({ params }: { params: Params }) {
   const profileId = Number(params.profileId ?? "0");
@@ -18,6 +27,23 @@ export default async function ProfileView({ params }: { params: Params }) {
     console.log("failed to fetch profile " + profileId + ", throwing notFound");
     notFound();
   });
+
+  const updateProfileAction = async (
+    state: { profile: ProfileData; message: string },
+    action: FormData
+  ) => {
+    "use server";
+    console.log("received state", state);
+    console.log("received formdata", action);
+    const update = profileFormSchema.parse(action);
+    try {
+      const updatedProfile = await updateProfile(profileId, update);
+      return { profile: updatedProfile, message: "Profile updated!" };
+    } catch (err) {
+      return { profile: state.profile, message: "Failed to update profile." };
+    }
+  };
+
   const meta = <title>{`Profile: ${profile.name}`}</title>;
   return (
     <>
@@ -28,6 +54,9 @@ export default async function ProfileView({ params }: { params: Params }) {
           Profile id: {profileId} <Timestamp />
         </div>
         <p>{profile.description}</p>
+
+        <ProfileEditForm data={profile} action={updateProfileAction} />
+
         <Link href={`/profile/${profileId}/foo/bar`} className={linkStyles}>
           Foo
         </Link>

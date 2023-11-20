@@ -6,6 +6,7 @@ import {
   PipeableStream,
   decodeAction,
   ServerManifest,
+  decodeFormState,
 } from "react-server-dom-webpack/server";
 
 import { ServerRouter } from "./root";
@@ -19,6 +20,7 @@ import type { Request, Response } from "express";
 import { RSC_CONTENT_TYPE } from "./shared";
 import { withRouterApi } from "@owoce/tangle-router/server";
 import { ActionResult } from "./router-integration/index.client";
+import { ReactFormState } from "react-server-dom-webpack/__/shared/ReactTypes";
 
 export type Options = {
   path: string;
@@ -57,6 +59,16 @@ export async function renderRSCRoot({
 type ServerActionHandlerOptions = {
   webpackMapForClient: ClientManifest;
   serverActionsManifest: ServerManifest;
+  handleSSRRequest(
+    res: Express.Response,
+    {
+      path,
+      formState,
+    }: {
+      path: string;
+      formState?: ReactFormState<unknown, any> | null | undefined;
+    }
+  ): Promise<void>;
 };
 
 export function createServerActionHandler(options: ServerActionHandlerOptions) {
@@ -92,11 +104,11 @@ export function createServerActionHandler(options: ServerActionHandlerOptions) {
       result.pipe(res);
     };
 
-    const handleNoJsResult = () => {
-      res.status(303); // "See Other"
-      res.header("location", req.originalUrl);
-      res.send("Redirecting...");
-    };
+    // const handleNoJsResult = () => {
+    //   res.status(303); // "See Other"
+    //   res.header("location", req.originalUrl);
+    //   res.send("Redirecting...");
+    // };
 
     if (id === null) {
       const formData = await getFormDataFromRequest(req);
@@ -104,8 +116,29 @@ export function createServerActionHandler(options: ServerActionHandlerOptions) {
       if (!decoded) {
         throw new Error("Could not decode form action");
       }
-      await runAction(decoded);
-      return handleNoJsResult();
+
+      let formState: ReactFormState<unknown, any> | null;
+      try {
+        const result = await runAction(decoded);
+        formState = await decodeFormState(
+          result.actionResult,
+          formData,
+          manifest
+        );
+      } catch (err) {
+        console.error("Error while executing non-JS action:", err);
+        formState = null;
+      }
+
+      console.log("SSRing response to no-JS action", {
+        formState,
+        path: req.originalUrl,
+      });
+
+      return options.handleSSRRequest(res, {
+        path: req.originalUrl,
+        formState,
+      });
     }
 
     type Args = any[];

@@ -45,6 +45,7 @@ export function getSSRDomStream({
     </StaticRouter>,
     {
       bootstrapScripts: [assetsManifest.main],
+      // formState: [],
       ...rest,
     }
   );

@@ -23,9 +23,10 @@ import type {
   ServerManifest,
 } from "react-server-dom-webpack/server";
 import type { SSRManifest } from "react-server-dom-webpack/client";
-import { isNotFound } from "@owoce/tangle-router/shared";
+import { ParsedPath, isNotFound } from "@owoce/tangle-router/shared";
 import { createInitialRscResponseTransformStream } from "./initial-rsc-stream";
 import { sanitize } from "htmlescape";
+import { ReactFormState } from "react-server-dom-webpack/__/shared/ReactTypes";
 
 const CLIENT_ASSETS_DIR = path.resolve(__dirname, "../client");
 
@@ -88,6 +89,7 @@ const varyHeader = [FLIGHT_REQUEST_HEADER, ROUTER_STATE_HEADER].join(", ");
 const handleServerAction = createServerActionHandler({
   webpackMapForClient,
   serverActionsManifest,
+  handleSSRRequest,
 });
 
 // server action (from callServer)
@@ -131,97 +133,118 @@ app.all(
     res.header("vary", varyHeader);
 
     if (req.header(FLIGHT_REQUEST_HEADER)) {
-      //=======================
       // RSC-only render
-      //=======================
-
-      const existingStateRaw = req.header(ROUTER_STATE_HEADER);
-      if (typeof existingStateRaw !== "string") {
-        throw new Error(
-          `Invalid "${ROUTER_STATE_HEADER}" header: ${existingStateRaw}`
-        );
-      }
-      const existingState = JSON.parse(req.header(ROUTER_STATE_HEADER)!);
-
-      console.log("=====================");
-      console.log("rendering RSC");
-      console.log("router state", existingState);
-      const rscStream = await renderRSCRoot({
+      await handleRSCRequest(res, {
         path,
-        existingState,
-        webpackMapForClient,
-        assetsManifest,
+        existingState: getRouterStateFromRequest(req),
       });
-      res.header("content-type", RSC_CONTENT_TYPE);
-      rscStream.pipe(res);
     } else {
-      //=======================
       // SSR Render
-      //=======================
-
-      console.log("=====================");
-      console.log("rendering RSC for SSR");
-
-      const rscStream = Readable.toWeb(
-        await renderRSCRoot({
-          path,
-          existingState: undefined,
-          webpackMapForClient,
-          assetsManifest,
-        })
-      ) as ReadableStream<Uint8Array>;
-
-      const [rscStream1, rscStream2] = rscStream.tee();
-
-      let shellFlushed = false;
-      let hasStatus = false;
-
-      const setStatus = (status: number) => {
-        if (hasStatus) return;
-        hasStatus = true;
-        res.statusCode = status;
-      };
-
-      const domStream = getSSRDomStream({
-        path,
-        rscStream: Readable.fromWeb(rscStream1 as any),
-        assetsManifest,
-        webpackMapForSSR,
-        bootstrapScriptContent: getInitialRSCChunkContent(),
-        onError(err) {
-          if (!shellFlushed) {
-            if (isNotFound(err)) {
-              setStatus(404);
-            } else {
-              console.error("onError", err);
-            }
-          }
-        },
-        onShellError(err) {
-          shellFlushed = true;
-          finalStream.destroy();
-          handleUnrecoverableError(err, setStatus, res);
-        },
-        onShellReady() {
-          shellFlushed = true;
-          setStatus(200);
-          res.header("content-type", "text/html; charset=utf-8");
-          finalStream.pipe(res);
-        },
-      });
-
-      // TODO: converting back and forth between web and node streams isn't ideal...
-      const finalStream = Readable.fromWeb(
-        Readable.toWeb(readablefromPipeable(domStream)).pipeThrough<Uint8Array>(
-          createInitialRscResponseTransformStream(rscStream2, {
-            transformRSCChunk,
-            getFinalRSCChunk,
-          })
-        )
-      );
+      await handleSSRRequest(res, { path });
     }
   })
 );
+
+function getRouterStateFromRequest(req: Express.Request) {
+  const existingStateRaw = req.header(ROUTER_STATE_HEADER);
+  if (typeof existingStateRaw !== "string") {
+    throw new Error(
+      `Invalid "${ROUTER_STATE_HEADER}" header: ${existingStateRaw}`
+    );
+  }
+  return JSON.parse(existingStateRaw) as ParsedPath;
+}
+
+async function handleRSCRequest(
+  res: Express.Response,
+  { path, existingState }: { path: string; existingState: ParsedPath }
+) {
+  console.log("=====================");
+  console.log("rendering RSC");
+  console.log("router state", existingState);
+  const rscStream = await renderRSCRoot({
+    path,
+    existingState,
+    webpackMapForClient,
+    assetsManifest,
+  });
+  res.header("content-type", RSC_CONTENT_TYPE);
+  rscStream.pipe(res);
+}
+
+async function handleSSRRequest(
+  res: Express.Response,
+  {
+    path,
+    formState,
+  }: {
+    path: string;
+    formState?: ReactFormState<unknown, any> | null;
+  }
+) {
+  console.log("=====================");
+  console.log("rendering RSC for SSR");
+
+  const rscStream = Readable.toWeb(
+    await renderRSCRoot({
+      path,
+      existingState: undefined,
+      webpackMapForClient,
+      assetsManifest,
+    })
+  ) as ReadableStream<Uint8Array>;
+
+  const [rscStream1, rscStream2] = rscStream.tee();
+
+  let shellFlushed = false;
+  let hasStatus = false;
+
+  const setStatus = (status: number) => {
+    if (hasStatus) return;
+    hasStatus = true;
+    res.statusCode = status;
+  };
+
+  const domStream = getSSRDomStream({
+    path,
+    rscStream: Readable.fromWeb(rscStream1 as any),
+    assetsManifest,
+    webpackMapForSSR,
+    bootstrapScriptContent: getInitialRSCChunkContent(),
+    // @ts-expect-error not part of the definitions
+    formState,
+    onError(err) {
+      if (!shellFlushed) {
+        if (isNotFound(err)) {
+          setStatus(404);
+        } else {
+          console.error("onError", err);
+        }
+      }
+    },
+    onShellError(err) {
+      shellFlushed = true;
+      finalStream.destroy();
+      handleUnrecoverableError(err, setStatus, res);
+    },
+    onShellReady() {
+      shellFlushed = true;
+      setStatus(200);
+      res.header("content-type", "text/html; charset=utf-8");
+      finalStream.pipe(res);
+    },
+  });
+
+  // TODO: converting back and forth between web and node streams isn't ideal...
+  const finalStream = Readable.fromWeb(
+    Readable.toWeb(readablefromPipeable(domStream)).pipeThrough<Uint8Array>(
+      createInitialRscResponseTransformStream(rscStream2, {
+        transformRSCChunk,
+        getFinalRSCChunk,
+      })
+    )
+  );
+}
 
 //=======================
 // RSC Encoding
