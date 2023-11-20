@@ -199,8 +199,6 @@ export const build = async ({
                   [
                     "module:" + "@owoce/babel-rsc/plugin-use-server",
                     {
-                      // TODO: enable encryption after updating react
-                      // encryption: null,
                       encryption: {
                         importSource:
                           "@owoce/tangle/dist/runtime/support/encrypt-action-bound-args",
@@ -659,15 +657,6 @@ const createProxyOfClientModule = ({
 
 const getHash = (s: string) =>
   crypto.createHash("sha1").update(s).digest().toString("hex");
-
-// // NOTE: the "<id>#<exportedName>" structure is prescribed by RSDW --
-// // that's the id that `registerServerReference` will create if given an export name.
-// // (if we wanted to use a different scheme, we can pass `null` there, but why fight the convention?)
-// const getServerActionReferenceId = (resource: string, name: string) =>
-//   getServerActionReferenceIdForModuleId(
-//     getServerActionModuleId(resource),
-//     name
-//   );
 
 // NOTE: the "<id>#<exportedName>" structure is prescribed by RSDW --
 // that's the id that `registerServerReference` will create if given an export name.
@@ -1160,8 +1149,6 @@ class RSCServerPlugin {
             }
           }
           const finalSSRManifest: SSRManifestBundled = {
-            // moduleLoading: this.options.ssrManifestFromClient
-            //   .moduleLoading as any,
             moduleLoading: null,
             moduleMap: finalSSRModuleMap,
           };
@@ -1268,17 +1255,8 @@ function getModuleReplacementsForServer(analysisCtx: RSCAnalysisCtx) {
     createImportRewritePlugin(
       (originalResource: string, resolveData: PartialResolveData) => {
         const issuerLayer = resolveData.contextInfo.issuerLayer;
-        // if (
-        //   issuerLayer &&
-        //   !(issuerLayer === LAYERS.rsc || issuerLayer === LAYERS.ssr)
-        // ) {
-        //   console.log("hmmm", originalResource, resolveData.contextInfo);
-        //   return null;
-        // }
 
-        // not sure why this happens, but looks like it does!
-        // i guess we're creating these virtual paths someplace else too?
-        // anyway, if it does, make DOUBLE sure we're assigning the correct layer
+        // make DOUBLE sure we're assigning the correct layer
         if (isVirtualPath(originalResource)) {
           if (isVirtualPathSSR(originalResource)) {
             return { request: originalResource, layer: LAYERS.ssr };
@@ -1346,7 +1324,6 @@ const createImportRewritePlugin = (
 
       if (!originalResource) return;
 
-      // TODO: consider doing layer assignments here? shared-layer is wreaking havoc on everything...
       const _rewrite = assignModule(originalResource, resolveData);
       const rewrite: { request: string | null; layer: string | null } =
         _rewrite === null

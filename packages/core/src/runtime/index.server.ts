@@ -3,8 +3,3 @@
 
 export { revalidatePath } from "@owoce/tangle-router/server";
 export { HTMLPage, notFound } from "./index.shared";
-
-// export {
-//   encryptActionBoundArgs,
-//   decryptActionBoundArgs,
-// } from "./support/encrypt-action-bound-args";

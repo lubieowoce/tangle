@@ -92,8 +92,6 @@ async function deserializeValue(decrypted: string): Promise<BoundArgs> {
   // that'd do all of this for us in `decodeReply` (in the main action handler).
   // so essentially we need to reprocess the reply AGAIN by doing a `encodeReply` from a fake client.
 
-  console.log("deserializeValue :: decrypted", decrypted);
-
   // Using Flight to deserialize the args from the string.
   const stream = new ReadableStream({
     start(controller) {
@@ -106,31 +104,22 @@ async function deserializeValue(decrypted: string): Promise<BoundArgs> {
     stream,
     { ssrManifest: noClientReferencesDeserialize }
   );
-  console.log("deserializeValue :: deserialized", deserialized);
 
   // This extra step ensures that the server references are recovered.
 
   // @ts-expect-error hack
   const serverModuleMap = globalThis["__TANGLE_SERVER_ACTIONS_MANIFEST__"];
 
-  console.log("deserializeValue :: (reply trick) encoding...");
   const encoded = await encodeReply(deserialized);
-  console.log("deserializeValue :: (reply trick) encoded", encoded);
-  const transformed = await decodeReply(
+  const decoded = await decodeReply(
     encoded as string | FormData,
     serverModuleMap
   );
-  console.log(
-    "deserializeValue :: (reply trick) decoded/transformed",
-    transformed
-  );
 
-  // const transformed = deserialized;
-
-  if (!Array.isArray(transformed)) {
-    console.error("Deserialized value is not an array", transformed);
+  if (!Array.isArray(decoded)) {
+    console.error("Deserialized value is not an array", decoded);
   }
-  return transformed as ReactClientValue[];
+  return decoded as ReactClientValue[];
 }
 
 async function streamToString(stream: streams.Transform) {
