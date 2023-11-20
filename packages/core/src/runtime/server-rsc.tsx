@@ -45,7 +45,6 @@ export async function renderRSCRoot({
           precedence="TANGLE"
         />
       )}
-      {/* @ts-expect-error  async component */}
       <ServerRouter path={path} existingState={existingState} />
     </>
   );
@@ -62,6 +61,10 @@ type ServerActionHandlerOptions = {
 
 export function createServerActionHandler(options: ServerActionHandlerOptions) {
   const manifest = options.serverActionsManifest;
+
+  // @ts-expect-error hack
+  globalThis["__TANGLE_SERVER_ACTIONS_MANIFEST__"] = manifest;
+
   return async function handleAction(
     id: string | null,
     req: Request,

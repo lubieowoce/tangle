@@ -1,5 +1,7 @@
 /** Adapted from the react source */
 
+import type { Thenable } from "../../shared/ReactTypes";
+
 type ReactJSONValue =
   | string
   | boolean
@@ -39,6 +41,11 @@ export type ReactServerValue =
   | Promise<ReactServerValue>; // Thenable<ReactServerValue>
 
 type ReactServerObject = { [key: string]: ReactServerValue };
+
+export function registerServerReference(
+  proxy: any,
+  reference: { id: ServerReferenceId; bound: null | Thenable<Array<any>> }
+): void;
 
 export function createServerReference<A extends any[], T>(
   id: ServerReferenceId,

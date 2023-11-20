@@ -10,7 +10,10 @@ import type { Busboy } from "busboy";
 import type { Writable } from "stream";
 import type { ServerContextJSONValue, Thenable } from "shared/ReactTypes";
 
-import { decodeAction } from "react-server/src/ReactFlightActionServer";
+import {
+  decodeAction,
+  decodeFormState,
+} from "react-server/src/ReactFlightActionServer";
 
 export {
   registerServerReference,
@@ -22,6 +25,7 @@ export { ClientManifest, ClientReferenceMetadata, ServerManifest };
 
 export type Options = {
   onError?: (error: unknown) => void;
+  onPostpone?: (reason: string) => void;
   context?: Array<[string, ServerContextJSONValue]>;
   identifierPrefix?: string;
 };
@@ -52,4 +56,5 @@ export {
   decodeReplyFromBusboy,
   decodeReply,
   decodeAction,
+  decodeFormState,
 };

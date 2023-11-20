@@ -1,31 +1,31 @@
 /** Adapted from the react source */
 
 import type { Thenable } from "shared/ReactTypes";
+import type {
+  ImportManifestEntry,
+  ImportMetadata,
+} from "./shared/ReactFlightImportMetadata";
 
-export type SSRManifest = null | {
+export type SSRModuleMap = null | {
   [clientId: string]: {
-    [clientExportName: string]: ClientReferenceMetadata;
+    [clientExportName: string]: ClientReferenceManifestEntry;
   };
 };
 
 export type ServerManifest = {
-  [id: string]: ClientReference<any>;
+  [id: string]: ImportManifestEntry;
 };
 
 export type ServerReferenceId = string;
 
-export type ClientReferenceMetadata = {
-  id: string;
-  chunks: Array<string>;
-  name: string;
-  async: boolean;
-};
+export type ClientReferenceManifestEntry = ImportManifestEntry;
+export type ClientReferenceMetadata = ImportMetadata;
 
 // eslint-disable-next-line no-unused-vars, @typescript-eslint/no-unused-vars
 export type ClientReference<T> = ClientReferenceMetadata;
 
 export function resolveClientReference<T>(
-  bundlerConfig: SSRManifest,
+  bundlerConfig: SSRModuleMap,
   metadata: ClientReferenceMetadata
 ): ClientReference<T>;
 

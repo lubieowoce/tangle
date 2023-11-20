@@ -5,7 +5,7 @@ import type { PipeableStream as PipeableStream2 } from "react-dom/server";
 
 export const readablefromPipeable = (
   stream: PipeableStream1 | PipeableStream2
-) => (stream as any).pipe(createNoopStream());
+): streams.Transform => (stream as any).pipe(createNoopStream());
 
 export const createNoopStream = () =>
   new streams.Transform({

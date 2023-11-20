@@ -1,8 +1,9 @@
 /** Adapted from the react source */
 
 import type { Thenable } from "shared/ReactTypes";
+import type { ImportMetadata } from "./shared/ReactFlightImportMetadata";
 
-export type SSRManifest = {
+export type SSRModuleMap = {
   [clientId: string]: {
     [clientExportName: string]: ClientReference<any>;
   };
@@ -12,12 +13,7 @@ export type ServerManifest = void;
 
 export type ServerReferenceId = string;
 
-export type ClientReferenceMetadata = {
-  id: string;
-  chunks: Array<string>;
-  name: string;
-  async?: boolean;
-};
+export type ClientReferenceMetadata = ImportMetadata;
 
 // eslint-disable-next-line no-unused-vars, @typescript-eslint/no-unused-vars
 export type ClientReference<T> = {
@@ -27,7 +23,7 @@ export type ClientReference<T> = {
 };
 
 export function resolveClientReference<T>(
-  bundlerConfig: SSRManifest,
+  bundlerConfig: SSRModuleMap,
   metadata: ClientReferenceMetadata
 ): ClientReference<T>;
 

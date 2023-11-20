@@ -247,7 +247,6 @@ function segmentMatchToJSX(
     return (
       <SegmentErrorBoundary
         key={extraKey ? cacheKey + "-" + extraKey : cacheKey}
-        // @ts-expect-error  async component
         fallback={<ErrorComponent />}
       >
         {children}
@@ -260,7 +259,6 @@ function segmentMatchToJSX(
     return (
       <Suspense
         key={extraKey ? cacheKey + "-" + extraKey : cacheKey}
-        // @ts-expect-error  async component
         fallback={<LoadingComponent params={params} />}
       >
         {children}
@@ -273,7 +271,6 @@ function segmentMatchToJSX(
     return (
       <SegmentNotFoundBoundary
         key={extraKey ? cacheKey + "-" + extraKey : cacheKey}
-        // @ts-expect-error  async component
         fallback={<NotFoundComponent params={params} />}
       >
         {children}
@@ -302,7 +299,6 @@ function segmentMatchToJSX(
     : RawComponent;
 
   let tree: JSX.Element | null = (
-    // @ts-expect-error  async component
     <Component key={cacheKey} {...componentProps} />
   );
 

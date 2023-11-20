@@ -1,5 +1,6 @@
 {
-  "include": ["**/*.ts", "**/*.tsx"],
+  "include": ["**/*.ts", "**/*.tsx", "**/*.cts"],
+  "exclude": ["**/__tests__/*"],
   "compilerOptions": {
     "outDir": "../../dist/build",
     "declaration": true,

@@ -59,9 +59,9 @@
     "micromatch": "^4.0.5"
   },
   "peerDependencies": {
-    "react": "^18.2.0 || ^18.3.0 || 18.3.0-canary-018c58c9c-20230601 || 18.3.0-canary-910045696-20230607 || 18.3.0-canary-8ec962d82-20230623 || 0.0.0-experimental-8ec962d82-20230623 || 0.0.0-experimental-493f72b0a-20230727"
+    "react": "^18.2.0 || ^18.3.0 || 18.3.0-canary-018c58c9c-20230601 || 18.3.0-canary-910045696-20230607 || 18.3.0-canary-8ec962d82-20230623 || 0.0.0-experimental-8ec962d82-20230623 || 0.0.0-experimental-493f72b0a-20230727 || 0.0.0-experimental-bbb9cb116-20231117"
   },
   "devDependencies": {
-    "@types/react": "18.2.5"
+    "@types/react": "18.2.37"
   }
 }

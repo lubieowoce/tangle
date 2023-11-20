@@ -6,21 +6,21 @@ import type {
   ClientReference,
   ServerReference,
 } from "./ReactFlightWebpackReferences";
+import {
+  ImportMetadata,
+  ImportManifestEntry,
+} from "./shared/ReactFlightImportMetadata";
 
 export type { ClientReference, ServerReference };
 
 export type ClientManifest = {
-  [id: string]: ClientReferenceMetadata;
+  [id: string]: ClientReferenceManifestEntry;
 };
 
 export type ServerReferenceId = string;
 
-export type ClientReferenceMetadata = {
-  id: string;
-  chunks: Array<string>;
-  name: string;
-  async: boolean;
-};
+export type ClientReferenceMetadata = ImportMetadata;
+export type ClientReferenceManifestEntry = ImportManifestEntry;
 
 export type ClientReferenceKey = string;
 

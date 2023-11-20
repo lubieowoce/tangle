@@ -11,10 +11,10 @@ import ReactFlightWebpackPlugin, {
   Options as ReactFlightWebpackPluginOptions,
 } from "react-server-dom-webpack/plugin";
 
-import type {
-  ServerManifest,
-  ClientReferenceMetadata,
-} from "react-server-dom-webpack/server";
+import type { ServerManifest } from "react-server-dom-webpack/server";
+import { ImportManifestEntry } from "react-server-dom-webpack/src/shared/ReactFlightImportMetadata";
+import type { SSRModuleMap as SSRModuleMapUnbundled } from "react-server-dom-webpack/src/ReactFlightClientConfigBundlerNode";
+import type { SSRManifest as SSRManifestBundled } from "react-server-dom-webpack/client";
 
 import { runWebpack } from "./run-webpack";
 import Webpack, {
@@ -119,6 +119,10 @@ export const build = async ({
       entry: path.join(INTERNAL_CODE, "server.js"),
       ssrModule: path.join(INTERNAL_CODE, "server-ssr.js"),
       rscModule: path.join(INTERNAL_CODE, "server-rsc.js"),
+      actionSupportModule: path.join(
+        INTERNAL_CODE,
+        "support/encrypt-action-bound-args.js"
+      ),
       generatedRoutesModule: path.join(INTERNAL_CODE, "generated/routes.js"),
       generatedActionHandlersModule: path.join(
         INTERNAL_CODE,
@@ -186,7 +190,28 @@ export const build = async ({
         {
           test: MODULE_EXTENSIONS_REGEX,
           exclude: [/node_modules/],
-          use: TS_LOADER,
+          use: [
+            {
+              // TODO: we're not applying this to node_modules, but we should...
+              loader: "babel-loader",
+              options: {
+                plugins: [
+                  [
+                    "module:" + "@owoce/babel-rsc/plugin-use-server",
+                    {
+                      encryption: {
+                        importSource:
+                          "@owoce/tangle/dist/runtime/support/encrypt-action-bound-args",
+                        encryptFn: "encryptActionBoundArgs",
+                        decryptFn: "decryptActionBoundArgs",
+                      },
+                    } satisfies import("@owoce/babel-rsc/plugin-use-server").PluginOptions,
+                  ],
+                ],
+              },
+            },
+            TS_LOADER,
+          ],
         },
         { test: /\.json$/, type: "json" },
       ],
@@ -227,16 +252,22 @@ export const build = async ({
   const analysisCtx = createAnalysisContext();
 
   console.log("performing analysis...");
+
+  // TODO: cheating a bit, because we're always resolving these to the server versions,
+  // but we only really need that for inline "use server" which'll be in server files anyway
+  const reactResolutionsAnalysis = await getReactPackagesResolutions({
+    importer: opts.server.entry,
+    conditionNames: IMPORT_CONDITIONS.rsc,
+  });
+
   const analysisConfig: Configuration = withUserWebpackConfig(
     mergeWebpackConfigs(shared, {
       mode: BUILD_MODE,
       devtool: false,
       entry: { main: opts.server.entry },
-      // resolve: {
-      //   ...shared.resolve,
-      //   // TODO: do we need react aliases here?
-      //   // could we be missing some import conditions or something?
-      // },
+      resolve: {
+        alias: reactResolutionsAnalysis.aliases,
+      },
       plugins: [...sharedPlugins(), new RSCAnalysisPlugin({ analysisCtx })],
       target: "node16", // TODO does this matter?
       experiments: { layers: true },
@@ -249,7 +280,12 @@ export const build = async ({
       },
     })
   );
-  await runWebpack(analysisConfig);
+  await runWebpack(
+    analysisConfig,
+    // FIXME: the way we do the analysis is kinda wonky (ignoring conditions and such),
+    // so it generates a ton of noise. hide the warnings until we figure out a better way to deal with it.
+    { quiet: true }
+  );
 
   console.log("analysis context");
   console.log(analysisCtx);
@@ -327,7 +363,7 @@ export const build = async ({
     INTERMEDIATE_SSR_MANIFEST
   );
 
-  const ssrManifestFromRSDW: SSRManifest = JSON.parse(
+  const ssrManifestFromRSDW: SSRManifestUnbundled = JSON.parse(
     readFileSync(ssrManifestPath, "utf-8")
   );
 
@@ -406,6 +442,11 @@ export const build = async ({
                 layer: LAYERS.ssr,
                 ...SERVER_MODULE_RULES.ssr,
               },
+              {
+                test: opts.server.actionSupportModule,
+                layer: LAYERS.rsc,
+                ...SERVER_MODULE_RULES.rsc,
+              },
             ],
           },
           {
@@ -417,6 +458,10 @@ export const build = async ({
               },
               {
                 issuerLayer: LAYERS.rsc,
+                ...SERVER_MODULE_RULES.rsc,
+              },
+              {
+                issuerLayer: LAYERS.shared,
                 ...SERVER_MODULE_RULES.rsc,
               },
             ],
@@ -616,30 +661,32 @@ const getHash = (s: string) =>
 // NOTE: the "<id>#<exportedName>" structure is prescribed by RSDW --
 // that's the id that `registerServerReference` will create if given an export name.
 // (if we wanted to use a different scheme, we can pass `null` there, but why fight the convention?)
-const getServerActionReferenceId = (resource: string, name: string) =>
-  getServerActionModuleId(resource) + "#" + name;
+const getServerActionReferenceIdForModuleId = (id: string, name: string) =>
+  id + "#" + name;
 
 // FIXME: this is can probably result in weird bugs --
 // we're only looking at the name of the module,
 // so we'll give it the same id even if the contents changed completely!
 // this id should probably look at some kind of source-hash...
-const getServerActionModuleId = (resource: string) =>
+const createServerActionModuleId = (resource: string) =>
   getHash(pathToFileURL(resource).href);
 
 const createProxyOfServerModule = ({
   resource,
   exports,
+  analysisCtx,
 }: {
   resource: string;
   exports: string[];
+  analysisCtx: RSCAnalysisCtx;
 }) => {
   const CREATE_PROXY_MOD_PATH = path.resolve(
     __dirname,
     "../runtime/support/server-action-proxy-for-client"
   );
 
-  const getActionId = (name: string) =>
-    getServerActionReferenceId(resource, name);
+  const getActionId = (exportName: string) =>
+    getActionIdFromCtx(analysisCtx, resource, exportName);
 
   const generatedCode = [
     `import { createServerActionProxy } from ${stringLiteral(
@@ -664,53 +711,6 @@ const createProxyOfServerModule = ({
   return generatedCode.join("\n");
 };
 
-const enhanceUseServerModuleForServer = ({
-  resource,
-  originalSource,
-  exports,
-}: {
-  resource: string;
-  originalSource: string;
-  exports: string[];
-}) => {
-  if (exports.includes("default")) {
-    // if the export is a default export, we can't just use its name
-    // in the addServerActionMetadata call.
-    // we'd need to do some kind of babel transform to support that
-    throw new Error(
-      `Found default export in \n  ${originalSource}\n` +
-        "Default exports from server actions are not supported yet. Please use a named export."
-    );
-  }
-
-  const prefix = [
-    `import { registerServerReference } from 'react-server-dom-webpack/server';`,
-    ``,
-  ];
-
-  const generatedCode: string[] = [];
-
-  const actionModuleId = getServerActionModuleId(resource);
-
-  const getRegisterStmt = (exportName: string) =>
-    [
-      `if (typeof ${exportName} === 'function') {`,
-      `  registerServerReference(`,
-      `    ${exportName},`,
-      `    ${stringLiteral(actionModuleId)},`,
-      `    ${stringLiteral(exportName)},`,
-      `  );`,
-      `}`,
-    ].join("\n");
-
-  for (const exportName of exports) {
-    const stmt = getRegisterStmt(exportName);
-    generatedCode.push(stmt);
-  }
-
-  return [...prefix, originalSource, ...generatedCode].join("\n");
-};
-
 function getActionHandlersModule(
   analysisCtx: RSCAnalysisCtx,
   targetFilePath: string
@@ -728,15 +728,7 @@ function getActionHandlersModule(
   ];
 }
 
-function getActionHandlersModuleSource(analysisCtx: {
-  modules: {
-    client: Map<string, Webpack.NormalModule>;
-    server: Map<string, Webpack.NormalModule>;
-  };
-  exports: { client: Map<string, string[]>; server: Map<string, string[]> };
-  getTypeForModule(mod: Module): "client" | "server" | null;
-  getTypeForResource(resource: string): "client" | "server" | null;
-}) {
+function getActionHandlersModuleSource(analysisCtx: RSCAnalysisCtx) {
   let unique = 0;
   const code: string[] = [];
   const handlersById: Record<string, string> = {};
@@ -749,7 +741,7 @@ function getActionHandlersModuleSource(analysisCtx: {
     );
 
     for (const exportName of modExports) {
-      const actionId = getServerActionReferenceId(resource, exportName);
+      const actionId = getActionIdFromCtx(analysisCtx, resource, exportName);
       const expr = `${modImportedName}.${exportName}`;
       handlersById[actionId] = expr;
     }
@@ -774,15 +766,20 @@ function getReplaceMentsOfServerModules({
   const virtualModules: Record<string, string> = {};
   for (const [resource, mod] of analysisCtx.modules.server.entries()) {
     const modExports = analysisCtx.exports.server.get(resource)!;
+
     const source = isServer
-      ? enhanceUseServerModuleForServer({
-          resource,
-          exports: modExports,
-          originalSource: getOriginalSource(mod),
-        })
+      ? analysisCtx.actionModuleIds.has(resource)
+        ? // if we have a pre-generated id for this module, we've already transformed it in babel-rsc.
+          getOriginalSource(mod)
+        : (() => {
+            throw new Error(
+              `Internal error: Server module '${resource}' not found in analysisCtx.actionModuleIds`
+            );
+          })()
       : createProxyOfServerModule({
           resource,
           exports: modExports,
+          analysisCtx,
         });
     if (LOG_OPTIONS.generatedCode) {
       console.log("VirtualModule (rsc): " + resource, "\n" + source + "\n");
@@ -797,16 +794,9 @@ function getReplaceMentsOfServerModules({
 // Initial bundle analysis
 //=========================
 
-type SSRManifest = {
-  [id: string]: {
-    [exportName: string]: { specifier: string | number; name: string };
-  };
-};
-
-type SSRManifestActual = {
-  [id: string]: {
-    [exportName: string]: ClientReferenceMetadata;
-  };
+type SSRManifestUnbundled = {
+  moduleLoading: unknown;
+  moduleMap: SSRModuleMapUnbundled;
 };
 
 const createAnalysisContext = () => ({
@@ -818,6 +808,7 @@ const createAnalysisContext = () => ({
     client: new Map<string, string[]>(),
     server: new Map<string, string[]>(),
   },
+  actionModuleIds: new Map<string, string>(),
   getTypeForModule(mod: Module) {
     if (mod instanceof NormalModule) {
       return this.getTypeForResource(mod.resource);
@@ -853,6 +844,27 @@ class RSCAnalysisPlugin {
           parser: Webpack.javascript.JavascriptParser
         ) => {
           parser.hooks.program.tap(RSCAnalysisPlugin.pluginName, (program) => {
+            // TODO: WHY aren't we getting comments here? are they getting added onto the first statement or something?
+            // (until we figure this out, the `babel-plugin-inline-actions:` info will have to be a string literal instead)
+
+            // const allComments = [
+            //   ...(program.leadingComments ?? []),
+            //   ...(program.comments ?? []),
+            //   ...(program.trailingComments ?? []),
+            // ];
+            // if (
+            //   allComments.length > 0
+            //   // allComments.some((c) =>
+            //   //   c.value.includes("babel-plugin-inline-actions:")
+            //   // )
+            // ) {
+            //   console.log(
+            //     "====================== COMMENTS! ========================",
+            //     allComments
+            //   );
+            // }
+            // console.log("parser.hooks.program", allComments.length);
+
             const isClientModule = program.body.some((node) => {
               return (
                 node.type === "ExpressionStatement" &&
@@ -860,12 +872,38 @@ class RSCAnalysisPlugin {
                 node.expression.value === "use client"
               );
             });
+
+            type PrebuiltModuleInfo = { id: string; names: string[] };
+
+            let prebuiltInfo: PrebuiltModuleInfo | null = null;
+
+            const getStashedInfo = (str: string) => {
+              const prefix = "babel-rsc/actions: ";
+              if (!str.startsWith(prefix)) {
+                return null;
+              }
+              return JSON.parse(str.slice(prefix.length)) as PrebuiltModuleInfo;
+            };
+
             const isServerModule = program.body.some((node) => {
-              return (
-                node.type === "ExpressionStatement" &&
-                node.expression.type === "Literal" &&
-                node.expression.value === "use server"
-              );
+              if (
+                !(
+                  node.type === "ExpressionStatement" &&
+                  node.expression.type === "Literal"
+                )
+              ) {
+                return false;
+              }
+              if (typeof node.expression.value === "string") {
+                const stashedInfo = getStashedInfo(node.expression.value);
+                if (stashedInfo) {
+                  prebuiltInfo = stashedInfo;
+                  return true;
+                }
+              }
+              if (node.expression.value === "use server") {
+                return true;
+              }
             });
 
             if (isServerModule && isClientModule) {
@@ -889,6 +927,18 @@ class RSCAnalysisPlugin {
                 parser.state.module.resource,
                 parser.state.module
               );
+              // weird type stuff going on here
+              const _prebuiltInfo = prebuiltInfo as PrebuiltModuleInfo | null;
+              if (_prebuiltInfo) {
+                this.options.analysisCtx.exports.server.set(
+                  parser.state.module.resource,
+                  _prebuiltInfo.names
+                );
+                this.options.analysisCtx.actionModuleIds.set(
+                  parser.state.module.resource,
+                  _prebuiltInfo.id
+                );
+              }
             }
           });
         };
@@ -906,10 +956,22 @@ class RSCAnalysisPlugin {
               if (module instanceof NormalModule) {
                 const type = this.options.analysisCtx.getTypeForModule(module);
                 if (!type) continue;
+                if (
+                  // we may have prefilled this before using information from babel.
+                  this.options.analysisCtx.exports[type].has(module.resource)
+                ) {
+                  continue;
+                }
+
                 const exports = compilation.moduleGraph.getExportsInfo(module);
+
+                const exportNames = [...exports.orderedExports].map(
+                  (exp) => exp.name
+                );
+
                 this.options.analysisCtx.exports[type].set(
                   module.resource,
-                  [...exports.orderedExports].map((exp) => exp.name)
+                  exportNames
                 );
               }
             }
@@ -926,7 +988,7 @@ class RSCAnalysisPlugin {
 
 type RSCPluginOptions = {
   analysisCtx: RSCAnalysisCtx;
-  ssrManifestFromClient: SSRManifest;
+  ssrManifestFromClient: SSRManifestUnbundled;
   ssrManifestFilename: string;
   serverActionsManifestFilename: string;
 };
@@ -938,6 +1000,7 @@ class RSCServerPlugin {
 
   apply(compiler: Compiler) {
     const ensureString = (id: string | number): string => id + "";
+    const { analysisCtx } = this.options;
 
     // Rewrite the SSR manifest that RSDW generated to match the real moduleIds
     compiler.hooks.make.tap(RSCServerPlugin.pluginName, (compilation) => {
@@ -962,7 +1025,6 @@ class RSCServerPlugin {
               return undefined;
             }
             if (isVirtualPath(mod.resource)) {
-              const { analysisCtx } = this.options;
               const originalResource = getOriginalPathFromVirtual(mod.resource);
               const type = analysisCtx.getTypeForResource(originalResource);
               if (type === null) {
@@ -1034,13 +1096,14 @@ class RSCServerPlugin {
                   return;
                 }
                 for (const exportName of moduleInfo.exports) {
-                  const actionId = getServerActionReferenceId(
-                    moduleInfo.originalResource,
+                  const resource = moduleInfo.originalResource;
+                  const actionId = getActionIdFromCtx(
+                    analysisCtx,
+                    resource,
                     exportName
                   );
                   serverActionsManifest[actionId] = {
                     id: moduleId,
-                    async: false,
                     chunks: chunkIds,
                     name: exportName,
                   };
@@ -1058,10 +1121,10 @@ class RSCServerPlugin {
             });
           });
 
-          const finalSSRManifest: SSRManifestActual = {};
+          const finalSSRModuleMap: SSRManifestBundled["moduleMap"] = {};
           const toRewrite = new Set(Object.keys(ssrManifestSpecifierRewrite));
           for (const [clientModuleId, moduleExportMap] of Object.entries(
-            this.options.ssrManifestFromClient
+            this.options.ssrManifestFromClient.moduleMap!
           )) {
             for (const [exportName, exportInfo] of Object.entries(
               moduleExportMap
@@ -1069,18 +1132,26 @@ class RSCServerPlugin {
               if (exportInfo.specifier in ssrManifestSpecifierRewrite) {
                 const rewriteInfo =
                   ssrManifestSpecifierRewrite[exportInfo.specifier];
-                const newExportInfo = {
+                const newExportInfo: ImportManifestEntry = {
                   name: exportName,
                   id: rewriteInfo.moduleId,
-                  chunks: rewriteInfo.chunkIds, // TODO: these are server-side chunks, is this right...?
-                  async: true, // TODO
+                  chunks: rewriteInfo.chunkIds.flatMap((id) => [
+                    id,
+                    `<no filename: ${id}>`, // Seemingly unused by react, but `preloadModule` breaks if not supplied
+                  ]),
+                  // we used to have this, not sure why it's not in the types anymore
+                  // async: true,
                 };
-                finalSSRManifest[clientModuleId] ||= {};
-                finalSSRManifest[clientModuleId][exportName] = newExportInfo;
+                finalSSRModuleMap[clientModuleId] ||= {};
+                finalSSRModuleMap[clientModuleId][exportName] = newExportInfo;
                 toRewrite.delete(ensureString(exportInfo.specifier));
               }
             }
           }
+          const finalSSRManifest: SSRManifestBundled = {
+            moduleLoading: null,
+            moduleMap: finalSSRModuleMap,
+          };
 
           if (LOG_OPTIONS.manifestRewrites) {
             console.log("manifest rewrites", ssrManifestSpecifierRewrite);
@@ -1156,6 +1227,7 @@ function getModuleReplacementsForServer(analysisCtx: RSCAnalysisCtx) {
       const source = createProxyOfServerModule({
         resource,
         exports: getExportsFromCtx(analysisCtx, resource, "server"),
+        analysisCtx,
       });
       if (LOG_OPTIONS.generatedCode) {
         console.log(
@@ -1166,15 +1238,14 @@ function getModuleReplacementsForServer(analysisCtx: RSCAnalysisCtx) {
       virtualModules[virtualPath] = source;
     }
     {
+      // "use server" modules should already be transformed by babel-rsc.
       const virtualPath = getVirtualPathRSC(resource);
-      const source = enhanceUseServerModuleForServer({
-        resource,
-        exports: getExportsFromCtx(analysisCtx, resource, "server"),
-        originalSource: getOriginalSource(mod),
-      });
-      if (LOG_OPTIONS.generatedCode) {
-        console.log("VirtualModule (rsc):" + virtualPath, "\n" + source + "\n");
+      if (!analysisCtx.actionModuleIds.has(resource)) {
+        throw new Error(
+          `Internal error: Server module '${resource}' not found in analysisCtx.actionModuleIds`
+        );
       }
+      const source = getOriginalSource(mod);
       virtualModules[virtualPath] = source;
     }
   }
@@ -1182,20 +1253,29 @@ function getModuleReplacementsForServer(analysisCtx: RSCAnalysisCtx) {
   return [
     new VirtualModulesPlugin(virtualModules),
     createImportRewritePlugin(
-      (
-        originalResource: string,
-        resolveData: PartialResolveData
-      ): string | null => {
+      (originalResource: string, resolveData: PartialResolveData) => {
+        const issuerLayer = resolveData.contextInfo.issuerLayer;
+
+        // make DOUBLE sure we're assigning the correct layer
+        if (isVirtualPath(originalResource)) {
+          if (isVirtualPathSSR(originalResource)) {
+            return { request: originalResource, layer: LAYERS.ssr };
+          }
+          if (isVirtualPathRSC(originalResource)) {
+            return { request: originalResource, layer: LAYERS.rsc };
+          }
+        }
+
         const type = analysisCtx.getTypeForResource(originalResource);
         if (type !== "client" && type !== "server") {
           return null;
         }
 
-        const isSSR = resolveData.contextInfo.issuerLayer === LAYERS.ssr;
+        const isSSR = issuerLayer === LAYERS.ssr;
 
-        const newResource = isSSR
-          ? getVirtualPathSSR(originalResource)
-          : getVirtualPathRSC(originalResource);
+        const [newResource, newLayer] = isSSR
+          ? [getVirtualPathSSR(originalResource), LAYERS.ssr]
+          : [getVirtualPathRSC(originalResource), LAYERS.rsc];
         const label = `(${isSSR ? "ssr" : "proxy"})`;
 
         if (LOG_OPTIONS.importRewrites) {
@@ -1209,7 +1289,7 @@ function getModuleReplacementsForServer(analysisCtx: RSCAnalysisCtx) {
           console.log(`${label} rewriting request to`, newResource);
           console.log();
         }
-        return newResource;
+        return { request: newResource, layer: newLayer };
       }
     ),
   ];
@@ -1218,11 +1298,12 @@ function getModuleReplacementsForServer(analysisCtx: RSCAnalysisCtx) {
 type PartialResolveData = {
   request: string | undefined;
   contextInfo: {
-    laer?: string;
-    issuerLayer?: string;
+    layer?: string;
+    issuerLayer?: string | null;
     issuer: string;
   };
   createData: {
+    layer?: string | null;
     request: string;
     resource: string;
     userRequest: string;
@@ -1233,7 +1314,7 @@ const createImportRewritePlugin = (
   assignModule: (
     originalResource: string,
     resolveData: PartialResolveData
-  ) => string | null
+  ) => string | null | { request: string; layer: string }
 ) => {
   return new NormalModuleReplacementPlugin(
     MODULE_EXTENSIONS_REGEX,
@@ -1243,16 +1324,25 @@ const createImportRewritePlugin = (
 
       if (!originalResource) return;
 
-      const newResource = assignModule(originalResource, resolveData);
+      const _rewrite = assignModule(originalResource, resolveData);
+      const rewrite: { request: string | null; layer: string | null } =
+        _rewrite === null
+          ? { request: null, layer: null }
+          : typeof _rewrite === "string"
+          ? { request: _rewrite, layer: null }
+          : _rewrite;
 
-      if (newResource !== null) {
-        resolveData.request = newResource;
+      if (rewrite.request !== null) {
+        resolveData.request = rewrite.request;
         resolveData.createData.request = resolveData.createData.request.replace(
           originalResource,
-          newResource
+          rewrite.request
         );
-        resolveData.createData.resource = newResource;
-        resolveData.createData.userRequest = newResource;
+        resolveData.createData.resource = rewrite.request;
+        resolveData.createData.userRequest = rewrite.request;
+      }
+      if (rewrite.layer !== null) {
+        resolveData.createData.layer = rewrite.layer;
       }
     }
   );
@@ -1394,4 +1484,15 @@ const getExportsFromCtx = (
     );
   }
   return res;
+};
+
+const getActionIdFromCtx = (
+  analysisCtx: RSCAnalysisCtx,
+  resource: string,
+  exportName: string
+) => {
+  const moduleId =
+    analysisCtx.actionModuleIds.get(resource) ??
+    createServerActionModuleId(resource);
+  return getServerActionReferenceIdForModuleId(moduleId, exportName);
 };

@@ -6,7 +6,7 @@
     "examples/*"
   ],
   "scripts": {
-    "example": "npm run -w examples/demo-1 dev",
+    "example": "npm run build && npm run -w examples/demo-1 dev",
     "example:prod": "NODE_ENV=production npm run -w examples/demo-1 dev",
     "build": "turbo run build --filter './packages/*'",
     "watch": "turbo run watch --filter './packages/*'",

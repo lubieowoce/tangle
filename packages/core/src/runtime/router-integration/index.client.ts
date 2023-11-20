@@ -1,3 +1,4 @@
+/// <reference types="react/experimental" />
 import { createFromFetch, encodeReply } from "react-server-dom-webpack/client";
 
 import {

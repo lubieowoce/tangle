@@ -9,5 +9,6 @@
     "strict": true,
     "types": ["node"],
     "lib": ["ESNext", "DOM"]
-  }
+  },
+  "include": ["src"]
 }
