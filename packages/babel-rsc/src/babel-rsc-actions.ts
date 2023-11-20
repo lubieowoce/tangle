@@ -523,7 +523,6 @@ const createPlugin =
                 );
               } else if (t.isExportDefaultSpecifier(specifier)) {
                 // `export default foo;`
-                console.log(specifier.exported);
                 throw path.buildCodeFrameError(
                   "Not implemented (ExportDefaultSpecifier in ExportNamedDeclaration)"
                 );
@@ -614,7 +613,7 @@ const createPlugin =
         if (this.extractedActions.length === 0) {
           return;
         }
-        console.log("extracted actions", this.extractedActions);
+        DEBUG && console.log("extracted actions", this.extractedActions);
         const stashedData =
           "babel-rsc/actions: " +
           JSON.stringify({

@@ -957,19 +957,10 @@ class RSCAnalysisPlugin {
                 const stashedInfo = getStashedInfo(node.expression.value);
                 if (stashedInfo) {
                   prebuiltInfo = stashedInfo;
-                  console.log(
-                    "GOT STASHED INFO",
-                    stashedInfo,
-                    parser.state.module.resource
-                  );
                   return true;
                 }
               }
               if (node.expression.value === "use server") {
-                console.log(
-                  'GOT TOP-LEVEL "use server"',
-                  parser.state.module.resource
-                );
                 return true;
               }
             });
