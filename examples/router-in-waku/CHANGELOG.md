@@ -1,5 +1,12 @@
 # router-in-waku
 
+## 0.1.5
+
+### Patch Changes
+
+- Updated dependencies [03fdffa]
+  - @owoce/tangle-router@0.1.0
+
 ## 0.1.4
 
 ### Patch Changes

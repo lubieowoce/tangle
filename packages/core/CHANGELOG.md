@@ -1,5 +1,17 @@
 # @owoce/tangle
 
+## 0.1.0
+
+### Minor Changes
+
+- 03fdffa: Implement inline "use server", move "use server" transformations into @owoce/babel-rsc
+
+### Patch Changes
+
+- 03fdffa: Update react packages to 0.0.0-experimental-bbb9cb116-20231117
+- Updated dependencies [03fdffa]
+  - @owoce/tangle-router@0.1.0
+
 ## 0.0.8
 
 ### Patch Changes
