@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, it, vi, test } from "vitest";
 import { fileURLToPath } from "node:url";
 import { readFileSync, readdirSync, statSync } from "node:fs";
 import * as path from "path";
@@ -93,6 +93,40 @@ describe("babel transform", () => {
           expect(onActionFound).toHaveBeenCalled();
         }
       }
+    );
+  });
+
+  test.only("custom getModuleId", () => {
+    const TEST_MODULE_ID = "test-id";
+    const inlineActionPLugin = createPlugin({
+      getModuleId() {
+        return TEST_MODULE_ID;
+      },
+    });
+
+    const inputPath = "/wherever/test.jsx";
+    const inputCode = `
+"use server"
+export async function test() {}
+`;
+
+    const runTransform = () =>
+      transformSync(inputCode, {
+        filename: inputPath,
+        root: path.dirname(inputPath),
+        plugins: [
+          "@babel/plugin-syntax-jsx",
+          [inlineActionPLugin, { encryption: null }],
+        ],
+      });
+
+    const { code: outputCode } = runTransform()!;
+    const [header] = outputCode!.split("\n", 1);
+    expect(header).toEqual(
+      `"babel-rsc/actions: ${JSON.stringify({
+        id: TEST_MODULE_ID,
+        names: ["test"],
+      }).replaceAll('"', '\\"')}";`
     );
   });
 });

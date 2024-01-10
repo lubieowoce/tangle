@@ -5,6 +5,7 @@ import {
   type NodePath,
   type PluginObj,
   type PluginPass,
+  BabelFile,
 } from "@babel/core";
 import type * as t from "@babel/types";
 import type { Scope as BabelScope } from "@babel/traverse";
@@ -39,13 +40,19 @@ const getHash = (s: string) =>
 // we're only looking at the name of the module,
 // so we'll give it the same id even if the contents changed completely!
 // this id should probably look at some kind of source-hash...
-const getServerActionModuleId = (resource: string) =>
-  getHash(pathToFileURL(resource).href);
+const getModuleIdDefault = (file: BabelFile) => {
+  const filePathForId = file.opts.root
+    ? // prefer relative paths, because we hash those for usage as module ids
+      "/__project__/" + getRelativePath(file.opts.root, file.opts.filename!)
+    : file.opts.filename!;
+  return getHash(pathToFileURL(filePathForId).href);
+};
 
 type PluginInjected = {
   onActionFound?: (
     arg: { file: string | undefined } & ExtractedActionInfo
   ) => void;
+  getModuleId?: (file: BabelFile) => string;
 };
 
 type ExtractedActionInfo = { localName?: string; exportedName: string };
@@ -98,7 +105,7 @@ const buildLazyWrapperHelper = () => {
 };
 
 const createPlugin =
-  ({ onActionFound }: PluginInjected = {}) =>
+  ({ onActionFound, getModuleId = getModuleIdDefault }: PluginInjected = {}) =>
   (
     api: BabelAPI,
     rawOptions: unknown = {},
@@ -319,13 +326,7 @@ const createPlugin =
         });
 
         this.getActionModuleId = once(() => {
-          const filePathForId = file.opts.root
-            ? // prefer relative paths, because we hash those for usage as module ids
-              "/__project__/" +
-              getRelativePath(file.opts.root, file.opts.filename!)
-            : file.opts.filename;
-
-          return getServerActionModuleId(filePathForId!);
+          return getModuleId(file);
         });
 
         this.defineBoundArgsWrapperHelper = once(() => {
