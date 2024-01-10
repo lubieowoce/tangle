@@ -1,5 +1,7 @@
 # @owoce/tangle-router
 
+## 0.1.1
+
 ## 0.1.0
 
 ### Patch Changes

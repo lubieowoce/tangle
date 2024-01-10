@@ -1,5 +1,13 @@
 # @owoce/tangle
 
+## 0.1.1
+
+### Patch Changes
+
+- Updated dependencies [1799816]
+  - @owoce/babel-rsc@0.2.0
+  - @owoce/tangle-router@0.1.1
+
 ## 0.1.0
 
 ### Minor Changes
