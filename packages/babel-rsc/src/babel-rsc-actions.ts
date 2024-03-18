@@ -40,12 +40,23 @@ const getHash = (s: string) =>
 // we're only looking at the name of the module,
 // so we'll give it the same id even if the contents changed completely!
 // this id should probably look at some kind of source-hash...
-const getModuleIdDefault = (file: BabelFile) => {
-  const filePathForId = file.opts.root
-    ? // prefer relative paths, because we hash those for usage as module ids
-      "/__project__/" + getRelativePath(file.opts.root, file.opts.filename!)
-    : file.opts.filename!;
-  return getHash(pathToFileURL(filePathForId).href);
+const getModuleIdHash = (file: BabelFile) => {
+  const idUrl = getModuleIdUrl(file, true);
+  return getHash(idUrl);
+};
+
+const getModuleIdUrl = (file: BabelFile, relative: boolean) => {
+  const filePathForId =
+    relative && file.opts.root
+      ? "/__project__/" + getRelativePath(file.opts.root, file.opts.filename!)
+      : file.opts.filename!;
+  return pathToFileURL(filePathForId).href;
+};
+
+const BUILTIN_MODULE_ID_FUNCTIONS = {
+  "file-url-root-relative": (file: BabelFile) => getModuleIdUrl(file, true),
+  "file-url-absolute": (file: BabelFile) => getModuleIdUrl(file, false),
+  "file-url-hash": (file: BabelFile) => getModuleIdHash(file),
 };
 
 type PluginInjected = {
@@ -70,6 +81,7 @@ type ThisExtras = {
 };
 
 export type PluginOptions = {
+  moduleIds?: "file-url-root-relative" | "file-url-absolute" | "file-url-hash";
   encryption: {
     importSource: string;
     encryptFn: string;
@@ -120,7 +132,7 @@ const buildLazyWrapperHelper = () => {
 };
 
 const createPlugin =
-  ({ onActionFound, getModuleId = getModuleIdDefault }: PluginInjected = {}) =>
+  ({ onActionFound, getModuleId: maybeGetModuleId }: PluginInjected = {}) =>
   (
     api: BabelAPI,
     rawOptions: unknown = {},
@@ -129,6 +141,13 @@ const createPlugin =
     api.assertVersion(7);
     const { types: t } = api;
     const options = { ...DEFAULT_OPTIONS, ...(rawOptions as PluginOptions) }; // FIXME: zod
+
+    const getModuleId =
+      (options.moduleIds
+        ? BUILTIN_MODULE_ID_FUNCTIONS[options.moduleIds]
+        : undefined) ??
+      maybeGetModuleId ??
+      BUILTIN_MODULE_ID_FUNCTIONS["file-url-hash"];
 
     // const getFilename = (state: PluginPass) =>
     //   state.file.opts.filename ?? "<unnamed>";
