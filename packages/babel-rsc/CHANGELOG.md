@@ -1,5 +1,11 @@
 # @owoce/babel-rsc
 
+## 0.4.1
+
+### Patch Changes
+
+- fbcd594: Fix serialization of extracted actions
+
 ## 0.4.0
 
 ### Minor Changes
