@@ -1,6 +1,6 @@
 {
   "name": "@owoce/tangle",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "",
   "repository": {
     "url": "https://github.com/lubieowoce/tangle"
@@ -60,9 +60,9 @@
   "dependencies": {
     "@babel/core": "^7.23.2",
     "@babel/plugin-syntax-jsx": "^7.22.5",
-    "@owoce/babel-rsc": "^0.2.0",
+    "@owoce/babel-rsc": "^0.3.0",
     "@owoce/react-server-dom-webpack": "^0.0.0-experimental-bbb9cb116-20231117",
-    "@owoce/tangle-router": "0.1.1",
+    "@owoce/tangle-router": "0.1.2",
     "babel-loader": "^9.1.3",
     "busboy": "^1.6.0",
     "chokidar": "^3.5.3",
