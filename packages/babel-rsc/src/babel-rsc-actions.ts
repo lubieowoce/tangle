@@ -75,6 +75,21 @@ export type PluginOptions = {
     encryptFn: string;
     decryptFn: string;
   } | null;
+  runtime?: {
+    registerServerReference: {
+      importSource: string;
+      name: string;
+    };
+  };
+};
+
+const DEFAULT_OPTIONS: Partial<PluginOptions> = {
+  runtime: {
+    registerServerReference: {
+      importSource: "react-server-dom-webpack/server",
+      name: "registerServerReference",
+    },
+  },
 };
 
 type ThisWithExtras = PluginPass & ThisExtras;
@@ -113,7 +128,7 @@ const createPlugin =
   ): PluginObj<ThisWithExtras> => {
     api.assertVersion(7);
     const { types: t } = api;
-    const options = rawOptions as PluginOptions; // FIXME: zod
+    const options = { ...DEFAULT_OPTIONS, ...(rawOptions as PluginOptions) }; // FIXME: zod
 
     // const getFilename = (state: PluginPass) =>
     //   state.file.opts.filename ?? "<unnamed>";
@@ -300,8 +315,8 @@ const createPlugin =
         this.addRSDWImport = once(() => {
           return addNamedImport(
             file.path,
-            "registerServerReference",
-            "react-server-dom-webpack/server"
+            options.runtime!.registerServerReference.name,
+            options.runtime!.registerServerReference.importSource
           );
         });
 
