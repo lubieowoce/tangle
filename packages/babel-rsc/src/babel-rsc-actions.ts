@@ -653,7 +653,7 @@ const createPlugin =
           id: this.getActionModuleId(),
           names: this.extractedActions.map((e) => e.exportedName),
         };
-        const stashedData = "babel-rsc/actions: " + payload;
+        const stashedData = "babel-rsc/actions: " + JSON.stringify(payload);
 
         file.path.node.body.unshift(
           t.expressionStatement(t.stringLiteral(stashedData))
