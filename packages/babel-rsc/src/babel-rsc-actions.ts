@@ -630,16 +630,18 @@ const createPlugin =
           return;
         }
         DEBUG && console.log("extracted actions", this.extractedActions);
-        const stashedData =
-          "babel-rsc/actions: " +
-          JSON.stringify({
-            id: this.getActionModuleId(),
-            names: this.extractedActions.map((e) => e.exportedName),
-          });
+        const payload = {
+          id: this.getActionModuleId(),
+          names: this.extractedActions.map((e) => e.exportedName),
+        };
+        const stashedData = "babel-rsc/actions: " + payload;
 
         file.path.node.body.unshift(
           t.expressionStatement(t.stringLiteral(stashedData))
         );
+
+        file.path.node.extra ??= {};
+        file.path.node.extra["babel-rsc/actions"] = payload;
 
         // state.path.addComment("leading", stashedData);
         // console.log(state.path.node);
