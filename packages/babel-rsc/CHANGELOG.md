@@ -1,5 +1,11 @@
 # @owoce/babel-rsc
 
+## 0.4.2
+
+### Patch Changes
+
+- ed28d95: Fixed a bug where references to injected imports (like `registerServerReference`) would not get picked up by `@babel/plugin-transform-modules-commonjs` (except for the first one)
+
 ## 0.4.1
 
 ### Patch Changes
