@@ -131,6 +131,45 @@ const buildLazyWrapperHelper = () => {
   return (_buildLazyWrapperHelper({}) as t.ExpressionStatement).expression;
 };
 
+const getOrCreateInMap = <K, V>(
+  map: Map<K, V>,
+  key: K,
+  create: () => V
+): [value: V, didCreate: boolean] => {
+  if (!map.has(key)) {
+    const result = create();
+    // console.log("getOrCreateInMap :: creating", key, result);
+    map.set(key, result);
+    return [result, true];
+  } else {
+    const result = map.get(key)!;
+    // console.log("getOrCreateInMap :: reusing", key, result);
+    return [result, false];
+  }
+};
+
+const createAddNamedImportOnce = (t: BabelAPI["types"]) => {
+  const addedImportsCache = new Map<string, Map<string, t.Identifier>>();
+  return function addNamedImportOnce(
+    path: NodePath<t.Node>,
+    name: string,
+    source: string
+  ) {
+    const [sourceCache] = getOrCreateInMap(
+      addedImportsCache,
+      source,
+      () => new Map<string, t.Identifier>()
+    );
+    const [identifier, didCreate] = getOrCreateInMap(sourceCache, name, () =>
+      addNamedImport(path, name, source)
+    );
+    // for cached imports, we need to clone the resulting identifier, because otherwise
+    // '@babel/plugin-transform-modules-commonjs' won't replace the references to the import for some reason.
+    // this is a helper for that.
+    return didCreate ? identifier : t.cloneNode(identifier);
+  };
+};
+
 const createPlugin =
   ({ onActionFound, getModuleId: maybeGetModuleId }: PluginInjected = {}) =>
   (
@@ -262,6 +301,7 @@ const createPlugin =
 
       const [inserted] = lastImportPath!.insertAfter(functionDeclaration);
       moduleScope.registerBinding(bindingKind, inserted);
+
       inserted.addComment(
         "leading",
         " hoisted action: " + (getFnPathName(path) ?? "<anonymous>"),
@@ -316,6 +356,7 @@ const createPlugin =
     };
 
     return {
+      name: "babel-rsc-actions",
       pre(file) {
         if (!file.code.includes("use server")) {
           this.didSkip = true;
@@ -331,33 +372,42 @@ const createPlugin =
           this.extractedActions.push(info);
         };
 
-        this.addRSDWImport = once(() => {
-          return addNamedImport(
+        const addNamedImportOnce = createAddNamedImportOnce(t);
+
+        this.addRSDWImport = () => {
+          return addNamedImportOnce(
             file.path,
             options.runtime!.registerServerReference.name,
             options.runtime!.registerServerReference.importSource
           );
-        });
+        };
+        // this.addRSDWImport = () => {
+        //   return addNamedImportOnce(
+        //     file.path,
+        //     options.runtime!.registerServerReference.name,
+        //     options.runtime!.registerServerReference.importSource
+        //   );
+        // };
 
-        this.addCryptImport = once(() => {
+        this.addCryptImport = () => {
           if (!options.encryption) {
             return null;
           }
           const path = file.path;
 
           return {
-            encryptFn: addNamedImport(
+            encryptFn: addNamedImportOnce(
               path,
               options.encryption.encryptFn,
               options.encryption.importSource
             ),
-            decryptFn: addNamedImport(
+            decryptFn: addNamedImportOnce(
               path,
               options.encryption.decryptFn,
               options.encryption.importSource
             ),
           };
-        });
+        };
 
         this.getActionModuleId = once(() => {
           return getModuleId(file);
@@ -375,7 +425,7 @@ const createPlugin =
         });
 
         this.wrapBoundArgs = (expr) => {
-          const wrapperFn = this.defineBoundArgsWrapperHelper();
+          const wrapperFn = t.cloneNode(this.defineBoundArgsWrapperHelper());
           return t.callExpression(wrapperFn, [
             t.arrowFunctionExpression([], expr),
           ]);

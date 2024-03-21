@@ -52,6 +52,7 @@ describe("babel transform", () => {
     it.each(pluginOptionsVariants)(
       "$name",
       async ({ options: pluginOptions, name: optionsVariantName }) => {
+        console.log(inputPath);
         const inputCode = readFileSync(inputPath, "utf-8");
 
         const onActionFound = vi.fn();
@@ -63,7 +64,9 @@ describe("babel transform", () => {
             root: path.dirname(inputPath),
             plugins: [
               "@babel/plugin-syntax-jsx",
-              [inlineActionPLugin, pluginOptions],
+              // for some godforsaken reason, skipping the .bind makes the test reuse the same
+              // instance of the plugin forever, messing up state.
+              [inlineActionPLugin.bind(null), pluginOptions],
             ],
           });
 
@@ -96,7 +99,7 @@ describe("babel transform", () => {
     );
   });
 
-  test.only("custom getModuleId", () => {
+  test("custom getModuleId", () => {
     const TEST_MODULE_ID = "test-id";
     const inlineActionPLugin = createPlugin({
       getModuleId() {
@@ -116,7 +119,7 @@ export async function test() {}
         root: path.dirname(inputPath),
         plugins: [
           "@babel/plugin-syntax-jsx",
-          [inlineActionPLugin, { encryption: null }],
+          [inlineActionPLugin.bind(null), { encryption: null }],
         ],
       });
 
@@ -128,5 +131,96 @@ export async function test() {}
         names: ["test"],
       }).replaceAll('"', '\\"')}";`
     );
+  });
+
+  describe("plugin options", () => {
+    const inputPath = "/wherever/test.jsx";
+    const inputCode = `
+"use server"
+export async function test() {}
+`;
+
+    test("custom runtime replaces RSDW", () => {
+      const spec = {
+        importSource: "@my/package",
+        name: "myCustomRegister",
+      };
+
+      const output = transformSync(inputCode, {
+        filename: inputPath,
+        root: path.dirname(inputPath),
+        plugins: [
+          "@babel/plugin-syntax-jsx",
+          [
+            createPlugin(),
+            { encryption: null, runtime: { registerServerReference: spec } },
+          ],
+        ],
+      });
+
+      expect(output!.code).toContain(spec.importSource);
+      expect(output!.code).toContain(spec.name);
+      expect(output!.code).not.toContain("react-server-dom-webpack/server");
+      expect(output!.code).not.toContain("registerServerReference");
+    });
+
+    describe("moduleIds", () => {
+      it.each(["file-url-root-relative", "file-url-absolute", "file-url-hash"])(
+        "%s",
+        (moduleIdsOption) => {
+          const spec = {
+            importSource: "@my/package",
+            name: "myCustomRegister",
+          };
+
+          const output = transformSync(inputCode, {
+            filename: inputPath,
+            root: path.dirname(inputPath),
+            plugins: [
+              "@babel/plugin-syntax-jsx",
+              [
+                createPlugin(),
+                {
+                  encryption: null,
+                  runtime: { registerServerReference: spec },
+                  moduleIds: moduleIdsOption,
+                },
+              ],
+            ],
+          });
+          expect(output).toBeTruthy();
+          expect(output!.code).toMatchSnapshot();
+        }
+      );
+    });
+  });
+
+  describe("with commonjs", () => {
+    // console.log(files);
+    const filteredFiles = files.filter((file) => file.testName === "top-level");
+    const pluginOptions = pluginOptionsVariants.find(
+      (variant) => variant.name === "unencrypted"
+    )!;
+    test.each(filteredFiles)("$testName", async ({ inputPath }) => {
+      const inputCode = readFileSync(inputPath, "utf-8");
+
+      const onActionFound = vi.fn();
+      const inlineActionPLugin = createPlugin({ onActionFound });
+
+      const runTransform = () =>
+        transformSync(inputCode, {
+          filename: inputPath,
+          root: path.dirname(inputPath),
+          plugins: [
+            "@babel/plugin-syntax-jsx",
+            "@babel/plugin-transform-modules-commonjs",
+            [inlineActionPLugin, pluginOptions],
+          ],
+        });
+
+      const output = runTransform();
+      expect(output).toBeTruthy();
+      expect(output!.code).toMatchSnapshot();
+    });
   });
 });

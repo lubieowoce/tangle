@@ -1,0 +1,73 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`babel transform > plugin options > moduleIds > file-url-absolute 1`] = `
+"\\"babel-rsc/actions: {\\\\\\"id\\\\\\":\\\\\\"file:///wherever/test.jsx\\\\\\",\\\\\\"names\\\\\\":[\\\\\\"test\\\\\\"]}\\";
+import { myCustomRegister as _myCustomRegister } from \\"@my/package\\";
+export async function test() {}
+_myCustomRegister(test, \\"file:///wherever/test.jsx\\", \\"test\\")"
+`;
+
+exports[`babel transform > plugin options > moduleIds > file-url-hash 1`] = `
+"\\"babel-rsc/actions: {\\\\\\"id\\\\\\":\\\\\\"88bacd4e6c277ba1bdaf7632d27e5d908447c3a7\\\\\\",\\\\\\"names\\\\\\":[\\\\\\"test\\\\\\"]}\\";
+import { myCustomRegister as _myCustomRegister } from \\"@my/package\\";
+export async function test() {}
+_myCustomRegister(test, \\"88bacd4e6c277ba1bdaf7632d27e5d908447c3a7\\", \\"test\\")"
+`;
+
+exports[`babel transform > plugin options > moduleIds > file-url-root-relative 1`] = `
+"\\"babel-rsc/actions: {\\\\\\"id\\\\\\":\\\\\\"file:///__project__/test.jsx\\\\\\",\\\\\\"names\\\\\\":[\\\\\\"test\\\\\\"]}\\";
+import { myCustomRegister as _myCustomRegister } from \\"@my/package\\";
+export async function test() {}
+_myCustomRegister(test, \\"file:///__project__/test.jsx\\", \\"test\\")"
+`;
+
+exports[`babel transform > with commonjs > 'top-level' 1`] = `
+"\\"use strict\\";
+
+\\"babel-rsc/actions: {\\\\\\"id\\\\\\":\\\\\\"c90d0c9037fc6688f68b459b16e90947f518beb4\\\\\\",\\\\\\"names\\\\\\":[\\\\\\"_$$INLINE_ACTION\\\\\\",\\\\\\"_$$INLINE_ACTION2\\\\\\",\\\\\\"_$$INLINE_ACTION3\\\\\\",\\\\\\"_$$INLINE_ACTION4\\\\\\",\\\\\\"_$$INLINE_ACTION5\\\\\\"]}\\";
+Object.defineProperty(exports, \\"__esModule\\", {
+  value: true
+});
+exports.test3 = exports.test2a = exports.test2 = exports.test1 = exports._$$INLINE_ACTION5 = exports._$$INLINE_ACTION4 = exports._$$INLINE_ACTION3 = exports._$$INLINE_ACTION2 = exports._$$INLINE_ACTION = void 0;
+var _server = require(\\"react-server-dom-webpack/server\\");
+var _serverStuff = require(\\"../server-stuff\\");
+var _wrapBoundArgs = thunk => {
+  let cache = undefined;
+  return {
+    get value() {
+      if (!cache) {
+        cache = thunk();
+      }
+      return cache;
+    }
+  };
+};
+// hoisted action: <anonymous>
+const _$$INLINE_ACTION5 = exports._$$INLINE_ACTION5 = (0, _server.registerServerReference)(async x => {
+  return (0, _serverStuff.doSomethingOnTheServer)([x, SOME_CONSTANT]);
+}, \\"c90d0c9037fc6688f68b459b16e90947f518beb4\\", \\"_$$INLINE_ACTION5\\");
+// hoisted action: <anonymous>
+const _$$INLINE_ACTION4 = exports._$$INLINE_ACTION4 = (0, _server.registerServerReference)(async (_$$CLOSURE, ...args) => {
+  var [fn] = _$$CLOSURE.value;
+  console.log(\\"checking auth\\");
+  return fn(...args);
+}, \\"c90d0c9037fc6688f68b459b16e90947f518beb4\\", \\"_$$INLINE_ACTION4\\");
+// hoisted action: test2a
+const _$$INLINE_ACTION3 = exports._$$INLINE_ACTION3 = (0, _server.registerServerReference)(async x => {
+  return (0, _serverStuff.doSomethingOnTheServer)([x, SOME_CONSTANT]);
+}, \\"c90d0c9037fc6688f68b459b16e90947f518beb4\\", \\"_$$INLINE_ACTION3\\");
+// hoisted action: test2
+const _$$INLINE_ACTION2 = exports._$$INLINE_ACTION2 = (0, _server.registerServerReference)(async x => {
+  return (0, _serverStuff.doSomethingOnTheServer)([x, SOME_CONSTANT]);
+}, \\"c90d0c9037fc6688f68b459b16e90947f518beb4\\", \\"_$$INLINE_ACTION2\\");
+// hoisted action: <anonymous>
+const _$$INLINE_ACTION = exports._$$INLINE_ACTION = (0, _server.registerServerReference)(async x => {
+  return (0, _serverStuff.doSomethingOnTheServer)([x, SOME_CONSTANT]);
+}, \\"c90d0c9037fc6688f68b459b16e90947f518beb4\\", \\"_$$INLINE_ACTION\\");
+const SOME_CONSTANT = \\"beep\\";
+const test1 = exports.test1 = _$$INLINE_ACTION;
+var test2 = exports.test2 = _$$INLINE_ACTION2;
+var test2a = exports.test2a = _$$INLINE_ACTION3;
+const withAuth = fn => _$$INLINE_ACTION4.bind(null, _wrapBoundArgs(() => [fn]));
+const test3 = exports.test3 = withAuth(_$$INLINE_ACTION5);"
+`;
