@@ -51,3 +51,26 @@ async function createProfile(data: ProfileData) {
   await slowdown(1_000);
   return newId;
 }
+
+export async function updateProfile(id: number, data: Partial<ProfileData>) {
+  const dbClient = await getDbClient();
+  const contents = await dbClient.read();
+
+  const existingProfile = contents.profiles[id];
+  if (!existingProfile) {
+    throw new Error("Cannot update nonexistent profile" + id);
+  }
+  const newProfile: ProfileData = {
+    ...existingProfile,
+    ...data,
+  };
+  console.log("updating profile", id, newProfile);
+  const newContents: DBContents = {
+    ...contents,
+    profiles: { ...contents.profiles, [id]: newProfile },
+  };
+
+  dbClient.write(newContents);
+  await slowdown(1_000);
+  return newProfile;
+}

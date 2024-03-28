@@ -8,16 +8,16 @@ import { twMerge } from "tailwind-merge";
 
 type Action = (formData: FormData) => Promise<any>;
 
-type ButtonProps = { action: Action } & ComponentProps<"button">;
+type ButtonProps = { action?: Action } & ComponentProps<"button">;
 
-function ButtonDisabledWhilePending({
+export function SubmitButton({
   action,
   disabled,
   children,
   ...rest
 }: ButtonProps) {
   const { pending } = useFormStatus();
-  console.log("formStatus", { pending });
+  // console.log("formStatus", { pending });
   return (
     <button disabled={disabled || pending} formAction={action} {...rest}>
       {children}
@@ -38,13 +38,13 @@ export function Button({
         Object.entries(props).map(([name, value]) => (
           <input key={name} type="hidden" name={name} value={value} />
         ))}
-      <ButtonDisabledWhilePending
+      <SubmitButton
         className={twMerge("w-full", className)}
         action={action}
         {...rest}
       >
         {children}
-      </ButtonDisabledWhilePending>
+      </SubmitButton>
     </form>
   );
 }
